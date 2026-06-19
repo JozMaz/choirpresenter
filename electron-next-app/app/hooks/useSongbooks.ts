@@ -91,7 +91,7 @@ export function useSongbooks() {
   const upsertSong = async (
     book: SongBookKey,
     song: Song,
-  ): Promise<void> => {
+  ): Promise<{ localOk: boolean; cloudOk: boolean | null }> => {
     let snapshot: Song[] = [];
     setRaw((prev) => {
       const arr = prev[book] || [];
@@ -104,11 +104,15 @@ export function useSongbooks() {
       return { ...prev, [book]: next };
     });
     if (window.api?.writeSongBook) {
-      await window.api.writeSongBook(book, { Songs: snapshot });
+      return await window.api.writeSongBook(book, { Songs: snapshot });
     }
+    return { localOk: false, cloudOk: null };
   };
 
-  const deleteSong = async (book: SongBookKey, id: number): Promise<void> => {
+  const deleteSong = async (
+    book: SongBookKey,
+    id: number,
+  ): Promise<{ localOk: boolean; cloudOk: boolean | null }> => {
     let snapshot: Song[] = [];
     setRaw((prev) => {
       const arr = prev[book] || [];
@@ -117,8 +121,9 @@ export function useSongbooks() {
       return { ...prev, [book]: next };
     });
     if (window.api?.writeSongBook) {
-      await window.api.writeSongBook(book, { Songs: snapshot });
+      return await window.api.writeSongBook(book, { Songs: snapshot });
     }
+    return { localOk: false, cloudOk: null };
   };
 
   return {

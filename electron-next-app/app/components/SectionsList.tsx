@@ -16,6 +16,8 @@ interface SectionsListProps {
   onNavigatePrev?: () => void;
   /** Stejné jako ArrowRight/ArrowDown na klávesnici. */
   onNavigateNext?: () => void;
+  /** Stav ukládání — zobrazí spinner/check/warning v headeru. */
+  saveStatus?: "idle" | "saving" | "saved" | "local" | "error";
 }
 
 export default function SectionsList({
@@ -27,6 +29,7 @@ export default function SectionsList({
   onOpenSettings,
   onNavigatePrev,
   onNavigateNext,
+  saveStatus = "idle",
 }: SectionsListProps) {
   const activeRef = useRef<HTMLButtonElement>(null);
   const lastSongIdRef = useRef<number | null>(null);
@@ -80,6 +83,42 @@ export default function SectionsList({
           )}
         </div>
         <div className="flex items-center gap-2">
+          {saveStatus === "saving" && (
+            <span
+              className="flex items-center gap-1 px-2 py-1 text-[11px] font-semibold text-text-secondary"
+              title="Saving to cloud..."
+            >
+              <Icon name="Loader" size={12} className="animate-spin" />
+              Saving…
+            </span>
+          )}
+          {saveStatus === "saved" && (
+            <span
+              className="flex items-center gap-1 px-2 py-1 text-[11px] font-semibold text-success"
+              title="Synced to cloud"
+            >
+              <Icon name="Check" size={12} />
+              Saved
+            </span>
+          )}
+          {saveStatus === "local" && (
+            <span
+              className="flex items-center gap-1 px-2 py-1 text-[11px] font-semibold text-text-secondary"
+              title="No write token — saved only on this device. Open Settings to add a token."
+            >
+              <Icon name="HardDrive" size={12} />
+              Local only
+            </span>
+          )}
+          {saveStatus === "error" && (
+            <span
+              className="flex items-center gap-1 px-2 py-1 text-[11px] font-semibold text-danger"
+              title="Cloud sync failed — check internet or your write token"
+            >
+              <Icon name="TriangleAlert" size={12} />
+              Cloud failed
+            </span>
+          )}
           {onOpenSettings && (
             <button
               onClick={onOpenSettings}

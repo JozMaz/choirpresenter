@@ -25,6 +25,10 @@ import {
   buildSongFromEditor,
   getNextSongbookId,
 } from "./lib/songSerialize";
+import {
+  processBilingualSongbook,
+  processPlOnlySongbook,
+} from "./lib/songProcessing";
 
 import { usePersistedState } from "./hooks/usePersistedState";
 import {
@@ -114,6 +118,17 @@ function HomeContent() {
   // Defaultně ON — po refreshi je vždy černá obrazovka, dokud Moon nezpypne.
   const [blackoutActive, setBlackoutActive] = useState(true);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  /**
+   * Stav uložení:
+   * - "idle" → nic se neukládá
+   * - "saving" → běží PUT na cloud (UI ukazuje spinner)
+   * - "saved" → cloud OK (UI ukazuje checkmark, fade po 2s)
+   * - "local" → local OK, cloud failed/skipped (warning, fade po 4s)
+   * - "error" → vše selhalo
+   */
+  const [saveStatus, setSaveStatus] = useState<
+    "idle" | "saving" | "saved" | "local" | "error"
+  >("idle");
 
   const toggleBlackout = () => setBlackoutActive((b) => !b);
 
@@ -290,8 +305,32 @@ function HomeContent() {
       nextId,
     });
 
-    await upsertSong(book, song);
+    setSaveStatus("saving");
+    const result = await upsertSong(book, song);
+    if (result.cloudOk === true) setSaveStatus("saved");
+    else if (result.cloudOk === false) setSaveStatus("error");
+    else setSaveStatus("local"); // null = no token, local only
     closeEditor();
+
+    // Pokud uživatel měl právě tu píseň otevřenou v playeru, refresh ji,
+    // ať se aktualizované sekce hned ukážou v SectionsList + preview/HDMI.
+    if (
+      editing?.source === book &&
+      player.currentSong?.id === editing.id &&
+      player.currentSong?.source === book
+    ) {
+      const newItem = (
+        book === "newSongPlGb" || book === "roboczy" || book === "children"
+          ? processBilingualSongbook(song, book)
+          : processPlOnlySongbook(song, book)
+      );
+      player.sendFirstPart(newItem);
+    }
+
+    // Auto-reset indicator
+    const resetMs =
+      result.cloudOk === true ? 2000 : result.cloudOk === false ? 5000 : 3000;
+    setTimeout(() => setSaveStatus("idle"), resetMs);
   };
 
   const handleDelete = async () => {
@@ -526,6 +565,7 @@ function HomeContent() {
                       setBlackoutActive(false);
                     }}
                     onOpenSettings={() => setSettingsOpen(true)}
+                    saveStatus={saveStatus}
                     onNavigatePrev={() => player.navigatePart("prev")}
                     onNavigateNext={() => player.navigatePart("next")}
                     onStartNewSong={
