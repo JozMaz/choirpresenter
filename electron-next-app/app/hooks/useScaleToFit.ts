@@ -42,5 +42,17 @@ export function useScaleToFit(deps: unknown[] = []) {
     return () => ro.disconnect();
   }, [scale]);
 
+  // Re-scale po načtení fontů — fonty často změní layout (jiná šířka glyfů
+  // než system fallback), a bez tohoto kroku by content přesahoval dolů.
+  useEffect(() => {
+    if (typeof document === "undefined" || !document.fonts?.ready) return;
+    document.fonts.ready.then(() => {
+      // dva framy delay aby browser stihl reflow
+      requestAnimationFrame(() =>
+        requestAnimationFrame(() => scale()),
+      );
+    });
+  }, [scale]);
+
   return { containerRef, contentRef };
 }

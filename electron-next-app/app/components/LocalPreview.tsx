@@ -69,7 +69,7 @@ export default function LocalPreview({
           <div
             ref={contentRef}
             style={contentStyle}
-            className="h-full flex flex-col text-sm text-text-secondary whitespace-pre-wrap font-['MyriadPro',sans-serif] font-semibold text-center"
+            className="h-full flex flex-col text-sm text-text-secondary whitespace-pre-wrap font-myriad font-semibold text-center"
           >
             {/* V message módu top je prázdný — label jde dolů */}
             {output1Text && isBible && (
@@ -81,7 +81,7 @@ export default function LocalPreview({
             )}
             <div className="flex-1 flex items-center justify-center px-6">
               <div
-                className={`whitespace-pre-wrap font-['MyriadPro',sans-serif] font-semibold ${
+                className={`whitespace-pre-wrap font-myriad font-semibold ${
                   isMessage ? "text-justify" : "text-center"
                 }`}
               >
@@ -102,7 +102,7 @@ export default function LocalPreview({
           <div
             ref={contentRef}
             style={contentStyle}
-            className="h-full flex flex-col text-sm text-text-secondary whitespace-pre-wrap font-['MyriadPro',sans-serif] font-semibold text-center"
+            className="h-full flex flex-col text-sm text-text-secondary whitespace-pre-wrap font-myriad font-semibold text-center"
           >
             {output1Text && (
               <div className="flex items-center justify-between w-full px-10">
@@ -159,7 +159,7 @@ export default function LocalPreview({
                 </span>
               </div>
             )}
-            <pre className="text-sm text-text-secondary whitespace-pre-wrap font-['MyriadPro',sans-serif] font-semibold text-center">
+            <pre className="text-sm text-text-secondary whitespace-pre-wrap font-myriad font-semibold text-center">
               {output1Text}
             </pre>
             {currentSong && output1Text && (

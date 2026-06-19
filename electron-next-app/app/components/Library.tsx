@@ -8,6 +8,8 @@ import MessagesBrowser from "./MessagesBrowser";
 interface LibraryProps {
   /** Songbooks tab obsah (typicky <SongLists />). */
   songbooksContent: React.ReactNode;
+  /** Sets / playlists tab obsah. */
+  setsContent?: React.ReactNode;
   bibles: Record<BibleKey, Bible | null>;
   biblesLoaded: boolean;
   onShowBibleChapter: (
@@ -24,10 +26,11 @@ interface LibraryProps {
   ) => void;
 }
 
-type Tab = "songbooks" | "bibles" | "messages";
+type Tab = "songbooks" | "sets" | "bibles" | "messages";
 
 export default function Library({
   songbooksContent,
+  setsContent,
   bibles,
   biblesLoaded,
   onShowBibleChapter,
@@ -48,6 +51,16 @@ export default function Library({
           }`}
         >
           Songbooks
+        </button>
+        <button
+          onClick={() => setTab("sets")}
+          className={`flex-1 px-3 py-2 text-xs font-semibold transition-colors ${
+            tab === "sets"
+              ? "bg-surface text-primary border-b-2 border-primary"
+              : "text-text-secondary hover:bg-surface-secondary"
+          }`}
+        >
+          Sets
         </button>
         <button
           onClick={() => setTab("bibles")}
@@ -74,6 +87,7 @@ export default function Library({
       {/* Tab content */}
       <div className="flex-1 min-h-0">
         {tab === "songbooks" && songbooksContent}
+        {tab === "sets" && setsContent}
         {tab === "bibles" && (
           <BibleBrowser
             bibles={bibles}

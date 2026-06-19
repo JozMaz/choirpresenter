@@ -43,6 +43,8 @@ import { useBibles } from "./hooks/useBibles";
 
 import Library from "./components/Library";
 import LoadingScreen from "./components/LoadingScreen";
+import PlaylistsPanel from "./components/PlaylistsPanel";
+import { usePlaylists } from "./hooks/usePlaylists";
 import SongbooksTree from "./components/SongbooksTree";
 import SelectedPanel from "./components/SelectedPanel";
 import LocalPreview from "./components/LocalPreview";
@@ -92,6 +94,15 @@ function HomeContent() {
 
   // ===== BIBLES =====
   const { bibles, loaded: biblesLoaded } = useBibles();
+
+  // ===== PLAYLISTS (Sets) =====
+  // Token (admin / autorizovaná osoba) určuje, do které sady playlistů se
+  // pracuje. Bez tokenu = "default" sada, sdílená pro read-only uživatele.
+  const [writeToken, setWriteToken] = useState<string | null>(null);
+  useEffect(() => {
+    window.api?.getWriteToken?.().then((t) => setWriteToken(t));
+  }, []);
+  const playlistsHook = usePlaylists(writeToken);
 
   // ===== SONG PLAYER =====
   const player = useSongPlayer();
@@ -492,6 +503,20 @@ function HomeContent() {
                     selectedItems={selectedItems}
                     onShow={player.sendFirstPart}
                     onSelect={selectItem}
+                  />
+                }
+                setsContent={
+                  <PlaylistsPanel
+                    playlists={playlistsHook.playlists}
+                    dataByBook={dataByBook}
+                    customSongs={customSongs}
+                    currentSong={player.currentSong}
+                    onCreatePlaylist={playlistsHook.createPlaylist}
+                    onRenamePlaylist={playlistsHook.renamePlaylist}
+                    onDeletePlaylist={playlistsHook.deletePlaylist}
+                    onAddSong={playlistsHook.addSong}
+                    onRemoveSong={playlistsHook.removeSong}
+                    onShowSong={player.sendFirstPart}
                   />
                 }
               />

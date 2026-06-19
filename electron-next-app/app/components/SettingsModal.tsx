@@ -1,6 +1,11 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import {
+  applyUpdate,
+  getLastManifest,
+  type BootstrapProgress,
+} from "../lib/cloudData";
 import Icon from "./Icon";
 
 interface SettingsModalProps {
@@ -14,13 +19,37 @@ export default function SettingsModal({ open, onClose }: SettingsModalProps) {
   const [saving, setSaving] = useState(false);
   const [savedMsg, setSavedMsg] = useState<string | null>(null);
 
+  // === Data sync ===
+  const [syncBusy, setSyncBusy] = useState(false);
+  const [syncProgress, setSyncProgress] = useState<BootstrapProgress | null>(
+    null,
+  );
+  const [localVersion, setLocalVersion] = useState<string | null>(null);
+  const [remoteVersion, setRemoteVersion] = useState<string | null>(null);
+
   useEffect(() => {
     if (!open) return;
     setSavedMsg(null);
+    setSyncProgress(null);
     (async () => {
       const t = await window.api?.getWriteToken?.();
       setSavedToken(t ?? null);
       setToken(t ?? "");
+
+      // Načti lokální manifest verzi pro info
+      const local = getLastManifest();
+      setLocalVersion(local?.version ?? null);
+
+      // Fetch remote manifest na pozadí
+      const raw = await window.api?.dataFetchManifest?.();
+      if (raw) {
+        try {
+          const remote = JSON.parse(raw);
+          setRemoteVersion(remote?.version ?? null);
+        } catch {
+          setRemoteVersion(null);
+        }
+      }
     })();
   }, [open]);
 
@@ -45,7 +74,35 @@ export default function SettingsModal({ open, onClose }: SettingsModalProps) {
     setSavedMsg("Cleared.");
   };
 
+  const handleSync = async () => {
+    setSyncBusy(true);
+    setSyncProgress({ phase: "init", ratio: 0 });
+    try {
+      await applyUpdate((p) => setSyncProgress(p));
+      const local = getLastManifest();
+      setLocalVersion(local?.version ?? null);
+      setSyncProgress({ phase: "done", ratio: 1, message: "Data updated." });
+      // Force full reload after sync — easiest way to re-init all hooks
+      setTimeout(() => {
+        window.location.reload();
+      }, 800);
+    } catch (err) {
+      setSyncProgress({
+        phase: "error",
+        ratio: 0,
+        message: (err as Error)?.message || "Sync failed",
+      });
+    } finally {
+      setSyncBusy(false);
+    }
+  };
+
   if (!open) return null;
+
+  const updateAvailable =
+    remoteVersion !== null &&
+    localVersion !== null &&
+    remoteVersion !== localVersion;
 
   return (
     <div
@@ -66,8 +123,93 @@ export default function SettingsModal({ open, onClose }: SettingsModalProps) {
           </button>
         </div>
 
-        <div className="space-y-4">
+        <div className="space-y-5">
+          {/* === Data sync === */}
           <div>
+            <label className="block text-xs font-semibold text-text-primary mb-1">
+              Cloud data
+            </label>
+            <div className="text-[11px] text-text-muted leading-snug space-y-0.5 mb-2">
+              <div>
+                Local version:{" "}
+                <span className="font-mono text-text-primary">
+                  {localVersion ?? "—"}
+                </span>
+              </div>
+              <div>
+                Cloud version:{" "}
+                <span className="font-mono text-text-primary">
+                  {remoteVersion ?? "—"}
+                </span>
+              </div>
+            </div>
+
+            {updateAvailable && !syncBusy && (
+              <div className="mb-2 px-2 py-1.5 bg-primary/10 border border-primary/30 rounded text-[11px] text-primary">
+                New data available on cloud. Click below to update.
+              </div>
+            )}
+
+            <div className="flex items-center gap-2">
+              <button
+                onClick={handleSync}
+                disabled={syncBusy}
+                className="px-3 py-1 text-xs font-semibold bg-primary text-white rounded hover:bg-primary-hover transition-colors disabled:opacity-50 flex items-center gap-1.5"
+              >
+                {syncBusy ? (
+                  <>
+                    <Icon name="Loader" size={12} className="animate-spin" />
+                    Syncing…
+                  </>
+                ) : updateAvailable ? (
+                  <>
+                    <Icon name="Download" size={12} />
+                    Update now
+                  </>
+                ) : (
+                  <>
+                    <Icon name="RefreshCw" size={12} />
+                    Force re-sync
+                  </>
+                )}
+              </button>
+            </div>
+
+            {syncProgress && (
+              <div className="mt-2">
+                {syncProgress.phase === "downloading" && (
+                  <>
+                    <div className="w-full h-1.5 rounded bg-surface-secondary overflow-hidden">
+                      <div
+                        className="h-full bg-primary transition-all duration-200"
+                        style={{
+                          width: `${Math.round(syncProgress.ratio * 100)}%`,
+                        }}
+                      />
+                    </div>
+                    <div className="text-[10px] text-text-muted mt-1 truncate">
+                      {syncProgress.currentFile}
+                    </div>
+                  </>
+                )}
+                {syncProgress.phase === "done" && (
+                  <div className="text-[11px] text-success flex items-center gap-1">
+                    <Icon name="Check" size={12} />
+                    {syncProgress.message ?? "Up to date"}
+                  </div>
+                )}
+                {syncProgress.phase === "error" && (
+                  <div className="text-[11px] text-danger flex items-center gap-1">
+                    <Icon name="TriangleAlert" size={12} />
+                    {syncProgress.message ?? "Sync failed"}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+
+          {/* === Write token === */}
+          <div className="border-t border-border pt-4">
             <label className="block text-xs font-semibold text-text-primary mb-1">
               Write token
             </label>
@@ -103,10 +245,7 @@ export default function SettingsModal({ open, onClose }: SettingsModalProps) {
                 <span className="text-[11px] text-text-muted">{savedMsg}</span>
               )}
             </div>
-          </div>
-
-          <div className="border-t border-border pt-4">
-            <p className="text-[11px] text-text-muted">
+            <p className="text-[11px] text-text-muted mt-3">
               Status:{" "}
               {savedToken ? (
                 <span className="text-success">

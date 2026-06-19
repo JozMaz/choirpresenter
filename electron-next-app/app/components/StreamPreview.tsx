@@ -68,7 +68,7 @@ export default function StreamPreview({
           <div
             ref={contentRef}
             style={contentStyle}
-            className="h-full flex flex-col text-sm text-text-secondary whitespace-pre-wrap font-['MyriadPro',sans-serif] font-semibold text-center"
+            className="h-full flex flex-col text-sm text-text-secondary whitespace-pre-wrap font-myriad font-semibold text-center"
           >
             {/* V message módu top je prázdný — label jde dolů */}
             {output2Text && isBible && (
@@ -80,7 +80,7 @@ export default function StreamPreview({
             )}
             <div className="flex-1 flex items-center justify-center px-6">
               <div
-                className={`whitespace-pre-wrap font-['MyriadPro',sans-serif] font-semibold ${
+                className={`whitespace-pre-wrap font-myriad font-semibold ${
                   isMessage ? "text-justify" : "text-center"
                 }`}
               >
@@ -101,7 +101,7 @@ export default function StreamPreview({
           <div
             ref={contentRef}
             style={contentStyle}
-            className="h-full flex flex-col text-sm text-text-secondary whitespace-pre-wrap font-['MyriadPro',sans-serif] font-semibold text-center"
+            className="h-full flex flex-col text-sm text-text-secondary whitespace-pre-wrap font-myriad font-semibold text-center"
           >
             {enPart ? (
               // Bilingual: 2 stejné poloviny s divider
@@ -137,7 +137,7 @@ export default function StreamPreview({
             style={contentStyle}
             className="h-full flex items-center justify-center"
           >
-            <pre className="text-sm text-text-secondary whitespace-pre-wrap font-['MyriadPro',sans-serif] font-semibold text-center">
+            <pre className="text-sm text-text-secondary whitespace-pre-wrap font-myriad font-semibold text-center">
               {output2Text}
             </pre>
           </div>
