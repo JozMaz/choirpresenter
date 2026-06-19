@@ -289,16 +289,29 @@ export function getCurrentSectionLabel(state: SongPlayerState): string {
     const verse = verses[currentVerseIndex];
     if (!verse) return "";
 
+    // Label respektuje verse.ID. Pokud má píseň více veršů se stejným ID
+    // (např. sequence "V1 V1 C V1 V2" — 3 verše s ID=1), label správně
+    // zobrazí "Verse 1" pro všechny tři, ne "Verse 1/2/3" podle pozice.
+    // Fallback na array pozici jen když verse.ID chybí / je 0.
     if (verse.Tag === 1) {
-      const list = verses.filter((v) => v.Tag === 1);
-      const idx = list.indexOf(verse) + 1;
-      return list.length > 1 ? `Chorus ${idx}` : "Chorus";
+      const id = verse.ID;
+      if (!id || id === 0) {
+        const list = verses.filter((v) => v.Tag === 1);
+        const idx = list.indexOf(verse) + 1;
+        return list.length > 1 ? `Chorus ${idx}` : "Chorus";
+      }
+      return id === 1 ? "Chorus" : `Chorus ${id}`;
     }
     if (verse.Tag === 2) {
-      const list = verses.filter((v) => v.Tag === 2);
-      const idx = list.indexOf(verse) + 1;
-      return list.length > 1 ? `Bridge ${idx}` : "Bridge";
+      const id = verse.ID;
+      if (!id || id === 0) {
+        const list = verses.filter((v) => v.Tag === 2);
+        const idx = list.indexOf(verse) + 1;
+        return list.length > 1 ? `Bridge ${idx}` : "Bridge";
+      }
+      return id === 1 ? "Bridge" : `Bridge ${id}`;
     }
+    if (verse.ID && verse.ID > 0) return `Verse ${verse.ID}`;
     const verseList = verses.filter((v) => !v.Tag);
     const idx = verseList.indexOf(verse) + 1;
     return `Verse ${idx}`;

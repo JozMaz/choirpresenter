@@ -18,6 +18,8 @@ export interface BuildSongArgs {
   existing?: Song;
   /** Pro nové písně se použije, pokud existing chybí. */
   nextId?: number;
+  /** Uživatel zadané vlastní ID — přebije existing.ID i nextId. */
+  customId?: number;
 }
 
 /** Songbooks, které ukládají verše ve dvojjazyčném formátu (TextPL/TextEN). */
@@ -28,7 +30,8 @@ const BILINGUAL_BOOKS = new Set<string>([
 ]);
 
 export function buildSongFromEditor(args: BuildSongArgs): Song {
-  const { songName, key, sections, targetBook, existing, nextId } = args;
+  const { songName, key, sections, targetBook, existing, nextId, customId } =
+    args;
   const hasBilingual = sections.some((s) => s.textEN.trim() !== "");
   const isPlEn = BILINGUAL_BOOKS.has(targetBook);
 
@@ -64,7 +67,8 @@ export function buildSongFromEditor(args: BuildSongArgs): Song {
       ? existing.Sequence
       : sections.map((s) => formatSequencePart(s.type, s.number)).join(" ");
 
-  const id = existing?.ID ?? nextId ?? 0;
+  // Priorita: user customId > existing > auto nextId
+  const id = customId ?? existing?.ID ?? nextId ?? 0;
   const guid = existing?.Guid ?? crypto.randomUUID();
 
   if (isPlEn) {

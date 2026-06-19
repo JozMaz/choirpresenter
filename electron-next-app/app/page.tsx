@@ -253,6 +253,7 @@ function HomeContent() {
     setEditorContext({
       initial: {
         songName: item.title,
+        songId: item.id,
         key: item.key || "C",
         sections: apiItemToEditorSections(item),
         targetBook,
@@ -268,8 +269,10 @@ function HomeContent() {
     const editing = editorContext?.editing;
 
     if (state.targetBook === "custom") {
-      // Custom song saved to localStorage
-      const id = editing?.source === "custom" ? editing.id : nextCustomId;
+      // Custom song saved to localStorage. User-set songId beats default.
+      const id =
+        state.songId ??
+        (editing?.source === "custom" ? editing.id : nextCustomId);
       const apiItem: ApiItem = {
         ...buildApiItemForCustom(state, id),
       };
@@ -303,6 +306,7 @@ function HomeContent() {
       targetBook: book,
       existing: existingRaw,
       nextId,
+      customId: state.songId,
     });
 
     setSaveStatus("saving");

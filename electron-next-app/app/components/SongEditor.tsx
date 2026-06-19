@@ -17,6 +17,8 @@ export type TargetBook = SongBookKey | "custom";
 
 export interface EditorState {
   songName: string;
+  /** Volitelné vlastní číslo písně (ID). Když undefined, použije se auto-generated. */
+  songId?: number;
   key: string;
   sections: EditorSection[];
   targetBook: TargetBook;
@@ -87,6 +89,10 @@ export default function SongEditor({
 }: SongEditorProps) {
   const [activePreviewIdx, setActivePreviewIdx] = useState(-1);
   const [songName, setSongName] = useState(initial?.songName ?? "");
+  // Prázdný string pro auto-generated, číslo pro custom.
+  const [songIdInput, setSongIdInput] = useState<string>(
+    initial?.songId != null ? String(initial.songId) : "",
+  );
   const [musicKey, setMusicKey] = useState(initial?.key ?? "C");
   const [sections, setSections] = useState<EditorSection[]>(
     initial?.sections ?? [createEmptySection()],
@@ -158,7 +164,9 @@ export default function SongEditor({
   const handleSave = () => {
     if (!songName.trim() || sections.length === 0) return;
     if (sections.every((s) => s.textPL.trim() === "")) return;
-    onSave({ songName, key: musicKey, sections, targetBook });
+    const parsedId = songIdInput.trim() ? Number(songIdInput.trim()) : NaN;
+    const songId = Number.isFinite(parsedId) && parsedId > 0 ? parsedId : undefined;
+    onSave({ songName, songId, key: musicKey, sections, targetBook });
   };
 
   const canSave =
@@ -256,6 +264,20 @@ export default function SongEditor({
           </div>
 
           <div className="flex gap-3">
+            <div className="w-20">
+              <label className="block text-xs font-semibold text-text-secondary mb-1">
+                ID
+              </label>
+              <input
+                type="number"
+                min={1}
+                value={songIdInput}
+                onChange={(e) => setSongIdInput(e.target.value)}
+                placeholder="auto"
+                title="Song number. Leave empty to auto-assign."
+                className="w-full px-3 py-2 text-sm border border-border-secondary rounded focus:outline-none focus:ring-1 focus:ring-primary bg-surface text-text-primary placeholder-text-muted"
+              />
+            </div>
             <div className="flex-1">
               <label className="block text-xs font-semibold text-text-secondary mb-1">
                 Song name

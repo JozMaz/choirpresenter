@@ -321,29 +321,50 @@ export const getSongSections = (item: ApiItem): SectionListItem[] => {
       const fullText = [v.TextPL || "", v.TextEN || ""]
         .filter(Boolean)
         .join("\n\n");
-      // Pro song mód chceme celý text na jednom řádku (truncate by width),
-      // ne jen první linku — uživatel chce vidět co nejvíc kontextu.
       const previewPL = singleLine(v.TextPL || "");
       const previewEN = singleLine(v.TextEN || "");
+      // Label respektuje verse.ID. Když má píseň víc veršů se stejným ID
+      // (např. sequence "V1 V1 V1 V2" = 3× V1 + 1× V2), label je "Verse 1"
+      // pro všechny tři, ne "Verse 1/2/3" podle pozice. Fallback na array
+      // pozici jen když ID chybí / je 0.
       if (v.Tag === 1) {
-        const list = all.filter((x) => x.Tag === 1);
-        const idx = list.indexOf(v) + 1;
+        if (!v.ID || v.ID === 0) {
+          const list = all.filter((x) => x.Tag === 1);
+          const idx = list.indexOf(v) + 1;
+          return {
+            label: list.length > 1 ? `Chorus ${idx}` : "Chorus",
+            previewPL,
+            previewEN,
+            fullText,
+          };
+        }
         return {
-          label: list.length > 1 ? `Chorus ${idx}` : "Chorus",
+          label: v.ID === 1 ? "Chorus" : `Chorus ${v.ID}`,
           previewPL,
           previewEN,
           fullText,
         };
       }
       if (v.Tag === 2) {
-        const list = all.filter((x) => x.Tag === 2);
-        const idx = list.indexOf(v) + 1;
+        if (!v.ID || v.ID === 0) {
+          const list = all.filter((x) => x.Tag === 2);
+          const idx = list.indexOf(v) + 1;
+          return {
+            label: list.length > 1 ? `Bridge ${idx}` : "Bridge",
+            previewPL,
+            previewEN,
+            fullText,
+          };
+        }
         return {
-          label: list.length > 1 ? `Bridge ${idx}` : "Bridge",
+          label: v.ID === 1 ? "Bridge" : `Bridge ${v.ID}`,
           previewPL,
           previewEN,
           fullText,
         };
+      }
+      if (v.ID && v.ID > 0) {
+        return { label: `Verse ${v.ID}`, previewPL, previewEN, fullText };
       }
       const verseList = all.filter((x) => !x.Tag);
       const idx = verseList.indexOf(v) + 1;
