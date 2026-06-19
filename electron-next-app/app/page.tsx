@@ -43,8 +43,7 @@ import { useBibles } from "./hooks/useBibles";
 
 import Library from "./components/Library";
 import LoadingScreen from "./components/LoadingScreen";
-import PlaylistsPanel from "./components/PlaylistsPanel";
-import { usePlaylists } from "./hooks/usePlaylists";
+import SelectedPanel from "./components/SelectedPanel";
 import SongbooksTree from "./components/SongbooksTree";
 import LocalPreview from "./components/LocalPreview";
 import StreamPreview from "./components/StreamPreview";
@@ -93,15 +92,6 @@ function HomeContent() {
 
   // ===== BIBLES =====
   const { bibles, loaded: biblesLoaded } = useBibles();
-
-  // ===== PLAYLISTS (Sets) =====
-  // Token (admin / autorizovaná osoba) určuje, do které sady playlistů se
-  // pracuje. Bez tokenu = "default" sada, sdílená pro read-only uživatele.
-  const [writeToken, setWriteToken] = useState<string | null>(null);
-  useEffect(() => {
-    window.api?.getWriteToken?.().then((t) => setWriteToken(t));
-  }, []);
-  const playlistsHook = usePlaylists(writeToken);
 
   // ===== SONG PLAYER =====
   const player = useSongPlayer();
@@ -500,17 +490,19 @@ function HomeContent() {
             </Allotment.Pane>
 
             <Allotment.Pane>
-              <PlaylistsPanel
-                playlists={playlistsHook.playlists}
-                dataByBook={dataByBook}
+              <SelectedPanel
                 customSongs={customSongs}
-                currentSong={player.currentSong}
-                onCreatePlaylist={playlistsHook.createPlaylist}
-                onRenamePlaylist={playlistsHook.renamePlaylist}
-                onDeletePlaylist={playlistsHook.deletePlaylist}
-                onAddSong={playlistsHook.addSong}
-                onRemoveSong={playlistsHook.removeSong}
-                onShowSong={player.sendFirstPart}
+                selectedItems={selectedItems}
+                onShow={player.sendFirstPart}
+                onSelect={selectItem}
+                onRemove={(id, source) =>
+                  setSelectedItems(
+                    selectedItems.filter(
+                      (item) => !(item.id === id && item.source === source),
+                    ),
+                  )
+                }
+                onClearAll={() => setSelectedItems([])}
               />
             </Allotment.Pane>
           </Allotment>

@@ -10,6 +10,7 @@ interface SelectedPanelProps {
   onShow: (item: ApiItem) => void;
   onSelect: (item: ApiItem) => void;
   onRemove: (id: number, source: SongSource) => void;
+  onClearAll: () => void;
 }
 
 const sourceLabel = (source: SongSource): string => {
@@ -28,6 +29,7 @@ export default function SelectedPanel({
   onShow,
   onSelect,
   onRemove,
+  onClearAll,
 }: SelectedPanelProps) {
   const isSelected = (item: ApiItem) =>
     selectedItems.some((i) => i.id === item.id && i.source === item.source);
@@ -60,6 +62,19 @@ export default function SelectedPanel({
           <h2 className="text-xs font-semibold text-text-primary">
             Selected songs ({selectedItems.length})
           </h2>
+          {selectedItems.length > 0 && (
+            <button
+              onClick={() => {
+                if (confirm(`Clear all ${selectedItems.length} selected songs?`))
+                  onClearAll();
+              }}
+              title="Clear all selected"
+              className="px-2 py-0.5 text-[10px] font-semibold text-danger hover:bg-danger hover:text-white rounded transition-colors flex items-center gap-1"
+            >
+              <Icon name="Trash2" size={11} />
+              Clear all
+            </button>
+          )}
         </div>
 
         <div className="space-y-1">
