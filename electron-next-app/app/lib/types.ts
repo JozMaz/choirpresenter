@@ -48,7 +48,9 @@ declare global {
       writeSongBook: (
         book: SongBookKey,
         data: { Songs: Song[] },
-      ) => Promise<boolean>;
+      ) => Promise<{ localOk: boolean; cloudOk: boolean | null }>;
+      getWriteToken: () => Promise<string | null>;
+      setWriteToken: (token: string) => Promise<boolean>;
       readBible: (bible: "warszawska" | "gdanska") => Promise<string | null>;
       readMessageTitles: () => Promise<MessageTitlesEntry[] | null>;
       readMessageText: (dateKey: string) => Promise<MessageTextEntry | null>;

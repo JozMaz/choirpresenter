@@ -44,6 +44,7 @@ import SelectedPanel from "./components/SelectedPanel";
 import LocalPreview from "./components/LocalPreview";
 import StreamPreview from "./components/StreamPreview";
 import SectionsList from "./components/SectionsList";
+import SettingsModal from "./components/SettingsModal";
 import SongEditor, {
   type EditorState,
   type TargetBook,
@@ -112,6 +113,7 @@ function HomeContent() {
   const [hdmi2Active, setHdmi2Active] = useState(false);
   // Defaultně ON — po refreshi je vždy černá obrazovka, dokud Moon nezpypne.
   const [blackoutActive, setBlackoutActive] = useState(true);
+  const [settingsOpen, setSettingsOpen] = useState(false);
 
   const toggleBlackout = () => setBlackoutActive((b) => !b);
 
@@ -523,6 +525,7 @@ function HomeContent() {
                       player.goToSection(idx);
                       setBlackoutActive(false);
                     }}
+                    onOpenSettings={() => setSettingsOpen(true)}
                     onNavigatePrev={() => player.navigatePart("prev")}
                     onNavigateNext={() => player.navigatePart("next")}
                     onStartNewSong={
@@ -545,6 +548,10 @@ function HomeContent() {
           </Allotment>
         </Allotment.Pane>
       </Allotment>
+      <SettingsModal
+        open={settingsOpen}
+        onClose={() => setSettingsOpen(false)}
+      />
     </main>
   );
 }

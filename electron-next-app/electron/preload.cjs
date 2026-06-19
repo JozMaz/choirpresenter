@@ -32,4 +32,8 @@ contextBridge.exposeInMainWorld("api", {
   dataFetchCloud: (relPath) => ipcRenderer.invoke("data-fetch-cloud", relPath),
   dataFetchManifest: () => ipcRenderer.invoke("data-fetch-manifest"),
   dataClearLocal: () => ipcRenderer.invoke("data-clear-local"),
+
+  // ===== Write token (auth pro cloud PUT) =====
+  getWriteToken: () => ipcRenderer.invoke("get-write-token"),
+  setWriteToken: (token) => ipcRenderer.invoke("set-write-token", token),
 });

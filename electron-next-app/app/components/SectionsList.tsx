@@ -11,6 +11,7 @@ interface SectionsListProps {
   onGoToSection: (idx: number) => void;
   onStartNewSong?: () => void;
   onEditCurrentSong?: () => void;
+  onOpenSettings?: () => void;
   /** Stejné jako ArrowLeft/ArrowUp na klávesnici. */
   onNavigatePrev?: () => void;
   /** Stejné jako ArrowRight/ArrowDown na klávesnici. */
@@ -23,6 +24,7 @@ export default function SectionsList({
   onGoToSection,
   onStartNewSong,
   onEditCurrentSong,
+  onOpenSettings,
   onNavigatePrev,
   onNavigateNext,
 }: SectionsListProps) {
@@ -45,38 +47,49 @@ export default function SectionsList({
     });
   }, [activeSectionIndex, currentSong?.id]);
 
-  // Když není nic vybráno (žádná píseň, bible kapitola, ani message),
-  // panel zůstane prázdný — bez info nadpisu, popisku i tlačítek.
-  if (!currentSong) return null;
-
+  // Header se ukazuje VŽDY — i bez vybrané písně, aby byly "+" a Settings
+  // pořád dostupné. Body sekcí se renderuje jen když je píseň vybraná.
   return (
     <>
       <div className="shrink-0 flex justify-between items-center p-4 pb-2">
         <div className="flex items-center gap-2">
-          <h2 className="text-lg font-semibold text-text-primary">
-            Sections
-          </h2>
-          {onNavigatePrev && (
-            <button
-              onClick={onNavigatePrev}
-              className="w-7 h-7 flex items-center justify-center rounded-full text-text-secondary hover:bg-surface-secondary hover:text-text-primary transition-colors"
-              title="Previous section (←/↑)"
-            >
-              <Icon name="ChevronLeft" size={16} />
-            </button>
-          )}
-          {onNavigateNext && (
-            <button
-              onClick={onNavigateNext}
-              className="w-7 h-7 flex items-center justify-center rounded-full text-text-secondary hover:bg-surface-secondary hover:text-text-primary transition-colors"
-              title="Next section (→/↓)"
-            >
-              <Icon name="ChevronRight" size={16} />
-            </button>
+          {currentSong && (
+            <>
+              <h2 className="text-lg font-semibold text-text-primary">
+                Sections
+              </h2>
+              {onNavigatePrev && (
+                <button
+                  onClick={onNavigatePrev}
+                  className="w-7 h-7 flex items-center justify-center rounded-full text-text-secondary hover:bg-surface-secondary hover:text-text-primary transition-colors"
+                  title="Previous section (←/↑)"
+                >
+                  <Icon name="ChevronLeft" size={16} />
+                </button>
+              )}
+              {onNavigateNext && (
+                <button
+                  onClick={onNavigateNext}
+                  className="w-7 h-7 flex items-center justify-center rounded-full text-text-secondary hover:bg-surface-secondary hover:text-text-primary transition-colors"
+                  title="Next section (→/↓)"
+                >
+                  <Icon name="ChevronRight" size={16} />
+                </button>
+              )}
+            </>
           )}
         </div>
         <div className="flex items-center gap-2">
-          {onEditCurrentSong && (
+          {onOpenSettings && (
+            <button
+              onClick={onOpenSettings}
+              className="w-8 h-8 flex items-center justify-center text-text-secondary hover:bg-surface-secondary hover:text-text-primary rounded-full transition-colors"
+              title="Settings"
+            >
+              <Icon name="Settings" size={16} />
+            </button>
+          )}
+          {currentSong && onEditCurrentSong && (
             <button
               onClick={onEditCurrentSong}
               className="w-8 h-8 flex items-center justify-center bg-surface-secondary border border-border text-text-secondary rounded-full hover:bg-primary hover:text-white hover:border-primary transition-colors"
@@ -96,7 +109,8 @@ export default function SectionsList({
           )}
         </div>
       </div>
-      <div className="flex-1 overflow-y-auto px-4 pb-4">
+      {currentSong && (
+        <div className="flex-1 overflow-y-auto px-4 pb-4">
         <div
           className={
             currentSong.isBible || currentSong.isMessage
@@ -168,7 +182,8 @@ export default function SectionsList({
               );
           })}
         </div>
-      </div>
+        </div>
+      )}
     </>
   );
 }

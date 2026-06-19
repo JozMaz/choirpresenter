@@ -447,19 +447,102 @@ ipcMain.handle("list-message-keys", async () => {
   return result.sort();
 });
 
+/**
+ * Zapíše songbook do:
+ *   1) lokální cache (userData/data/data/songs/{book}-converted.json) — vždy
+ *   2) cloud (Worker PUT) — pokud má uživatel write token
+ *
+ * Vrací { localOk, cloudOk } kde:
+ *   - localOk: true/false jestli local write prošel
+ *   - cloudOk: true/false jestli cloud PUT prošel, null pokud nemá token
+ *              (= local-only mode, ostatní uživatelé tu změnu neuvidí)
+ */
 ipcMain.handle("write-songbook", async (_, book, data) => {
-  const target = SONGBOOK_PATHS[book];
-  if (!target) return false;
+  const cacheKey = SONGBOOK_CACHE_KEYS[book];
+  if (!cacheKey) return { localOk: false, cloudOk: null };
+
+  const body = JSON.stringify(data, null, 2);
+
+  // 1) Local cache write
+  let localOk = false;
   try {
-    // Pretty-print s 2 mezerami pro lepší git diffy
-    await fs.promises.writeFile(
-      target,
-      JSON.stringify(data, null, 2),
-      "utf8",
-    );
+    const localPath = path.join(dataCacheDir(), cacheKey);
+    await fs.promises.mkdir(path.dirname(localPath), { recursive: true });
+    await fs.promises.writeFile(localPath, body, "utf8");
+    localOk = true;
+  } catch (err) {
+    console.error("Local write failed:", err);
+  }
+
+  // 2) Cloud PUT (jen pokud máme write token)
+  let cloudOk = null;
+  const token = await readWriteTokenFromDisk();
+  if (token) {
+    try {
+      const safe = cacheKey.split("/").map(encodeURIComponent).join("/");
+      const res = await fetch(`${CLOUD_DATA_URL}/${safe}`, {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body,
+      });
+      cloudOk = res.ok;
+      if (!res.ok) {
+        console.error(`Cloud PUT failed: ${res.status} ${await res.text()}`);
+      }
+    } catch (err) {
+      console.error("Cloud PUT threw:", err);
+      cloudOk = false;
+    }
+  }
+
+  return { localOk, cloudOk };
+});
+
+// ===== WRITE TOKEN =====
+// Token pro autorizaci PUT requests do cloudu. Uloženo v userData/config.json.
+const CONFIG_PATH = () => path.join(app.getPath("userData"), "config.json");
+
+async function readWriteTokenFromDisk() {
+  try {
+    if (!fs.existsSync(CONFIG_PATH())) return null;
+    const raw = await fs.promises.readFile(CONFIG_PATH(), "utf8");
+    const cfg = JSON.parse(raw);
+    return typeof cfg.writeToken === "string" ? cfg.writeToken : null;
+  } catch {
+    return null;
+  }
+}
+
+async function writeWriteTokenToDisk(token) {
+  let cfg = {};
+  try {
+    if (fs.existsSync(CONFIG_PATH())) {
+      cfg = JSON.parse(await fs.promises.readFile(CONFIG_PATH(), "utf8"));
+    }
+  } catch {
+    cfg = {};
+  }
+  cfg.writeToken = token || null;
+  await fs.promises.writeFile(
+    CONFIG_PATH(),
+    JSON.stringify(cfg, null, 2),
+    "utf8",
+  );
+}
+
+ipcMain.handle("get-write-token", async () => {
+  return await readWriteTokenFromDisk();
+});
+
+ipcMain.handle("set-write-token", async (_, token) => {
+  try {
+    await writeWriteTokenToDisk(token || "");
     return true;
   } catch (err) {
-    console.error("Failed to write songbook", book, err);
+    console.error("set-write-token failed:", err);
     return false;
   }
 });
