@@ -130,12 +130,22 @@ const SONGBOOK_POLISH_NAMES: Record<string, string> = {
 };
 
 /**
+ * Když má titul na konci (...) co vypadá jako hudební tónina ("(d-moll)",
+ * "(Em)", "(F#)", "(c-moll)"), strip ji — `song.key` je autoritativní zdroj.
+ * Bez toho by patička dvakrát ukazovala tóninu: "Title (d-moll)  (Em)  ...".
+ */
+const KEY_TRAIL_RE =
+  /\s*\(\s*[A-Ha-h][#♯b♭]?(?:\s*-?\s*(?:m(?:oll|inor|ajor)?|dur))?\s*\)\s*$/i;
+const stripKeyFromTitle = (title: string): string =>
+  title.replace(KEY_TRAIL_RE, "").trim();
+
+/**
  * Sestaví patičku pro song mód: "{title}  ({key})  {id}  ({songbook})".
  * Části bez hodnoty se vynechají. Pro custom songy se songbook nezobrazí.
  */
 export const buildSongFooter = (song: ApiItem): string => {
   const parts: string[] = [];
-  const title = song.title?.trim();
+  const title = song.title ? stripKeyFromTitle(song.title) : "";
   if (title) parts.push(title);
   if (song.key?.trim()) parts.push(`(${song.key.trim()})`);
   if (song.id && song.id > 0) parts.push(String(song.id));

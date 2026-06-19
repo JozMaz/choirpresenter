@@ -46,7 +46,6 @@ import LoadingScreen from "./components/LoadingScreen";
 import PlaylistsPanel from "./components/PlaylistsPanel";
 import { usePlaylists } from "./hooks/usePlaylists";
 import SongbooksTree from "./components/SongbooksTree";
-import SelectedPanel from "./components/SelectedPanel";
 import LocalPreview from "./components/LocalPreview";
 import StreamPreview from "./components/StreamPreview";
 import SectionsList from "./components/SectionsList";
@@ -244,14 +243,6 @@ function HomeContent() {
     ) {
       setSelectedItems([...selectedItems, { ...item, selected: true }]);
     }
-  };
-
-  const removeItem = (id: number, source: SongSource) => {
-    setSelectedItems(
-      selectedItems.filter(
-        (item) => !(item.id === id && item.source === source),
-      ),
-    );
   };
 
   // ===== EDITOR HANDLERS =====
@@ -505,30 +496,21 @@ function HomeContent() {
                     onSelect={selectItem}
                   />
                 }
-                setsContent={
-                  <PlaylistsPanel
-                    playlists={playlistsHook.playlists}
-                    dataByBook={dataByBook}
-                    customSongs={customSongs}
-                    currentSong={player.currentSong}
-                    onCreatePlaylist={playlistsHook.createPlaylist}
-                    onRenamePlaylist={playlistsHook.renamePlaylist}
-                    onDeletePlaylist={playlistsHook.deletePlaylist}
-                    onAddSong={playlistsHook.addSong}
-                    onRemoveSong={playlistsHook.removeSong}
-                    onShowSong={player.sendFirstPart}
-                  />
-                }
               />
             </Allotment.Pane>
 
             <Allotment.Pane>
-              <SelectedPanel
+              <PlaylistsPanel
+                playlists={playlistsHook.playlists}
+                dataByBook={dataByBook}
                 customSongs={customSongs}
-                selectedItems={selectedItems}
-                onShow={player.sendFirstPart}
-                onSelect={selectItem}
-                onRemove={removeItem}
+                currentSong={player.currentSong}
+                onCreatePlaylist={playlistsHook.createPlaylist}
+                onRenamePlaylist={playlistsHook.renamePlaylist}
+                onDeletePlaylist={playlistsHook.deletePlaylist}
+                onAddSong={playlistsHook.addSong}
+                onRemoveSong={playlistsHook.removeSong}
+                onShowSong={player.sendFirstPart}
               />
             </Allotment.Pane>
           </Allotment>
