@@ -74,15 +74,16 @@ export default function SettingsModal({ open, onClose }: SettingsModalProps) {
     setSavedMsg("Cleared.");
   };
 
-  const handleSync = async () => {
+  // updateAvailable mode: download jen diff. Force re-sync: VŠECHNO znova
+  // (řeší případy kdy je lokální cache rozjetá vs manifest).
+  const handleSync = async (forceAll: boolean) => {
     setSyncBusy(true);
     setSyncProgress({ phase: "init", ratio: 0 });
     try {
-      await applyUpdate((p) => setSyncProgress(p));
+      await applyUpdate((p) => setSyncProgress(p), { forceAll });
       const local = getLastManifest();
       setLocalVersion(local?.version ?? null);
       setSyncProgress({ phase: "done", ratio: 1, message: "Data updated." });
-      // Force full reload after sync — easiest way to re-init all hooks
       setTimeout(() => {
         window.location.reload();
       }, 800);
@@ -150,26 +151,31 @@ export default function SettingsModal({ open, onClose }: SettingsModalProps) {
               </div>
             )}
 
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 flex-wrap">
+              {updateAvailable && !syncBusy && (
+                <button
+                  onClick={() => handleSync(false)}
+                  className="px-3 py-1 text-xs font-semibold bg-primary text-white rounded hover:bg-primary-hover transition-colors flex items-center gap-1.5"
+                >
+                  <Icon name="Download" size={12} />
+                  Update now
+                </button>
+              )}
               <button
-                onClick={handleSync}
+                onClick={() => handleSync(true)}
                 disabled={syncBusy}
-                className="px-3 py-1 text-xs font-semibold bg-primary text-white rounded hover:bg-primary-hover transition-colors disabled:opacity-50 flex items-center gap-1.5"
+                title="Re-download everything from cloud, ignoring local hash"
+                className="px-3 py-1 text-xs font-semibold bg-surface-secondary border border-border text-text-primary rounded hover:bg-border transition-colors disabled:opacity-50 flex items-center gap-1.5"
               >
                 {syncBusy ? (
                   <>
                     <Icon name="Loader" size={12} className="animate-spin" />
                     Syncing…
                   </>
-                ) : updateAvailable ? (
-                  <>
-                    <Icon name="Download" size={12} />
-                    Update now
-                  </>
                 ) : (
                   <>
                     <Icon name="RefreshCw" size={12} />
-                    Force re-sync
+                    Force re-sync (full)
                   </>
                 )}
               </button>

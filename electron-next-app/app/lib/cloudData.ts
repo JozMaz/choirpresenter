@@ -175,10 +175,18 @@ export function bootstrap(onProgress: BootstrapListener): Promise<void> {
 }
 
 /**
- * Manuální update: aplikuje aktuální cloud manifest, stáhne změněné soubory.
- * Volat z tlačítka "Update" v UI.
+ * Manuální update: aplikuje aktuální cloud manifest.
+ *
+ * - `forceAll: false` (default) → jen soubory s diff hashem oproti lokálnímu
+ *   manifestu. Rychlé, ale pokud je lokální cache rozjetá (file na disku
+ *   neodpovídá hashe v manifestu), nepomůže.
+ * - `forceAll: true` → re-downloaduje VŠE z manifestu, ignoruje lokální hashe.
+ *   Pomalé, ale spolehlivé. Použít pro "Force re-sync" button.
  */
-export async function applyUpdate(onProgress: BootstrapListener): Promise<void> {
+export async function applyUpdate(
+  onProgress: BootstrapListener,
+  opts: { forceAll?: boolean } = {},
+): Promise<void> {
   const api = window.api;
   if (!api) throw new Error("Electron IPC not available");
 
@@ -188,20 +196,24 @@ export async function applyUpdate(onProgress: BootstrapListener): Promise<void> 
     onProgress({ phase: "error", ratio: 0, message: "Cloud unavailable" });
     return;
   }
-  const local = await loadLocalManifest();
-  // Diff: soubory se změněným hashem (nebo nové)
-  const changedKeys: string[] = [];
-  for (const [key, entry] of Object.entries(remote.files)) {
-    const localEntry = local?.files?.[key];
-    if (!localEntry || localEntry.hash !== entry.hash) {
-      changedKeys.push(key);
+
+  let toFetch: string[];
+  if (opts.forceAll) {
+    toFetch = Object.keys(remote.files);
+  } else {
+    const local = await loadLocalManifest();
+    toFetch = [];
+    for (const [key, entry] of Object.entries(remote.files)) {
+      const localEntry = local?.files?.[key];
+      if (!localEntry || localEntry.hash !== entry.hash) {
+        toFetch.push(key);
+      }
     }
   }
-  // (Mazání odstraněných souborů by mohlo přijít sem; pro Phase 1 ignoruj.)
 
-  const total = changedKeys.length;
+  const total = toFetch.length;
   let done = 0;
-  for (const key of changedKeys) {
+  for (const key of toFetch) {
     onProgress({
       phase: "downloading",
       ratio: done / Math.max(1, total),
