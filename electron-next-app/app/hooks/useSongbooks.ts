@@ -1,54 +1,26 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import newSongJson from "../../api/SongBooks/new-song-converted.json";
-import newSongPlGbJson from "../../api/SongBooks/new-song-pl-gb-converted.json";
-import pielgrzymJson from "../../api/SongBooks/pielgrzym-converted.json";
-import roboczyJson from "../../api/SongBooks/roboczy-converted.json";
-import childrenJson from "../../api/SongBooks/children-converted.json";
 import {
   processBilingualSongbook,
   processPlOnlySongbook,
 } from "../lib/songProcessing";
 import type { ApiItem, Song, SongBookKey } from "../lib/types";
 
-/** Konfigurace songbooks: lidsky label + formát + případně bundled fallback. */
+/**
+ * Konfigurace songbooks: lidský label + formát.
+ * Data se načítají runtime přes Electron IPC z lokální cache (cloud download).
+ */
 export const SONGBOOKS: {
   key: SongBookKey;
   label: string;
   bilingual: boolean;
-  fallback: { Songs?: Song[] };
 }[] = [
-  {
-    key: "newSong",
-    label: "New Song",
-    bilingual: false,
-    fallback: newSongJson as unknown as { Songs?: Song[] },
-  },
-  {
-    key: "newSongPlGb",
-    label: "New Song PL/EN",
-    bilingual: true,
-    fallback: newSongPlGbJson as unknown as { Songs?: Song[] },
-  },
-  {
-    key: "pielgrzym",
-    label: "Pielgrzym",
-    bilingual: false,
-    fallback: pielgrzymJson as unknown as { Songs?: Song[] },
-  },
-  {
-    key: "roboczy",
-    label: "Roboczy",
-    bilingual: true,
-    fallback: roboczyJson as unknown as { Songs?: Song[] },
-  },
-  {
-    key: "children",
-    label: "Children",
-    bilingual: true,
-    fallback: childrenJson as unknown as { Songs?: Song[] },
-  },
+  { key: "newSong", label: "New Song", bilingual: false },
+  { key: "newSongPlGb", label: "New Song PL/EN", bilingual: true },
+  { key: "pielgrzym", label: "Pielgrzym", bilingual: false },
+  { key: "roboczy", label: "Roboczy", bilingual: true },
+  { key: "children", label: "Children", bilingual: true },
 ];
 
 type SongbooksState = Record<SongBookKey, Song[]>;
@@ -74,7 +46,7 @@ export function useSongbooks() {
       const next: SongbooksState = emptyState();
 
       for (const book of SONGBOOKS) {
-        let data: Song[] | null = null;
+        let data: Song[] = [];
         if (api?.readSongBook) {
           try {
             const r = await api.readSongBook(book.key);
@@ -83,7 +55,6 @@ export function useSongbooks() {
             console.error(`Failed to read songbook ${book.key}`, err);
           }
         }
-        if (!data) data = book.fallback.Songs ?? [];
         next[book.key] = data;
       }
 
