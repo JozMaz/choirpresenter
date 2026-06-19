@@ -1,7 +1,7 @@
 "use client";
 
 import type { ApiItem, DisplayInfo } from "../lib/types";
-import { getDisplayTitle, isBilingualSource } from "../lib/songProcessing";
+import { buildSongFooter, isBilingualSource } from "../lib/songProcessing";
 import { useScaleToFit } from "../hooks/useScaleToFit";
 import Icon from "./Icon";
 import MonitorPicker from "./MonitorPicker";
@@ -139,7 +139,7 @@ export default function LocalPreview({
             )}
             {output1Text && (
               <div className="flex justify-center items-center w-full px-10">
-                <span className="text-xs">{getDisplayTitle(currentSong)}</span>
+                <span className="text-xs whitespace-nowrap">{buildSongFooter(currentSong)}</span>
               </div>
             )}
           </div>
@@ -164,8 +164,8 @@ export default function LocalPreview({
             </pre>
             {currentSong && output1Text && (
               <div className="flex justify-center items-center w-full px-10">
-                <span className="text-xs text-text-secondary font-semibold">
-                  {getDisplayTitle(currentSong)}
+                <span className="text-xs text-text-secondary font-semibold whitespace-nowrap">
+                  {buildSongFooter(currentSong)}
                 </span>
               </div>
             )}

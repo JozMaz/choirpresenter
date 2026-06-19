@@ -120,6 +120,30 @@ export const getDisplayTitle = (song: ApiItem): string => {
   return song.title;
 };
 
+/** Polské názvy songbooků pro patičku ve previewu / HDMI. */
+const SONGBOOK_POLISH_NAMES: Record<string, string> = {
+  newSong: "Nowa pieśń",
+  newSongPlGb: "Śpiewnik polsko-angielski",
+  pielgrzym: "Śpiewnik pielgrzyma",
+  roboczy: "Śpiewnik roboczy",
+  children: "Śpiewnik dziecięcy",
+};
+
+/**
+ * Sestaví patičku pro song mód: "{title}  ({key})  {id}  ({songbook})".
+ * Části bez hodnoty se vynechají. Pro custom songy se songbook nezobrazí.
+ */
+export const buildSongFooter = (song: ApiItem): string => {
+  const parts: string[] = [];
+  const title = song.title?.trim();
+  if (title) parts.push(title);
+  if (song.key?.trim()) parts.push(`(${song.key.trim()})`);
+  if (song.id && song.id > 0) parts.push(String(song.id));
+  const sb = SONGBOOK_POLISH_NAMES[song.source];
+  if (sb) parts.push(`(${sb})`);
+  return parts.join("  ");
+};
+
 export const getVerseText = (verse: Verse, _source: SongSource): string => {
   // Pokud verse má TextPL (dvojjazyčná), použij ji; jinak Text (PL-only formát).
   return verse.TextPL || verse.Text || "";

@@ -1,5 +1,5 @@
 import type { ApiItem } from "./types";
-import { getDisplayTitle, isBilingualSource } from "./songProcessing";
+import { buildSongFooter, isBilingualSource } from "./songProcessing";
 
 interface BuildHdmiHtmlArgs {
   currentSong: ApiItem | null;
@@ -50,10 +50,10 @@ export function buildHdmiHtml({
   }
 
   const sequence = currentSong.sequence || "";
-  const title = getDisplayTitle(currentSong);
+  const footerText = buildSongFooter(currentSong);
 
   const header = `<div class="header"><span class="sequence">${sectionLabel}</span><span class="sequence">${sequence}</span></div>`;
-  const footer = `<div class="title-row"><span class="sequence">${title}</span></div>`;
+  const footer = `<div class="title-row"><span class="sequence">${footerText}</span></div>`;
 
   if (isBilingualSource(currentSong)) {
     const [plText = "", enText = ""] = output1Text.split("\n\n");
