@@ -1,0 +1,84 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*.*.*"
+
+jobs:
+  build:
+    name: Build ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-latest, windows-latest]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: electron-next-app/package-lock.json
+
+      - name: Install dependencies
+        working-directory: electron-next-app
+        run: npm ci
+
+      - name: Build (macOS)
+        if: matrix.os == 'macos-latest'
+        working-directory: electron-next-app
+        env:
+          # No code signing — appka bude unsigned (uživatel uvidí "unidentified
+          # developer", musí kliknout pravým → Open). Pro signed build by se sem
+          # daly Apple Developer creds.
+          CSC_IDENTITY_AUTO_DISCOVERY: false
+        run: npm run dist:mac
+
+      - name: Build (Windows)
+        if: matrix.os == 'windows-latest'
+        working-directory: electron-next-app
+        run: npm run dist:win
+
+      - name: Upload artifacts (macOS)
+        if: matrix.os == 'macos-latest'
+        uses: actions/upload-artifact@v4
+        with:
+          name: mac-dist
+          path: |
+            electron-next-app/dist/*.dmg
+            electron-next-app/dist/*.dmg.blockmap
+            electron-next-app/dist/latest-mac.yml
+
+      - name: Upload artifacts (Windows)
+        if: matrix.os == 'windows-latest'
+        uses: actions/upload-artifact@v4
+        with:
+          name: win-dist
+          path: |
+            electron-next-app/dist/*.exe
+            electron-next-app/dist/*.exe.blockmap
+            electron-next-app/dist/latest.yml
+
+  release:
+    name: Publish release
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            artifacts/mac-dist/*
+            artifacts/win-dist/*
+          draft: false
+          prerelease: false
+          generate_release_notes: true

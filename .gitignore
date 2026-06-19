@@ -1,0 +1,38 @@
+# macOS
+.DS_Store
+
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+out/
+.next/
+.turbo/
+
+# Lokální data (z důvodu velikosti) — data jsou hostována v Cloudflare R2,
+# appka si je sama stáhne při prvním spuštění. Dev fallback čte z těchto
+# složek pokud existují lokálně, ale do gitu nepatří (114+ MB).
+electron-next-app/api/
+
+# Electron build cache
+.cache/
+
+# Wrangler local state + logs
+.wrangler/
+.dev.vars
+
+# Environment & secrets
+.env
+.env.local
+.env.*.local
+
+# Editor
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Logs
+*.log
+npm-debug.log*

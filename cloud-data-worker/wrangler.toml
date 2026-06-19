@@ -1,0 +1,19 @@
+name = "choirpresenter-data"
+main = "src/index.ts"
+compatibility_date = "2026-01-01"
+
+# R2 bucket binding — vytvoř bucket "choirpresenter-data" v Cloudflare dashboardu nebo přes:
+#   wrangler r2 bucket create choirpresenter-data
+[[r2_buckets]]
+binding = "DATA_BUCKET"
+bucket_name = "choirpresenter-data"
+
+# Write tokens (čárkami oddělené). Nastav přes:
+#   wrangler secret put WRITE_TOKENS
+# pak zadej hodnotu jako: tok-jane,tok-pastor,tok-admin
+# Bez nastavení = PUT je úplně zablokovaný (vrátí 503).
+# Tohle není v tomto souboru aby tokeny nebyly v gitu.
+
+[vars]
+# Verze API — zvedni když změníš schema manifestu.
+API_VERSION = "1"
