@@ -23,9 +23,34 @@ jobs:
           cache: npm
           cache-dependency-path: electron-next-app/package-lock.json
 
+      # Cache Electron binary download — největší + nejvíc flaky download.
+      # Sdílí se mezi runs, dramaticky snižuje šanci na "socket hang up".
+      - name: Cache Electron binary
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/electron
+          key: electron-${{ runner.os }}-${{ hashFiles('electron-next-app/package-lock.json') }}
+          restore-keys: |
+            electron-${{ runner.os }}-
+
+      # 5× retry s 30s backoff. Občas selže download Electronu (got: socket hang up).
       - name: Install dependencies
         working-directory: electron-next-app
-        run: npm ci
+        env:
+          npm_config_fetch_retries: 5
+          npm_config_fetch_retry_mintimeout: 30000
+          npm_config_fetch_retry_maxtimeout: 120000
+          npm_config_fetch_timeout: 600000
+          ELECTRON_GET_USE_PROXY: 1
+        run: |
+          for i in 1 2 3; do
+            echo "Attempt $i..."
+            if npm ci; then exit 0; fi
+            echo "Failed, sleeping 30s..."
+            sleep 30
+          done
+          exit 1
+        shell: bash
 
       - name: Build (macOS)
         if: matrix.os == 'macos-latest'
