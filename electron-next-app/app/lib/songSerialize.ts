@@ -67,8 +67,11 @@ export function buildSongFromEditor(args: BuildSongArgs): Song {
       ? existing.Sequence
       : sections.map((s) => formatSequencePart(s.type, s.number)).join(" ");
 
-  // Priorita: user customId > existing > auto nextId
-  const id = customId ?? existing?.ID ?? nextId ?? 0;
+  // Priorita: user customId > existing.ID > 0 (= "no ID").
+  // NEKTERUJEME auto-increment přes nextId — když user nezadá číslo, píseň
+  // dostane ID 0. Upsert v useSongbooks identifikuje píseň podle Guid (níž),
+  // takže duplicitní ID 0 nevadí.
+  const id = customId ?? existing?.ID ?? 0;
   const guid = existing?.Guid ?? crypto.randomUUID();
 
   if (isPlEn) {

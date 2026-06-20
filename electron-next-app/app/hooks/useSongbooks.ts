@@ -95,7 +95,11 @@ export function useSongbooks() {
     let snapshot: Song[] = [];
     setRaw((prev) => {
       const arr = prev[book] || [];
-      const idx = arr.findIndex((s) => s.ID === song.ID);
+      // Identifikuj přes Guid (vždy unikátní) — ID může chybět / kolidovat.
+      // Fallback na ID match jen když píseň nemá Guid (legacy data).
+      const idx = song.Guid
+        ? arr.findIndex((s) => s.Guid === song.Guid)
+        : arr.findIndex((s) => s.ID === song.ID && song.ID > 0);
       const next =
         idx >= 0
           ? arr.map((s, i) => (i === idx ? song : s))

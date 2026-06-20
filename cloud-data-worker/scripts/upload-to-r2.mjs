@@ -52,8 +52,10 @@ const MAPPINGS = [
   },
 ];
 
-function sha256File(file) {
-  const h = createHash("sha256");
+// Používáme MD5 (= R2 ETag), aby manifesty z upload-script a Worker auto-refresh
+// měly konzistentní formát hash. MD5 zde je jen pro diff detekci, ne crypto.
+function md5File(file) {
+  const h = createHash("md5");
   h.update(fs.readFileSync(file));
   return h.digest("hex");
 }
@@ -76,7 +78,7 @@ function collectFiles() {
         localPath: srcPath,
         key,
         size: stat.size,
-        hash: sha256File(srcPath),
+        hash: md5File(srcPath),
       });
     }
   }
@@ -100,21 +102,65 @@ function uploadManifest(manifest) {
   }
 }
 
+// Worker URL pro fetch remote manifestu (pro differential upload).
+// Override přes env: WORKER_URL=https://your-worker.workers.dev
+const WORKER_URL =
+  process.env.WORKER_URL ||
+  "https://choirpresenter-data.joz-maz-work.workers.dev";
+
+async function fetchRemoteManifest() {
+  try {
+    const res = await fetch(`${WORKER_URL}/manifest.json?_t=${Date.now()}`, {
+      cache: "no-store",
+    });
+    if (!res.ok) return null;
+    return await res.json();
+  } catch (err) {
+    console.warn(`Could not fetch remote manifest (${err.message}); will upload everything.`);
+    return null;
+  }
+}
+
 // === MAIN ===
 const version = new Date().toISOString().slice(0, 19).replace(/[T:]/g, "-");
-console.log(`Uploading data to R2 bucket "${BUCKET}" — version ${version}`);
+const forceAll = process.argv.includes("--all");
+
+console.log(`Differential upload to R2 bucket "${BUCKET}" — version ${version}`);
+console.log(forceAll ? "Mode: FULL (--all)" : "Mode: differential (skip unchanged)");
+
+const remoteManifest = forceAll ? null : await fetchRemoteManifest();
+const remoteFiles = remoteManifest?.files || {};
+console.log(
+  remoteManifest
+    ? `Remote manifest version: ${remoteManifest.version} (${Object.keys(remoteFiles).length} files)`
+    : "No remote manifest — uploading everything as new.",
+);
 
 const files = collectFiles();
-console.log(`Found ${files.length} files to upload.`);
+console.log(`Found ${files.length} local files. Comparing…`);
 
 let totalBytes = 0;
+let uploaded = 0;
+let skipped = 0;
 let i = 0;
 for (const f of files) {
   i++;
-  process.stdout.write(`[${i}/${files.length}] ${f.key} (${(f.size / 1024).toFixed(1)} KB) ... `);
+  const remote = remoteFiles[f.key];
+  const unchanged =
+    remote && remote.hash === f.hash && remote.size === f.size;
+  if (unchanged && !forceAll) {
+    skipped++;
+    if (i % 50 === 0 || i === files.length)
+      process.stdout.write(`  skipped ${skipped} unchanged so far…\r`);
+    continue;
+  }
+  process.stdout.write(
+    `[${i}/${files.length}] ${f.key} (${(f.size / 1024).toFixed(1)} KB) ... `,
+  );
   try {
     uploadOne(f);
     console.log("OK");
+    uploaded++;
     totalBytes += f.size;
   } catch (err) {
     console.log("FAILED");
@@ -122,16 +168,30 @@ for (const f of files) {
     process.exit(1);
   }
 }
+console.log(""); // newline after skip counter
+console.log(`Uploaded ${uploaded}, skipped ${skipped} unchanged.`);
 
-const manifest = {
-  version,
-  generatedAt: new Date().toISOString(),
-  files: Object.fromEntries(
-    files.map((f) => [f.key, { hash: f.hash, size: f.size }]),
-  ),
-};
-
-console.log(`\nUploading manifest.json ...`);
-uploadManifest(manifest);
-console.log(`Done. ${files.length} files, ${(totalBytes / 1024 / 1024).toFixed(1)} MB total.`);
-console.log(`Manifest version: ${version}`);
+// Když nic nenahráno (vše unchanged), Worker nemá důvod přebuilďovat manifest.
+// Nicméně uploadneme i tak — drobné ujistění že verze je aktualizovaná.
+if (uploaded === 0) {
+  console.log("Nothing changed. Manifest stays as-is on cloud.");
+} else {
+  // Manifest mergujeme: lokální files se updatují, cloud-only entries
+  // (= soubory které jsou jen v cloudu, např. nahrané přes app PUT)
+  // ZACHOVÁME, aby se nesmazaly.
+  const mergedFiles = { ...remoteFiles };
+  for (const f of files) {
+    mergedFiles[f.key] = { hash: f.hash, size: f.size };
+  }
+  const manifest = {
+    version,
+    generatedAt: new Date().toISOString(),
+    files: mergedFiles,
+  };
+  console.log(`\nUploading manifest.json (${Object.keys(mergedFiles).length} entries) ...`);
+  uploadManifest(manifest);
+  console.log(
+    `Done. Uploaded ${uploaded} files (${(totalBytes / 1024 / 1024).toFixed(1)} MB), skipped ${skipped}.`,
+  );
+  console.log(`Manifest version: ${version}`);
+}

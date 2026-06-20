@@ -110,7 +110,50 @@ async function handlePutData(
   await env.DATA_BUCKET.put(path, body, {
     httpMetadata: { contentType },
   });
+  // Auto-refresh manifestu po každém PUT, aby ostatní devices uviděly novou
+  // verzi. Slow path (~500ms na list+rebuild), ale není v hot path UI.
+  await rebuildManifest(env);
   return corsJson({ ok: true, path, size: body.byteLength });
+}
+
+/**
+ * Projde všechny data/* objekty v R2, zbuilduje manifest s novou verzí
+ * a uloží ho jako manifest.json.
+ *
+ * Hash používáme R2 httpEtag (= MD5 obsahu) — pro diff detekci postačí.
+ */
+async function rebuildManifest(env: Env): Promise<void> {
+  const files: Record<string, { hash: string; size: number }> = {};
+  let cursor: string | undefined;
+  // R2 list paginuje (max 1000 per call). Iteruj dokud nedojde.
+  do {
+    const listed = await env.DATA_BUCKET.list({
+      prefix: "data/",
+      cursor,
+      limit: 1000,
+    });
+    for (const obj of listed.objects) {
+      files[obj.key] = {
+        // R2 etag je MD5 hex obsahu, někdy s uvozovkami — strip je.
+        hash: obj.etag.replace(/^"|"$/g, ""),
+        size: obj.size,
+      };
+    }
+    cursor = listed.truncated ? listed.cursor : undefined;
+  } while (cursor);
+
+  const version = new Date()
+    .toISOString()
+    .slice(0, 19)
+    .replace(/[T:]/g, "-");
+  const manifest = {
+    version,
+    generatedAt: new Date().toISOString(),
+    files,
+  };
+  await env.DATA_BUCKET.put(MANIFEST_KEY, JSON.stringify(manifest, null, 2), {
+    httpMetadata: { contentType: "application/json" },
+  });
 }
 
 export default {
