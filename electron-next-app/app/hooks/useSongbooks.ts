@@ -92,23 +92,20 @@ export function useSongbooks() {
     book: SongBookKey,
     song: Song,
   ): Promise<{ localOk: boolean; cloudOk: boolean | null }> => {
-    let snapshot: Song[] = [];
-    setRaw((prev) => {
-      const arr = prev[book] || [];
-      // Identifikuj přes Guid (vždy unikátní) — ID může chybět / kolidovat.
-      // Fallback na ID match jen když píseň nemá Guid (legacy data).
-      const idx = song.Guid
-        ? arr.findIndex((s) => s.Guid === song.Guid)
-        : arr.findIndex((s) => s.ID === song.ID && song.ID > 0);
-      const next =
-        idx >= 0
-          ? arr.map((s, i) => (i === idx ? song : s))
-          : [...arr, song];
-      snapshot = next;
-      return { ...prev, [book]: next };
-    });
+    // Snapshot SYNCHRONNĚ z aktuálního raw (closure).
+    // POZOR: setRaw callback se nevolá synchronně v React 18 — kdybychom
+    // snapshot updatovali uvnitř callbacku, writeSongBook by čekal a měl
+    // by initial value [] → cloud + cache by dostaly prázdný songbook.
+    const arr = raw[book] || [];
+    const idx = song.Guid
+      ? arr.findIndex((s) => s.Guid === song.Guid)
+      : arr.findIndex((s) => s.ID === song.ID && song.ID > 0);
+    const next = idx >= 0
+      ? arr.map((s, i) => (i === idx ? song : s))
+      : [...arr, song];
+    setRaw((prev) => ({ ...prev, [book]: next }));
     if (window.api?.writeSongBook) {
-      return await window.api.writeSongBook(book, { Songs: snapshot });
+      return await window.api.writeSongBook(book, { Songs: next });
     }
     return { localOk: false, cloudOk: null };
   };
@@ -117,15 +114,11 @@ export function useSongbooks() {
     book: SongBookKey,
     id: number,
   ): Promise<{ localOk: boolean; cloudOk: boolean | null }> => {
-    let snapshot: Song[] = [];
-    setRaw((prev) => {
-      const arr = prev[book] || [];
-      const next = arr.filter((s) => s.ID !== id);
-      snapshot = next;
-      return { ...prev, [book]: next };
-    });
+    const arr = raw[book] || [];
+    const next = arr.filter((s) => s.ID !== id);
+    setRaw((prev) => ({ ...prev, [book]: next }));
     if (window.api?.writeSongBook) {
-      return await window.api.writeSongBook(book, { Songs: snapshot });
+      return await window.api.writeSongBook(book, { Songs: next });
     }
     return { localOk: false, cloudOk: null };
   };
