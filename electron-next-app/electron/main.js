@@ -462,11 +462,34 @@ ipcMain.handle("write-songbook", async (_, book, data) => {
   if (!cacheKey) return { localOk: false, cloudOk: null };
 
   const body = JSON.stringify(data, null, 2);
+  const newCount = Array.isArray(data?.Songs) ? data.Songs.length : 0;
 
-  // 1) Local cache write
+  // SAFETY: pokud nový soubor má ≥10× méně písní než ten co je teď na disku,
+  // odmítni zapis a zachovej backup. Chrání proti race-condition bugům
+  // co psaly {Songs:[]} a smazaly celé songbooky.
   let localOk = false;
   try {
     const localPath = path.join(dataCacheDir(), cacheKey);
+    if (fs.existsSync(localPath)) {
+      try {
+        const existingRaw = await fs.promises.readFile(localPath, "utf8");
+        const existing = JSON.parse(existingRaw);
+        const existingCount = Array.isArray(existing?.Songs)
+          ? existing.Songs.length
+          : 0;
+        if (existingCount >= 10 && newCount * 10 <= existingCount) {
+          console.error(
+            `[write-songbook] REFUSED: existing has ${existingCount} songs, new has only ${newCount}. Likely a bug — keeping existing file untouched. Backup created.`,
+          );
+          // Backup pro debug — kdyby byl nový soubor přesto správný
+          const backupPath = `${localPath}.attempted-${Date.now()}.json`;
+          await fs.promises.writeFile(backupPath, body, "utf8");
+          return { localOk: false, cloudOk: null, refused: true };
+        }
+      } catch {
+        // Existing soubor nečitelný — povolíme write (pravděpodobně recovery).
+      }
+    }
     await fs.promises.mkdir(path.dirname(localPath), { recursive: true });
     await fs.promises.writeFile(localPath, body, "utf8");
     localOk = true;
