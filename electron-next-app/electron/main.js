@@ -607,9 +607,15 @@ ipcMain.handle("data-fetch-cloud", async (_, relPath) => {
     .split("/")
     .map(encodeURIComponent)
     .join("/");
-  const url = `${CLOUD_DATA_URL}/${safe}`;
+  // Cache-busting query param + no-cache headers — Cloudflare CDN by jinak
+  // mohl vracet starý cached response (max-age=3600 v Worker odpovědi) i když
+  // se R2 obsah mezitím změnil. Pro nás je každý fetch fresh = aktuální R2.
+  const url = `${CLOUD_DATA_URL}/${safe}?_t=${Date.now()}`;
   try {
-    const res = await fetch(url);
+    const res = await fetch(url, {
+      cache: "no-store",
+      headers: { "Cache-Control": "no-cache", Pragma: "no-cache" },
+    });
     if (!res.ok) {
       console.error(`Cloud fetch ${url} failed: ${res.status}`);
       return null;
@@ -623,8 +629,11 @@ ipcMain.handle("data-fetch-cloud", async (_, relPath) => {
 
 ipcMain.handle("data-fetch-manifest", async () => {
   try {
-    const res = await fetch(`${CLOUD_DATA_URL}/manifest.json`, {
-      cache: "no-cache",
+    // Cache-bust manifest taky — manifest se nemění často ale když jo, musíme to vidět hned.
+    const url = `${CLOUD_DATA_URL}/manifest.json?_t=${Date.now()}`;
+    const res = await fetch(url, {
+      cache: "no-store",
+      headers: { "Cache-Control": "no-cache", Pragma: "no-cache" },
     });
     if (!res.ok) return null;
     return await res.text();

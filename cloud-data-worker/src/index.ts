@@ -74,9 +74,10 @@ async function handleGetData(env: Env, path: string): Promise<Response> {
 
   const headers: Record<string, string> = {
     "Content-Type": obj.httpMetadata?.contentType ?? "application/json",
-    // 1 hour edge cache + revalidation via etag. Client (Electron) ale stejně
-    // už komparuje hash z manifestu, takže cache hit je bonus, ne závislost.
-    "Cache-Control": "public, max-age=3600",
+    // Krátký cache window — když admin re-uploaduje píseň, klient by jinak
+    // dostával stale verzi z Cloudflare CDN. Client posílá ?_t=now query
+    // param, takže CDN miss bývá vždy. Tahle hlavička je belt-and-suspenders.
+    "Cache-Control": "public, max-age=60, must-revalidate",
     ETag: obj.httpEtag,
     ...CORS_HEADERS,
   };
