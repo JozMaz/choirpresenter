@@ -42,6 +42,7 @@ export const processPlOnlySongbook = (
 
   return {
     id: song.ID,
+    guid: song.Guid,
     text: title,
     title,
     fullText,
@@ -71,8 +72,8 @@ export const processBilingualSongbook = (
   const fullText = cleanVerses
     .map((v, i) => {
       const verseLabel = v.Tag === 1 ? `Ref.${v.ID || ""}` : `${i + 1}.`;
-      const plPart = v.TextPL ? `🇵🇱 ${v.TextPL}` : "";
-      const enPart = v.TextEN ? `\n🇬🇧 ${v.TextEN}` : "";
+      const plPart = v.TextPL ? `PL: ${v.TextPL}` : "";
+      const enPart = v.TextEN ? `\nEN: ${v.TextEN}` : "";
       return `${verseLabel}\n${plPart}${enPart}`;
     })
     .join("\n\n");
@@ -89,6 +90,7 @@ export const processBilingualSongbook = (
 
   return {
     id: song.ID,
+    guid: song.Guid,
     text: title,
     title,
     fullText,

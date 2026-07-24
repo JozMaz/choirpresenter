@@ -57,8 +57,11 @@ import SongEditor, {
 /** Co editor aktuálně edituje (pre-fill + co dělat při save/delete). */
 interface EditorContext {
   initial?: EditorState;
-  /** Při editaci existující písně – identifikuje původní záznam. */
-  editing?: { source: SongSource; id: number };
+  /**
+   * Při editaci existující písně – identifikuje původní záznam.
+   * `guid` je autoritativní (vždy unikátní), `id` je jen pro custom (localStorage) písně.
+   */
+  editing?: { source: SongSource; id: number; guid?: string };
   lockTargetBook?: boolean;
 }
 
@@ -85,8 +88,10 @@ function HomeContent() {
     dataByBook,
     raw: rawSongbooks,
     findSong,
+    findSongByGuid,
     upsertSong,
     deleteSong,
+    deleteSongByGuid,
     loaded: songbooksLoaded,
   } = useSongbooks();
 
@@ -250,7 +255,7 @@ function HomeContent() {
         sections: apiItemToEditorSections(item),
         targetBook,
       },
-      editing: { source: item.source, id: item.id },
+      editing: { source: item.source, id: item.id, guid: item.guid },
       lockTargetBook: true,
     });
   };
@@ -283,9 +288,12 @@ function HomeContent() {
 
     // Save to a songbook file
     const book = state.targetBook;
+    // Preferuj Guid — vždy unikátní. Fallback na ID pro custom / legacy případy.
     const existingRaw =
       editing && editing.source === book
-        ? findSong(book, editing.id)
+        ? editing.guid
+          ? findSongByGuid(book, editing.guid)
+          : findSong(book, editing.id)
         : undefined;
 
     const nextId =
@@ -335,6 +343,9 @@ function HomeContent() {
 
     if (editing.source === "custom") {
       setCustomSongs(customSongs.filter((s) => s.id !== editing.id));
+    } else if (editing.guid) {
+      // Autoritativní — smaže se přesně tato jedna píseň bez ohledu na ID
+      await deleteSongByGuid(editing.source, editing.guid);
     } else {
       await deleteSong(editing.source, editing.id);
     }

@@ -88,6 +88,13 @@ export function useSongbooks() {
   const findSong = (book: SongBookKey, id: number): Song | undefined =>
     (raw[book] || []).find((s) => s.ID === id);
 
+  /** Autoritativní lookup — Guid je vždy unikátní, ID může chybět/kolidovat. */
+  const findSongByGuid = (
+    book: SongBookKey,
+    guid: string,
+  ): Song | undefined =>
+    (raw[book] || []).find((s) => s.Guid === guid);
+
   const upsertSong = async (
     book: SongBookKey,
     song: Song,
@@ -110,6 +117,28 @@ export function useSongbooks() {
     return { localOk: false, cloudOk: null };
   };
 
+  /**
+   * Smazání podle Guid (autoritativní). Bezpečnější než delete-by-ID protože
+   * ID může být 0/undefined nebo duplikované.
+   */
+  const deleteSongByGuid = async (
+    book: SongBookKey,
+    guid: string,
+  ): Promise<{ localOk: boolean; cloudOk: boolean | null }> => {
+    const arr = raw[book] || [];
+    const next = arr.filter((s) => s.Guid !== guid);
+    if (next.length === arr.length) {
+      console.warn(`deleteSongByGuid: no song with Guid ${guid} in ${book}`);
+      return { localOk: false, cloudOk: null };
+    }
+    setRaw((prev) => ({ ...prev, [book]: next }));
+    if (window.api?.writeSongBook) {
+      return await window.api.writeSongBook(book, { Songs: next });
+    }
+    return { localOk: false, cloudOk: null };
+  };
+
+  /** Legacy delete-by-ID (jen pro custom songy v localStorage). */
   const deleteSong = async (
     book: SongBookKey,
     id: number,
@@ -128,7 +157,9 @@ export function useSongbooks() {
     dataByBook,
     raw,
     findSong,
+    findSongByGuid,
     upsertSong,
     deleteSong,
+    deleteSongByGuid,
   };
 }

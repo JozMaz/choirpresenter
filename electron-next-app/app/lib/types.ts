@@ -123,6 +123,8 @@ export interface MessageMeta {
 
 export interface ApiItem {
   id: number;
+  /** Unikátní identifikátor napříč songbookem — použit pro upsert (ID může chybět/kolidovat). */
+  guid?: string;
   text: string;
   title: string;
   fullText: string;
