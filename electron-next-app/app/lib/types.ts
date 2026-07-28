@@ -42,19 +42,18 @@ declare global {
       updateHdmi2: (html: string) => void;
       closeHdmi2: () => void;
       setHdmi2Blackout: (active: boolean) => void;
-      readSongBook: (
-        book: SongBookKey,
-      ) => Promise<{ Songs?: Song[] } | null>;
+      readSongBook: (book: SongBookKey) => Promise<Songbook | null>;
       writeSongBook: (
         book: SongBookKey,
-        data: { Songs: Song[] },
-      ) => Promise<{ localOk: boolean; cloudOk: boolean | null }>;
+        data: Songbook,
+      ) => Promise<WriteResult>;
       getWriteToken: () => Promise<string | null>;
       setWriteToken: (token: string) => Promise<boolean>;
       readBible: (bible: "warszawska" | "gdanska") => Promise<string | null>;
       readMessageTitles: () => Promise<MessageTitlesEntry[] | null>;
       readMessageText: (dateKey: string) => Promise<MessageTextEntry | null>;
       listMessageKeys: () => Promise<string[]>;
+      dataLocalMode: () => Promise<boolean>;
       dataCacheDir: () => Promise<string>;
       dataHasLocal: () => Promise<boolean>;
       dataReadLocal: (relPath: string) => Promise<string | null>;
@@ -66,7 +65,6 @@ declare global {
   }
 }
 
-/** Klíče songbooků – odpovídají jménům souborů v api/SongBooks/. */
 export type SongBookKey =
   | "newSong"
   | "newSongPlGb"
@@ -74,100 +72,116 @@ export type SongBookKey =
   | "roboczy"
   | "children";
 
-export interface Verse {
-  Tag?: number;
-  ID?: number;
-  Style?: unknown;
-  Text?: string; // pro nowa-piesn
-  TextPL?: string; // pro pl-en
-  TextEN?: string; // pro pl-en
-  /** True když EN je jen překlad (nejde zpívat) — render italic, na stream skip. */
-  IsTranslation?: boolean;
-}
-
-export interface Song {
-  ID: number;
-  Guid: string;
-  Verses: Verse[];
-  VideoDuration?: number;
-  Text?: string;
-  TextPL?: string;
-  TextEN?: string;
-  Sequence?: string;
-  Key?: string;
-  Capo?: number;
-  Style?: unknown;
-}
-
 export type SongSource = SongBookKey | "custom";
 
+export interface WriteResult {
+  localOk: boolean;
+  cloudOk: boolean | null;
+  refused?: boolean;
+}
+
+export type SectionType = "verse" | "chorus" | "bridge" | "ending";
+
+export interface SectionEntry {
+  order: number;
+  type: SectionType;
+  number: number;
+  lines: string[];
+  slides: string[][];
+  slidesLocked?: true;
+}
+
+export interface LangBlock {
+  isTranslation: boolean;
+  sections: SectionEntry[];
+}
+
+export interface SongEntry {
+  id: string;
+  number: number | null;
+  key: string | null;
+  title: string;
+  sequence: string;
+  text: LangBlock[];
+}
+
+export interface Songbook {
+  name: string;
+  songs: SongEntry[];
+}
+
 export interface BibleMeta {
-  /** Krátká reference knihy ("Ks. Przysłów"). */
   bookName: string;
-  /** Číslo kapitoly. */
   chapter: number;
-  /** Plný název bible — zobrazí se ve spodním řádku previews/HDMI. */
   bibleName: string;
 }
 
 export interface MessageMeta {
-  /** Date key, např. "47-0412" nebo "50-0813A". */
   dateKey: string;
-  /** Plný název kázání. */
   title: string;
-  /** Místo a stát (z HTML headeru). */
   location: string;
-  /** Paragraph number per verse (paralelní pole k verses). */
   pnums: number[];
 }
 
+export interface SlideText {
+  primary: string[];
+  secondary?: string[];
+}
+
+export interface Slide extends SlideText {
+  sectionIndex: number;
+  label: string;
+}
+
+export interface Section extends SlideText {
+  label: string;
+  type: SectionType;
+  number: number;
+  slideStart: number;
+  slideCount: number;
+}
+
+export interface EditorSlide {
+  id: string;
+  lines: string;
+  altLines: string;
+}
+
 export interface ApiItem {
-  id: number;
-  /** Unikátní identifikátor napříč songbookem — použit pro upsert (ID může chybět/kolidovat). */
-  guid?: string;
-  text: string;
+  id: string;
+  number: number | null;
   title: string;
-  fullText: string;
-  selected: boolean;
+  key: string | null;
   sequence: string;
-  verses: Verse[];
-  key: string;
   source: SongSource;
+  bookName: string;
+  secondaryIsTranslation: boolean;
+  translationLabel: string;
+  sections: Section[];
+  slides: Slide[];
   searchIndex: string;
-  /** True když item je bible kapitola → jiný layout. */
+  fullText: string;
   isBible?: boolean;
-  /** Metadata pro bible mód. */
   bibleMeta?: BibleMeta;
-  /** True když item je sermon message → jiný layout. */
   isMessage?: boolean;
-  /** Metadata pro message mód. */
   messageMeta?: MessageMeta;
 }
-
-export interface VerseParts {
-  verseIndex: number;
-  fullPL: string;
-  fullEN: string;
-  plParts: string[];
-  enParts: string[];
-  /** True když je tento verš jen translation pro čtení (EN render italic, na stream skip). */
-  isTranslation?: boolean;
-}
-
-export type SectionType = "verse" | "chorus" | "bridge";
 
 export interface EditorSection {
   id: string;
   type: SectionType;
   number: number;
-  textPL: string;
-  textEN: string;
-  showEN: boolean;
+  lines: string;
+  altLines: string;
+  showAlt: boolean;
+  slides: EditorSlide[];
+  slidesLocked: boolean;
 }
 
 export interface SectionListItem {
   label: string;
-  previewPL: string;
-  previewEN: string;
+  previewPrimary: string;
+  previewPrimary2: string;
+  previewSecondary: string;
   fullText: string;
 }

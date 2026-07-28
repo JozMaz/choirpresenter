@@ -1,40 +1,33 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import {
-  processBilingualSongbook,
-  processPlOnlySongbook,
-} from "../lib/songProcessing";
-import type { ApiItem, Song, SongBookKey } from "../lib/types";
+import { toApiItem, SONGBOOK_NAMES } from "../lib/songAdapter";
+import type {
+  ApiItem,
+  SongBookKey,
+  SongEntry,
+  Songbook,
+  WriteResult,
+} from "../lib/types";
 
-/**
- * Konfigurace songbooks: lidský label + formát.
- * Data se načítají runtime přes Electron IPC z lokální cache (cloud download).
- */
-export const SONGBOOKS: {
-  key: SongBookKey;
-  label: string;
-  bilingual: boolean;
-}[] = [
-  { key: "newSong", label: "New Song", bilingual: false },
-  { key: "newSongPlGb", label: "New Song PL/EN", bilingual: true },
-  { key: "pielgrzym", label: "Pielgrzym", bilingual: false },
-  { key: "roboczy", label: "Roboczy", bilingual: true },
-  { key: "children", label: "Children", bilingual: true },
+export const SONGBOOK_KEYS: SongBookKey[] = [
+  "newSong",
+  "newSongPlGb",
+  "pielgrzym",
+  "roboczy",
+  "children",
 ];
 
-type SongbooksState = Record<SongBookKey, Song[]>;
+type SongbooksState = Record<SongBookKey, Songbook>;
 
 const emptyState = (): SongbooksState =>
-  SONGBOOKS.reduce(
-    (acc, b) => ({ ...acc, [b.key]: [] }),
+  SONGBOOK_KEYS.reduce(
+    (acc, key) => ({ ...acc, [key]: { name: SONGBOOK_NAMES[key], songs: [] } }),
     {} as SongbooksState,
   );
 
-/**
- * Načte všechny songbooky přes Electron IPC (s fallbackem na bundled JSON).
- * Poskytuje upsert / delete operace, které updatují stav i přepíšou JSON na disku.
- */
+const NOT_WRITTEN: WriteResult = { localOk: false, cloudOk: null };
+
 export function useSongbooks() {
   const [raw, setRaw] = useState<SongbooksState>(emptyState());
   const [loaded, setLoaded] = useState(false);
@@ -45,17 +38,16 @@ export function useSongbooks() {
       const api = window.api;
       const next: SongbooksState = emptyState();
 
-      for (const book of SONGBOOKS) {
-        let data: Song[] = [];
-        if (api?.readSongBook) {
-          try {
-            const r = await api.readSongBook(book.key);
-            if (r?.Songs) data = r.Songs;
-          } catch (err) {
-            console.error(`Failed to read songbook ${book.key}`, err);
+      for (const key of SONGBOOK_KEYS) {
+        if (!api?.readSongBook) continue;
+        try {
+          const book = await api.readSongBook(key);
+          if (book?.songs) {
+            next[key] = { name: book.name || SONGBOOK_NAMES[key], songs: book.songs };
           }
+        } catch (err) {
+          console.error(`Failed to read songbook ${key}`, err);
         }
-        next[book.key] = data;
       }
 
       if (!cancelled) {
@@ -68,98 +60,68 @@ export function useSongbooks() {
     };
   }, []);
 
-  /** Mapa per-book ApiItem[] derivována z raw. */
   const dataByBook = useMemo(() => {
-    const out: Record<SongBookKey, ApiItem[]> = emptyState() as unknown as Record<
-      SongBookKey,
-      ApiItem[]
-    >;
-    for (const book of SONGBOOKS) {
-      const songs = raw[book.key] || [];
-      out[book.key] = songs.map((s) =>
-        book.bilingual
-          ? processBilingualSongbook(s, book.key)
-          : processPlOnlySongbook(s, book.key),
-      );
+    const out = {} as Record<SongBookKey, ApiItem[]>;
+    for (const key of SONGBOOK_KEYS) {
+      const book = raw[key];
+      out[key] = book.songs.map((s) => toApiItem(s, key, book.name));
     }
     return out;
   }, [raw]);
 
-  const findSong = (book: SongBookKey, id: number): Song | undefined =>
-    (raw[book] || []).find((s) => s.ID === id);
+  const bookNames = useMemo(() => {
+    const out = {} as Record<SongBookKey, string>;
+    for (const key of SONGBOOK_KEYS) out[key] = raw[key].name;
+    return out;
+  }, [raw]);
 
-  /** Autoritativní lookup — Guid je vždy unikátní, ID může chybět/kolidovat. */
-  const findSongByGuid = (
+  const findSongById = (book: SongBookKey, id: string): SongEntry | undefined =>
+    raw[book].songs.find((s) => s.id === id);
+
+  const write = async (
     book: SongBookKey,
-    guid: string,
-  ): Song | undefined =>
-    (raw[book] || []).find((s) => s.Guid === guid);
+    songs: SongEntry[],
+  ): Promise<WriteResult> => {
+    const next: Songbook = { name: raw[book].name, songs };
+    setRaw((prev) => ({ ...prev, [book]: next }));
+    if (window.api?.writeSongBook) {
+      return await window.api.writeSongBook(book, next);
+    }
+    return NOT_WRITTEN;
+  };
 
   const upsertSong = async (
     book: SongBookKey,
-    song: Song,
-  ): Promise<{ localOk: boolean; cloudOk: boolean | null }> => {
-    // Snapshot SYNCHRONNĚ z aktuálního raw (closure).
-    // POZOR: setRaw callback se nevolá synchronně v React 18 — kdybychom
-    // snapshot updatovali uvnitř callbacku, writeSongBook by čekal a měl
-    // by initial value [] → cloud + cache by dostaly prázdný songbook.
-    const arr = raw[book] || [];
-    const idx = song.Guid
-      ? arr.findIndex((s) => s.Guid === song.Guid)
-      : arr.findIndex((s) => s.ID === song.ID && song.ID > 0);
-    const next = idx >= 0
-      ? arr.map((s, i) => (i === idx ? song : s))
-      : [...arr, song];
-    setRaw((prev) => ({ ...prev, [book]: next }));
-    if (window.api?.writeSongBook) {
-      return await window.api.writeSongBook(book, { Songs: next });
-    }
-    return { localOk: false, cloudOk: null };
+    song: SongEntry,
+  ): Promise<WriteResult> => {
+    const songs = raw[book].songs;
+    const idx = songs.findIndex((s) => s.id === song.id);
+    return write(
+      book,
+      idx >= 0 ? songs.map((s, i) => (i === idx ? song : s)) : [...songs, song],
+    );
   };
 
-  /**
-   * Smazání podle Guid (autoritativní). Bezpečnější než delete-by-ID protože
-   * ID může být 0/undefined nebo duplikované.
-   */
-  const deleteSongByGuid = async (
+  const deleteSongById = async (
     book: SongBookKey,
-    guid: string,
-  ): Promise<{ localOk: boolean; cloudOk: boolean | null }> => {
-    const arr = raw[book] || [];
-    const next = arr.filter((s) => s.Guid !== guid);
-    if (next.length === arr.length) {
-      console.warn(`deleteSongByGuid: no song with Guid ${guid} in ${book}`);
-      return { localOk: false, cloudOk: null };
+    id: string,
+  ): Promise<WriteResult> => {
+    const songs = raw[book].songs;
+    const next = songs.filter((s) => s.id !== id);
+    if (next.length === songs.length) {
+      console.warn(`deleteSongById: no song with id ${id} in ${book}`);
+      return NOT_WRITTEN;
     }
-    setRaw((prev) => ({ ...prev, [book]: next }));
-    if (window.api?.writeSongBook) {
-      return await window.api.writeSongBook(book, { Songs: next });
-    }
-    return { localOk: false, cloudOk: null };
-  };
-
-  /** Legacy delete-by-ID (jen pro custom songy v localStorage). */
-  const deleteSong = async (
-    book: SongBookKey,
-    id: number,
-  ): Promise<{ localOk: boolean; cloudOk: boolean | null }> => {
-    const arr = raw[book] || [];
-    const next = arr.filter((s) => s.ID !== id);
-    setRaw((prev) => ({ ...prev, [book]: next }));
-    if (window.api?.writeSongBook) {
-      return await window.api.writeSongBook(book, { Songs: next });
-    }
-    return { localOk: false, cloudOk: null };
+    return write(book, next);
   };
 
   return {
     loaded,
     dataByBook,
+    bookNames,
     raw,
-    findSong,
-    findSongByGuid,
+    findSongById,
     upsertSong,
-    deleteSong,
-    deleteSongByGuid,
+    deleteSongById,
   };
 }

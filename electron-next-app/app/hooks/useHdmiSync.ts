@@ -19,7 +19,7 @@ export function useHdmiSync(
     if (!api) return;
     if (variant === 1 && api.updateHdmi && html) api.updateHdmi(html);
     if (variant === 2 && api.updateHdmi2 && html) api.updateHdmi2(html);
-  });
+  }, [active, html, variant]);
 
   // Sync blackout
   useEffect(() => {

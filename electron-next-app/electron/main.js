@@ -28,6 +28,11 @@ const __dirname = path.dirname(__filename);
  * archive a fs.readFile by nemusel transparentně rozpoznat unpacked redirect
  * (zejména s non-ASCII chars v názvu jako "Uwspółcześniona").
  */
+const HDMI_VIEW = () =>
+  app.isPackaged
+    ? path.join(__dirname, "..", "out", "hdmi-view.html")
+    : path.join(__dirname, "..", "public", "hdmi-view.html");
+
 const API_BASE = app.isPackaged
   ? path.join(process.resourcesPath, "app.asar.unpacked", "api")
   : path.join(__dirname, "..", "api");
@@ -36,24 +41,33 @@ const API_BASE = app.isPackaged
 // Bundle fallback (jen pro dev, kdy ještě nemusí být stažené cloud data).
 // V produkci je bundle prázdný a vše čteme z userData cache (níže).
 const SONGBOOK_BUNDLE_PATHS = {
-  newSong: path.join(API_BASE, "SongBooks", "new-song-converted.json"),
-  newSongPlGb: path.join(
-    API_BASE,
-    "SongBooks",
-    "new-song-pl-gb-converted.json",
-  ),
-  pielgrzym: path.join(API_BASE, "SongBooks", "pielgrzym-converted.json"),
-  roboczy: path.join(API_BASE, "SongBooks", "roboczy-converted.json"),
-  children: path.join(API_BASE, "SongBooks", "children-converted.json"),
+  newSong: path.join(API_BASE, "SongBooks", "new-song.json"),
+  newSongPlGb: path.join(API_BASE, "SongBooks", "new-song-pl-gb.json"),
+  pielgrzym: path.join(API_BASE, "SongBooks", "pielgrzym.json"),
+  roboczy: path.join(API_BASE, "SongBooks", "roboczy.json"),
+  children: path.join(API_BASE, "SongBooks", "children.json"),
 };
 
 const SONGBOOK_CACHE_KEYS = {
-  newSong: "data/songs/new-song-converted.json",
-  newSongPlGb: "data/songs/new-song-pl-gb-converted.json",
-  pielgrzym: "data/songs/pielgrzym-converted.json",
-  roboczy: "data/songs/roboczy-converted.json",
-  children: "data/songs/children-converted.json",
+  newSong: "data/songs/new-song.json",
+  newSongPlGb: "data/songs/new-song-pl-gb.json",
+  pielgrzym: "data/songs/pielgrzym.json",
+  roboczy: "data/songs/roboczy.json",
+  children: "data/songs/children.json",
 };
+
+// Zvedni když se změní formát dat v cache — při startu se cache smaže
+// a stáhne znovu. Bez toho by stará cache držela soubory ve starém schématu
+// a appka by nabootovala s prázdnými zpěvníky bez chybové hlášky.
+const DATA_EPOCH = 2;
+
+const LOCAL_DATA_MODE =
+  process.env.CHOIRPRESENTER_LOCAL_DATA === "1"
+    ? true
+    : process.env.CHOIRPRESENTER_LOCAL_DATA === "0"
+      ? false
+      : !app.isPackaged &&
+        fs.existsSync(path.join(API_BASE, "SongBooks", "new-song.json"));
 
 let hdmiWindow = null;
 let hdmiWindow2 = null;
@@ -160,7 +174,7 @@ ipcMain.handle("open-hdmi", (_, displayId) => {
   if (!target) return;
 
   hdmiWindow = createHdmiWindow(target.bounds);
-  hdmiWindow.loadFile(path.join(__dirname, "hdmi.html"));
+  hdmiWindow.loadFile(HDMI_VIEW());
 
   hdmiWindow.once("ready-to-show", () => {
     hdmiWindow.showInactive(); // zobrazí, ale nepřevezme focus
@@ -208,7 +222,7 @@ ipcMain.handle("open-hdmi2", (_, displayId) => {
   if (!target) return;
 
   hdmiWindow2 = createHdmiWindow(target.bounds);
-  hdmiWindow2.loadFile(path.join(__dirname, "hdmi.html"));
+  hdmiWindow2.loadFile(HDMI_VIEW());
 
   hdmiWindow2.once("ready-to-show", () => {
     hdmiWindow2.showInactive();
@@ -246,6 +260,11 @@ ipcMain.on("hdmi2-blackout", (_, active) => {
 // ===== SONGBOOK IPC =====
 
 async function readSongbookFile(book) {
+  if (LOCAL_DATA_MODE) {
+    const target = SONGBOOK_BUNDLE_PATHS[book];
+    if (!target || !fs.existsSync(target)) return null;
+    return JSON.parse(await fs.promises.readFile(target, "utf8"));
+  }
   // 1) Pokus se z userData cache (po cloud downloadu)
   const cacheKey = SONGBOOK_CACHE_KEYS[book];
   if (cacheKey) {
@@ -462,11 +481,35 @@ ipcMain.handle("write-songbook", async (_, book, data) => {
   if (!cacheKey) return { localOk: false, cloudOk: null };
 
   const body = JSON.stringify(data, null, 2);
-  const newCount = Array.isArray(data?.Songs) ? data.Songs.length : 0;
+  const newCount = Array.isArray(data?.songs) ? data.songs.length : 0;
+
+  if (LOCAL_DATA_MODE) {
+    const target = SONGBOOK_BUNDLE_PATHS[book];
+    try {
+      if (fs.existsSync(target)) {
+        const existing = JSON.parse(await fs.promises.readFile(target, "utf8"));
+        const existingCount = Array.isArray(existing?.songs)
+          ? existing.songs.length
+          : 0;
+        if (existingCount >= 10 && newCount * 10 <= existingCount) {
+          console.error(
+            `[write-songbook] REFUSED (local mode): existing ${existingCount}, new ${newCount}`,
+          );
+          return { localOk: false, cloudOk: null, refused: true };
+        }
+      }
+      await fs.promises.writeFile(target, body + "\n", "utf8");
+      console.log(`[write-songbook] local mode → ${target}`);
+      return { localOk: true, cloudOk: null };
+    } catch (err) {
+      console.error("Local-mode write failed:", err);
+      return { localOk: false, cloudOk: null };
+    }
+  }
 
   // SAFETY: pokud nový soubor má ≥10× méně písní než ten co je teď na disku,
   // odmítni zapis a zachovej backup. Chrání proti race-condition bugům
-  // co psaly {Songs:[]} a smazaly celé songbooky.
+  // co psaly {songs:[]} a smazaly celé songbooky.
   let localOk = false;
   try {
     const localPath = path.join(dataCacheDir(), cacheKey);
@@ -474,8 +517,8 @@ ipcMain.handle("write-songbook", async (_, book, data) => {
       try {
         const existingRaw = await fs.promises.readFile(localPath, "utf8");
         const existing = JSON.parse(existingRaw);
-        const existingCount = Array.isArray(existing?.Songs)
-          ? existing.Songs.length
+        const existingCount = Array.isArray(existing?.songs)
+          ? existing.songs.length
           : 0;
         if (existingCount >= 10 && newCount * 10 <= existingCount) {
           console.error(
@@ -587,6 +630,7 @@ function dataCachePath(relPath) {
   return path.join(dataCacheDir(), clean);
 }
 
+ipcMain.handle("data-local-mode", () => LOCAL_DATA_MODE);
 ipcMain.handle("data-cache-dir", () => dataCacheDir());
 
 ipcMain.handle("data-has-local", async () => {
@@ -677,4 +721,42 @@ ipcMain.handle("data-clear-local", async () => {
   }
 });
 
-app.whenReady().then(createWindow);
+async function migrateDataEpoch() {
+  let cfg = {};
+  try {
+    if (fs.existsSync(CONFIG_PATH())) {
+      cfg = JSON.parse(await fs.promises.readFile(CONFIG_PATH(), "utf8"));
+    }
+  } catch {
+    cfg = {};
+  }
+  if (cfg.dataEpoch === DATA_EPOCH) return;
+  if (LOCAL_DATA_MODE) {
+    console.log("[data-epoch] local data mode — cache se nemaže");
+    return;
+  }
+
+  try {
+    await fs.promises.rm(dataCacheDir(), { recursive: true, force: true });
+    console.log(
+      `[data-epoch] cache wiped (${cfg.dataEpoch ?? "none"} -> ${DATA_EPOCH}), will re-download`,
+    );
+  } catch (err) {
+    console.error("[data-epoch] cache wipe failed:", err);
+  }
+
+  try {
+    await fs.promises.writeFile(
+      CONFIG_PATH(),
+      JSON.stringify({ ...cfg, dataEpoch: DATA_EPOCH }, null, 2),
+      "utf8",
+    );
+  } catch (err) {
+    console.error("[data-epoch] config write failed:", err);
+  }
+}
+
+app.whenReady().then(async () => {
+  await migrateDataEpoch();
+  createWindow();
+});

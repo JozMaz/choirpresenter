@@ -28,6 +28,14 @@ const BUCKET = "choirpresenter-data";
 
 // Mapování: lokální src dir → R2 key prefix.
 // Jen JSON soubory. Per-soubor JSONy (pl-texts/) jdou jako data/messages/texts/{name}.json.
+const SONGBOOK_FILES = new Set([
+  "new-song.json",
+  "new-song-pl-gb.json",
+  "pielgrzym.json",
+  "roboczy.json",
+  "children.json",
+]);
+
 const MAPPINGS = [
   {
     srcDir: path.join(APP_ROOT, "api/Bibles"),
@@ -48,7 +56,7 @@ const MAPPINGS = [
   {
     srcDir: path.join(APP_ROOT, "api/SongBooks"),
     keyPrefix: "data/songs/",
-    filter: (n) => n.endsWith("-converted.json"),
+    filter: (n) => SONGBOOK_FILES.has(n),
   },
 ];
 

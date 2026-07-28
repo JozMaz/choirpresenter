@@ -17,22 +17,19 @@ export interface FlatVerse {
   chapterVerses: BibleVerse[];
 }
 
-const formatBookName = (name: string) =>
-  /^\d/.test(name) ? name : `Ks. ${name}`;
-
 const cache = new Map<BibleKey, FlatVerse[]>();
 const scheduled = new Set<BibleKey>();
 const listeners = new Map<BibleKey, Array<() => void>>();
 
-function build(bible: Bible, activeBible: BibleKey): FlatVerse[] {
+function build(bible: Bible): FlatVerse[] {
   const list: FlatVerse[] = [];
   let bookFlatIdx = 0;
   for (const testament of bible.Testaments || []) {
     for (const book of testament.Books || []) {
       const chapters = book.Chapters || [];
-      const rawName = getBookName(activeBible, bookFlatIdx);
-      const bookDisplayName = formatBookName(rawName);
-      const bookReferenceName = formatBookName(stripBookAlias(rawName));
+      const rawName = getBookName(bookFlatIdx);
+      const bookDisplayName = rawName;
+      const bookReferenceName = stripBookAlias(rawName);
       for (let chIdx = 0; chIdx < chapters.length; chIdx++) {
         const verses = chapters[chIdx].Verses || [];
         for (let vIdx = 0; vIdx < verses.length; vIdx++) {
@@ -71,7 +68,7 @@ export function getBibleVerseIndex(
 ): FlatVerse[] {
   let v = cache.get(activeBible);
   if (!v) {
-    v = build(bible, activeBible);
+    v = build(bible);
     cache.set(activeBible, v);
   }
   return v;
@@ -128,7 +125,7 @@ export function prebuildBibleVerseIndexes(
     }
     scheduled.add(k);
     idle(() => {
-      if (!cache.has(k)) cache.set(k, build(b, k));
+      if (!cache.has(k)) cache.set(k, build(b));
       const ls = listeners.get(k) ?? [];
       listeners.delete(k);
       for (const l of ls) l();

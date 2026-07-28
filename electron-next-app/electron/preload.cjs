@@ -24,6 +24,7 @@ contextBridge.exposeInMainWorld("api", {
   listMessageKeys: () => ipcRenderer.invoke("list-message-keys"),
 
   // ===== Cloud + local cache management =====
+  dataLocalMode: () => ipcRenderer.invoke("data-local-mode"),
   dataCacheDir: () => ipcRenderer.invoke("data-cache-dir"),
   dataHasLocal: () => ipcRenderer.invoke("data-has-local"),
   dataReadLocal: (relPath) => ipcRenderer.invoke("data-read-local", relPath),

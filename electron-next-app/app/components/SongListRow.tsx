@@ -36,13 +36,13 @@ export default function SongListRow({
     >
       <div className="flex flex-col gap-0.5 flex-1 min-w-0">
         <div className="flex items-center gap-3 min-w-0">
-          {showId && item.id > 0 && (
+          {showId && item.number !== null && (
             <span className="text-xs font-semibold text-primary shrink-0">
-              {item.id}.
+              {item.number}.
             </span>
           )}
           <span className="text-xs text-text-secondary truncate">
-            {titleHl ? <HighlightedText result={titleHl} fallback={item.text} /> : item.text}
+            {titleHl ? <HighlightedText result={titleHl} fallback={item.title} /> : item.title}
           </span>
         </div>
         {hasSnippet && (

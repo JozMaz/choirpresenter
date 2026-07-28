@@ -24,6 +24,23 @@ export interface HighlightOptions {
  * ("Wiara jest substancją") — výsledný highlight je rozsekaný po slovech,
  * takže každé slovo má vlastní "pill".
  */
+const CHAR_CACHE = new Map<string, string>();
+
+function normChar(ch: string): string {
+  let v = CHAR_CACHE.get(ch);
+  if (v === undefined) {
+    v = ch
+      .toLowerCase()
+      .normalize("NFD")
+      .replace(/[̀-ͯ]/g, "")
+      .replace(/ł/g, "l")
+      .replace(/Ł/g, "l")
+      .replace(/[^a-z0-9\s]/g, " ");
+    CHAR_CACHE.set(ch, v);
+  }
+  return v;
+}
+
 export function highlightSnippet(
   text: string,
   tokens: string[],
@@ -34,31 +51,28 @@ export function highlightSnippet(
 
   // Position-preserving normalizace char-by-char.
   // Pravidla = normalizeSearch (kromě \s+ collapse).
-  let normalized = "";
+  const parts: string[] = [];
   const origIdx: number[] = [];
   for (let i = 0; i < text.length; i++) {
-    const ch = text[i]
-      .toLowerCase()
-      .normalize("NFD")
-      .replace(/[̀-ͯ]/g, "")
-      .replace(/ł/g, "l")
-      .replace(/Ł/g, "l")
-      .replace(/[^a-z0-9\s]/g, " ");
-    for (const c of ch) {
-      normalized += c;
+    const ch = normChar(text[i]);
+    for (let k = 0; k < ch.length; k++) {
+      parts.push(ch[k]);
       origIdx.push(i);
     }
   }
+  const normalized = parts.join("");
 
   // Verze bez mezer s mapováním zpět — fallback pro tokeny psané spolu.
-  let nospace = "";
+  const nospaceParts: string[] = [];
   const nospaceOrigIdx: number[] = [];
   for (let i = 0; i < normalized.length; i++) {
-    if (!/\s/.test(normalized[i])) {
-      nospace += normalized[i];
+    const c = normalized[i];
+    if (c !== " " && c !== "\t" && c !== "\n" && c !== "\r") {
+      nospaceParts.push(c);
       nospaceOrigIdx.push(origIdx[i]);
     }
   }
+  const nospace = nospaceParts.join("");
 
   // Najdi všechny matche
   const ranges: [number, number][] = [];

@@ -1,380 +1,116 @@
 "use client";
 
 import { useState } from "react";
-import type { ApiItem, VerseParts } from "../lib/types";
-import {
-  extractSongParts,
-  getAllPartsFlat,
-  isBilingualSource,
-  processAllVersesForPLEN,
-} from "../lib/songProcessing";
+import type { ApiItem, SlideText } from "../lib/types";
+
+interface LivePosition {
+  song: ApiItem;
+  slideIndex: number;
+}
 
 interface SongPlayerState {
   currentSong: ApiItem | null;
-  currentVerseIndex: number;
-  currentPartIndex: number;
-  allVersesParts: VerseParts[];
-  totalParts: number;
-  output1Text: string;
-  output2Text: string;
+  slideIndex: number;
+  live: LivePosition | null;
 }
 
 const emptyState: SongPlayerState = {
   currentSong: null,
-  currentVerseIndex: -1,
-  currentPartIndex: -1,
-  allVersesParts: [],
-  totalParts: 0,
-  output1Text: "",
-  output2Text: "",
+  slideIndex: -1,
+  live: null,
 };
 
-/** Odstraní "Translation:" prefix z EN textu (ponechá leading style tagy). */
-function stripTranslationPrefix(text: string): string {
-  return text.replace(/^((?:<\/?s\d*>)*)\s*Translation:\s*\n?/i, "$1");
-}
-
-/**
- * Stream / Output 2 text z verše a part-indexu.
- * Zajišťuje, že pokud verse má EN, vždy se zobrazí PL i EN spolu —
- * když jeden jazyk má méně částí, použijeme jeho poslední dostupnou
- * (nikdy nezobrazujeme samotný EN nebo samotný PL když existují oba).
- *
- * Pro IsTranslation verše navíc strippne "Translation:" prefix z EN
- * (na Output 1 zůstává — strip se děje až tady).
- */
-function buildOutput2(
-  verse: { fullPL: string; fullEN: string; plParts: string[]; enParts: string[] },
-  partIdx: number,
-): string {
-  const hasPL = verse.fullPL.trim() !== "";
-  const hasEN = verse.fullEN.trim() !== "";
-
-  const plClamp = Math.max(0, Math.min(partIdx, verse.plParts.length - 1));
-  const enClamp = Math.max(0, Math.min(partIdx, verse.enParts.length - 1));
-  const pl = verse.plParts[plClamp] || "";
-  // Strippneme "Translation:" prefix vždy — pokud tam není, regex pass-through.
-  const en = stripTranslationPrefix(verse.enParts[enClamp] || "");
-
-  if (hasPL && hasEN) return pl + "\n\n" + en;
-  if (hasPL) return pl;
-  return en;
-}
+const EMPTY_TEXT: SlideText = { primary: [] };
 
 export function useSongPlayer() {
   const [state, setState] = useState<SongPlayerState>(emptyState);
 
-  /**
-   * Načte píseň/kapitolu do panelu sekcí, ALE nezobrazí žádnou sekci
-   * — uživatel musí kliknout v pravém dolním panelu na konkrétní sekci.
-   */
   const loadSong = (item: ApiItem) => {
-    if (isBilingualSource(item)) {
-      const versesParts = processAllVersesForPLEN(item);
-      const total = versesParts.reduce(
-        (sum, vp) => sum + Math.max(vp.plParts.length, vp.enParts.length),
-        0,
-      );
-      setState({
-        currentSong: item,
-        currentVerseIndex: -1,
-        currentPartIndex: -1,
-        allVersesParts: versesParts,
-        totalParts: total,
-        output1Text: "",
-        output2Text: "",
-      });
-    } else {
-      const flatParts = getAllPartsFlat(item);
-      setState({
-        currentSong: item,
-        currentVerseIndex: -1,
-        currentPartIndex: -1,
-        allVersesParts: [],
-        totalParts: flatParts.length,
-        output1Text: "",
-        output2Text: "",
-      });
-    }
+    setState((prev) => ({ ...prev, currentSong: item, slideIndex: -1 }));
   };
-
-  /** Zpětně-kompatibilní alias pro místa, která ještě používají sendFirstPart. */
-  const sendFirstPart = loadSong;
 
   const navigatePart = (direction: "next" | "prev") => {
     setState((prev) => {
-      if (!prev.currentSong) return prev;
-      const { currentSong, allVersesParts, currentVerseIndex, currentPartIndex } =
-        prev;
+      const song = prev.currentSong;
+      if (!song || song.slides.length === 0) return prev;
 
-      if (isBilingualSource(currentSong)) {
-        if (allVersesParts.length === 0) return prev;
-
-        // První navigace po načtení — skoč na první verš
-        if (currentVerseIndex < 0 || currentPartIndex < 0) {
-          const verse = allVersesParts[0];
-          return {
-            ...prev,
-            currentVerseIndex: 0,
-            currentPartIndex: 0,
-            output1Text: verse.fullPL + "\n\n" + verse.fullEN,
-            output2Text: buildOutput2(verse, 0),
-          };
-        }
-
-        let newVerseIndex = currentVerseIndex;
-        let newPartIndex = currentPartIndex;
-
-        if (direction === "next") {
-          newPartIndex++;
-          const currentVerseParts = allVersesParts[currentVerseIndex];
-          const maxParts = Math.max(
-            currentVerseParts.plParts.length,
-            currentVerseParts.enParts.length,
-          );
-          if (newPartIndex >= maxParts) {
-            newVerseIndex = (currentVerseIndex + 1) % allVersesParts.length;
-            newPartIndex = 0;
-          }
-        } else {
-          newPartIndex--;
-          if (newPartIndex < 0) {
-            newVerseIndex =
-              currentVerseIndex - 1 < 0
-                ? allVersesParts.length - 1
-                : currentVerseIndex - 1;
-            newPartIndex = 0;
-          }
-        }
-
-        const verse = allVersesParts[newVerseIndex];
-        return {
-          ...prev,
-          currentVerseIndex: newVerseIndex,
-          currentPartIndex: newPartIndex,
-          output1Text: verse.fullPL + "\n\n" + verse.fullEN,
-          output2Text: buildOutput2(verse, newPartIndex),
-        };
+      if (prev.slideIndex < 0) {
+        return { ...prev, slideIndex: 0, live: { song, slideIndex: 0 } };
       }
 
-      const flatParts = getAllPartsFlat(currentSong);
-      if (flatParts.length === 0) return prev;
-
-      // První navigace po načtení — skoč na první část
-      if (currentPartIndex < 0) {
-        return {
-          ...prev,
-          currentPartIndex: 0,
-          output1Text: flatParts[0].verseText,
-          output2Text: flatParts[0].partText,
-        };
-      }
-
-      let newIndex = currentPartIndex;
+      const last = song.slides.length - 1;
+      let next: number;
       if (direction === "next") {
-        newIndex =
-          currentPartIndex + 1 >= flatParts.length ? 0 : currentPartIndex + 1;
+        next = prev.slideIndex >= last ? 0 : prev.slideIndex + 1;
       } else {
-        const candidateIdx =
-          currentPartIndex - 1 < 0
-            ? flatParts.length - 1
-            : currentPartIndex - 1;
-        if (
-          flatParts[candidateIdx].verseText !==
-          flatParts[currentPartIndex].verseText
-        ) {
-          let startIdx = candidateIdx;
-          while (
-            startIdx > 0 &&
-            flatParts[startIdx - 1].verseText ===
-              flatParts[candidateIdx].verseText
-          ) {
-            startIdx--;
-          }
-          newIndex = startIdx;
-        } else {
-          newIndex = candidateIdx;
-        }
+        const candidate = prev.slideIndex <= 0 ? last : prev.slideIndex - 1;
+        const leavingSection =
+          song.slides[candidate].sectionIndex !==
+          song.slides[prev.slideIndex].sectionIndex;
+        next = leavingSection
+          ? song.sections[song.slides[candidate].sectionIndex].slideStart
+          : candidate;
       }
-
-      return {
-        ...prev,
-        currentPartIndex: newIndex,
-        output1Text: flatParts[newIndex].verseText,
-        output2Text: flatParts[newIndex].partText,
-      };
+      return { ...prev, slideIndex: next, live: { song, slideIndex: next } };
     });
   };
 
   const goToSection = (sectionIndex: number) => {
     setState((prev) => {
-      if (!prev.currentSong) return prev;
-      const { currentSong, allVersesParts } = prev;
-
-      if (isBilingualSource(currentSong)) {
-        if (sectionIndex < 0 || sectionIndex >= allVersesParts.length)
-          return prev;
-        const target = allVersesParts[sectionIndex];
-        return {
-          ...prev,
-          currentVerseIndex: sectionIndex,
-          currentPartIndex: 0,
-          output1Text: target.fullPL + "\n\n" + target.fullEN,
-          output2Text: buildOutput2(target, 0),
-        };
-      }
-
-      const songParts = extractSongParts(currentSong);
-      if (sectionIndex < 0 || sectionIndex >= songParts.length) return prev;
-      let flatIdx = 0;
-      for (let i = 0; i < sectionIndex; i++) {
-        flatIdx += songParts[i].parts.length;
-      }
-      const flatParts = getAllPartsFlat(currentSong);
-      if (flatIdx >= flatParts.length) return prev;
-      return {
-        ...prev,
-        currentPartIndex: flatIdx,
-        output1Text: flatParts[flatIdx].verseText,
-        output2Text: flatParts[flatIdx].partText,
-      };
+      const song = prev.currentSong;
+      if (!song) return prev;
+      if (sectionIndex < 0 || sectionIndex >= song.sections.length) return prev;
+      const slideIndex = song.sections[sectionIndex].slideStart;
+      return { ...prev, slideIndex, live: { song, slideIndex } };
     });
   };
 
+  const live = state.live;
+  const slide = live ? live.song.slides[live.slideIndex] : null;
+  const section = slide ? live!.song.sections[slide.sectionIndex] : null;
+
   return {
     ...state,
-    sendFirstPart,
+    liveSong: live?.song ?? null,
+    output1: section
+      ? { primary: section.primary, secondary: section.secondary }
+      : EMPTY_TEXT,
+    output2: slide
+      ? { primary: slide.primary, secondary: slide.secondary }
+      : EMPTY_TEXT,
+    sendFirstPart: loadSong,
     navigatePart,
     goToSection,
   };
 }
 
-// ===== Pure selectors =====
-
 export function getCurrentSectionLabel(state: SongPlayerState): string {
-  const { currentSong, currentVerseIndex, currentPartIndex } = state;
-  if (!currentSong) return "";
-  // Nic není vybráno
-  if (currentPartIndex < 0) return "";
+  const live = state.live;
+  if (!live) return "";
+  const { song, slideIndex } = live;
 
-  // Bible mód: vrátíme plnou referenci "Ks. Przysłów 10:24"
-  if (currentSong.isBible && currentSong.bibleMeta) {
-    const sequenceParts = (currentSong.sequence || "")
-      .split(/\s+/)
-      .filter(Boolean);
-    const songParts = extractSongParts(currentSong);
-    let cumulative = 0;
-    for (let i = 0; i < songParts.length; i++) {
-      const partsCount = songParts[i].parts.length;
-      if (currentPartIndex < cumulative + partsCount) {
-        const code = sequenceParts[i] || "";
-        const verseNum = code.startsWith("V") ? code.substring(1) : "";
-        const { bookName, chapter } = currentSong.bibleMeta;
-        return `${bookName} ${chapter}:${verseNum}`;
-      }
-      cumulative += partsCount;
-    }
-    return "";
+  if (song.isBible && song.bibleMeta) {
+    const section = song.sections[song.slides[slideIndex].sectionIndex];
+    const { bookName, chapter } = song.bibleMeta;
+    return `${bookName} ${chapter}:${section.number}`;
   }
 
-  // Message mód: vrátíme "Title - 47-0412" (zobrazí se DOLE).
-  // Paragraph číslo je už součástí textu chunku ("1. Text" nebo "1. ... Text").
-  if (currentSong.isMessage && currentSong.messageMeta) {
-    const { dateKey, title } = currentSong.messageMeta;
+  if (song.isMessage && song.messageMeta) {
+    const { dateKey, title } = song.messageMeta;
     return `${title} - ${dateKey}`;
   }
 
-  if (isBilingualSource(currentSong)) {
-    const verses = currentSong.verses;
-    const verse = verses[currentVerseIndex];
-    if (!verse) return "";
-
-    // Label respektuje verse.ID. Pokud má píseň více veršů se stejným ID
-    // (např. sequence "V1 V1 C V1 V2" — 3 verše s ID=1), label správně
-    // zobrazí "Verse 1" pro všechny tři, ne "Verse 1/2/3" podle pozice.
-    // Fallback na array pozici jen když verse.ID chybí / je 0.
-    if (verse.Tag === 1) {
-      const id = verse.ID;
-      if (!id || id === 0) {
-        const list = verses.filter((v) => v.Tag === 1);
-        const idx = list.indexOf(verse) + 1;
-        return list.length > 1 ? `Chorus ${idx}` : "Chorus";
-      }
-      return id === 1 ? "Chorus" : `Chorus ${id}`;
-    }
-    if (verse.Tag === 2) {
-      const id = verse.ID;
-      if (!id || id === 0) {
-        const list = verses.filter((v) => v.Tag === 2);
-        const idx = list.indexOf(verse) + 1;
-        return list.length > 1 ? `Bridge ${idx}` : "Bridge";
-      }
-      return id === 1 ? "Bridge" : `Bridge ${id}`;
-    }
-    if (verse.ID && verse.ID > 0) return `Verse ${verse.ID}`;
-    const verseList = verses.filter((v) => !v.Tag);
-    const idx = verseList.indexOf(verse) + 1;
-    return `Verse ${idx}`;
-  }
-
-  const sequenceParts = (currentSong.sequence || "")
-    .split(/\s+/)
-    .filter(Boolean);
-  const songParts = extractSongParts(currentSong);
-  let cumulative = 0;
-  for (let i = 0; i < songParts.length; i++) {
-    const partsCount = songParts[i].parts.length;
-    if (currentPartIndex < cumulative + partsCount) {
-      const code = sequenceParts[i] || "";
-      if (code.startsWith("V")) return `Verse ${code.substring(1) || "1"}`;
-      if (code === "C") return "Chorus";
-      if (code.startsWith("C")) return `Chorus ${code.substring(1)}`;
-      if (code === "B") return "Bridge";
-      if (code.startsWith("B")) return `Bridge ${code.substring(1)}`;
-      return code;
-    }
-    cumulative += partsCount;
-  }
-  return "";
+  return song.slides[slideIndex]?.label ?? "";
 }
 
 export function getCurrentPosition(state: SongPlayerState): string {
-  const {
-    currentSong,
-    allVersesParts,
-    currentVerseIndex,
-    currentPartIndex,
-    totalParts,
-  } = state;
-  if (!currentSong) return "";
-  if (currentPartIndex < 0) return "";
-
-  if (isBilingualSource(currentSong)) {
-    if (allVersesParts.length === 0) return "";
-    let counter = 0;
-    for (let i = 0; i < currentVerseIndex; i++) {
-      counter += Math.max(
-        allVersesParts[i].plParts.length,
-        allVersesParts[i].enParts.length,
-      );
-    }
-    counter += currentPartIndex + 1;
-    return `${counter} / ${totalParts}`;
-  }
-  const flatParts = getAllPartsFlat(currentSong);
-  return `${currentPartIndex + 1} / ${flatParts.length}`;
+  const live = state.live;
+  if (!live) return "";
+  return `${live.slideIndex + 1} / ${live.song.slides.length}`;
 }
 
 export function getActiveSectionIndex(state: SongPlayerState): number {
-  const { currentSong, currentVerseIndex, currentPartIndex } = state;
-  if (!currentSong) return -1;
-  if (currentPartIndex < 0) return -1;
-  if (isBilingualSource(currentSong)) return currentVerseIndex;
-  const songParts = extractSongParts(currentSong);
-  let cumulative = 0;
-  for (let i = 0; i < songParts.length; i++) {
-    cumulative += songParts[i].parts.length;
-    if (currentPartIndex < cumulative) return i;
-  }
-  return -1;
+  const { currentSong, slideIndex } = state;
+  if (!currentSong || slideIndex < 0) return -1;
+  return currentSong.slides[slideIndex]?.sectionIndex ?? -1;
 }

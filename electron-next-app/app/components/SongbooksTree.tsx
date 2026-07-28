@@ -1,18 +1,18 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
 import type { ApiItem, SongBookKey } from "../lib/types";
 import { normalizeSearch } from "../lib/textUtils";
 import { highlightSnippet, type HighlightResult } from "../lib/searchHighlight";
 import { scoreTokens } from "../lib/searchScore";
-import { useDebounced } from "../hooks/useDebounced";
-import { SONGBOOKS } from "../hooks/useSongbooks";
+import { SONGBOOK_KEYS } from "../hooks/useSongbooks";
 import Icon from "./Icon";
 import SongListRow from "./SongListRow";
 
 interface SongbooksTreeProps {
   /** Per-songbook ApiItem[] map. */
   dataByBook: Record<SongBookKey, ApiItem[]>;
+  bookNames: Record<SongBookKey, string>;
   selectedItems: ApiItem[];
   onShow: (item: ApiItem) => void;
   onSelect: (item: ApiItem) => void;
@@ -20,26 +20,45 @@ interface SongbooksTreeProps {
 
 export default function SongbooksTree({
   dataByBook,
+  bookNames,
   selectedItems,
   onShow,
   onSelect,
 }: SongbooksTreeProps) {
   const [searchTerm, setSearchTerm] = useState("");
   const [openBook, setOpenBook] = useState<SongBookKey | null>(null);
-  const debouncedTerm = useDebounced(searchTerm, 150);
+  const deferredTerm = useDeferredValue(searchTerm);
+  const inputRef = useRef<HTMLInputElement>(null);
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  useEffect(() => () => {
+    if (timerRef.current) clearTimeout(timerRef.current);
+  }, []);
+
+  const scheduleSearch = (value: string) => {
+    if (timerRef.current) clearTimeout(timerRef.current);
+    timerRef.current = setTimeout(() => setSearchTerm(value), 120);
+  };
+
+  const clearSearch = () => {
+    if (timerRef.current) clearTimeout(timerRef.current);
+    if (inputRef.current) inputRef.current.value = "";
+    setSearchTerm("");
+  };
+
+  const selectedKeys = useMemo(
+    () => new Set(selectedItems.map((i) => `${i.source}:${i.id}`)),
+    [selectedItems],
+  );
   const isSelected = (item: ApiItem) =>
-    selectedItems.some(
-      (i) => i.id === item.id && i.source === item.source,
-    );
+    selectedKeys.has(`${item.source}:${item.id}`);
 
   const tokens = useMemo(() => {
-    const norm = normalizeSearch(debouncedTerm);
+    const norm = normalizeSearch(deferredTerm);
     return norm ? norm.split(" ").filter(Boolean) : [];
-  }, [debouncedTerm]);
+  }, [deferredTerm]);
 
-  // Vázat na okamžitý searchTerm — UI ihned přepne do search módu.
-  const isSearching = normalizeSearch(searchTerm).length > 0;
+  const isSearching = normalizeSearch(deferredTerm).length > 0;
 
   /**
    * Filtrované songbooky. Při searchi:
@@ -49,17 +68,18 @@ export default function SongbooksTree({
    *   žádný highlightSnippet na hot pathu
    * - Cap MAX_RESULTS_PER_BOOK aby pro běžná slova nesplodit stovky pills
    */
-  const MAX_RESULTS_PER_BOOK = 200;
+  const MAX_RESULTS_PER_BOOK = 50;
   type Row = { item: ApiItem; titleHl?: HighlightResult; bodyHl?: HighlightResult };
   const filteredByBook = useMemo(() => {
     const out: { key: SongBookKey; label: string; rows: Row[]; truncated: boolean }[] = [];
-    for (const b of SONGBOOKS) {
-      const items = dataByBook[b.key] || [];
+    for (const key of SONGBOOK_KEYS) {
+      const items = dataByBook[key] || [];
+      const label = bookNames[key];
       if (tokens.length === 0) {
         out.push({
-          key: b.key,
-          label: b.label,
-          rows: items.map((item) => ({ item })),
+          key,
+          label,
+          rows: items.map((item: ApiItem) => ({ item })),
           truncated: false,
         });
       } else {
@@ -74,17 +94,17 @@ export default function SongbooksTree({
         const top = truncated ? scored.slice(0, MAX_RESULTS_PER_BOOK) : scored;
         const rows: Row[] = top.map(({ item }) => ({
           item,
-          titleHl: highlightSnippet(item.text, tokens, { snippetLen: 0 }),
+          titleHl: highlightSnippet(item.title, tokens, { snippetLen: 0 }),
           bodyHl: highlightSnippet(item.fullText, tokens, {
             snippetLen: 200,
             before: 50,
           }),
         }));
-        out.push({ key: b.key, label: b.label, rows, truncated });
+        out.push({ key, label, rows, truncated });
       }
     }
     return out;
-  }, [dataByBook, tokens]);
+  }, [dataByBook, bookNames, tokens]);
 
   const totalResults = filteredByBook.reduce((s, b) => s + b.rows.length, 0);
 
@@ -96,13 +116,28 @@ export default function SongbooksTree({
     <div className="h-full flex flex-col bg-surface overflow-hidden">
       {/* Search */}
       <div className="shrink-0 pt-2 px-2">
-        <input
-          type="text"
-          placeholder="Search all songbooks..."
-          value={searchTerm}
-          onChange={(e) => setSearchTerm(e.target.value)}
-          className="w-full px-2 py-1 text-xs border border-border-secondary rounded focus:outline-none focus:ring-1 focus:ring-primary bg-surface text-text-primary placeholder-text-muted"
-        />
+        <div className="relative">
+          <input
+            ref={inputRef}
+            type="text"
+            placeholder="Search all songbooks..."
+            defaultValue=""
+            onChange={(e) => scheduleSearch(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Escape") clearSearch();
+            }}
+            className="w-full px-2 py-1 pr-7 text-xs border border-border-secondary rounded focus:outline-none focus:ring-1 focus:ring-primary bg-surface text-text-primary placeholder-text-muted"
+          />
+          {isSearching && (
+            <button
+              onClick={clearSearch}
+              title="Clear search (Esc)"
+              className="absolute right-1 top-1/2 -translate-y-1/2 w-5 h-5 flex items-center justify-center rounded text-text-muted hover:text-text-primary hover:bg-surface-secondary transition-colors"
+            >
+              <Icon name="X" size={12} />
+            </button>
+          )}
+        </div>
       </div>
 
       {isSearching && (

@@ -1,128 +1,127 @@
 import type {
-  ApiItem,
   EditorSection,
-  SectionType,
-  Song,
-  SongBookKey,
-  Verse,
+  EditorSlide,
+  SectionEntry,
+  SongEntry,
 } from "./types";
-import { formatSequencePart } from "./sequence";
+import { deriveSequence } from "./songSchema";
+import { splitLinesMono, splitLinesBilingual, alignSecondary } from "./slideSplit";
 
-/** Editor state → Song (JSON format pro disk). */
 export interface BuildSongArgs {
   songName: string;
-  key: string;
+  key: string | null;
+  number: number | null;
   sections: EditorSection[];
-  targetBook: SongBookKey | "custom";
-  /** Při editaci: zachováme ID, Guid a původní Sequence pokud se počty sekcí nezměnily. */
-  existing?: Song;
-  /** Pro nové písně se použije, pokud existing chybí. */
-  nextId?: number;
-  /** Uživatel zadané vlastní ID — přebije existing.ID i nextId. */
-  customId?: number;
+  secondaryIsTranslation: boolean;
+  existingId?: string;
 }
 
-/** Songbooks, které ukládají verše ve dvojjazyčném formátu (TextPL/TextEN). */
-const BILINGUAL_BOOKS = new Set<string>([
-  "newSongPlGb",
-  "roboczy",
-  "children",
-]);
+export const toLines = (text: string): string[] =>
+  text
+    .split("\n")
+    .map((l) => l.trim())
+    .filter((l) => l !== "");
 
-export function buildSongFromEditor(args: BuildSongArgs): Song {
-  const { songName, key, sections, targetBook, existing, nextId, customId } =
+export function generateSlides(
+  section: Pick<EditorSection, "lines" | "altLines" | "showAlt">,
+  bilingual: boolean,
+): EditorSlide[] {
+  const lines = toLines(section.lines);
+  if (lines.length === 0) return [];
+
+  const parts = bilingual ? splitLinesBilingual(lines) : splitLinesMono(lines);
+  const alt = section.showAlt ? toLines(section.altLines) : [];
+  const altParts = alt.length ? alignSecondary(alt, parts.length) : [];
+
+  return parts.map((part, i) => ({
+    id: crypto.randomUUID(),
+    lines: part.join("\n"),
+    altLines: (altParts[i] ?? []).join("\n"),
+  }));
+}
+
+export function buildSongFromEditor(args: BuildSongArgs): SongEntry {
+  const { songName, key, number, sections, secondaryIsTranslation, existingId } =
     args;
-  const hasBilingual = sections.some((s) => s.textEN.trim() !== "");
-  const isPlEn = BILINGUAL_BOOKS.has(targetBook);
 
-  const verses: Verse[] = sections.map((section) => {
-    const tag =
-      section.type === "chorus"
-        ? 1
-        : section.type === "bridge"
-          ? 2
-          : undefined;
-    const verseId =
-      section.type === "verse"
-        ? section.number
-        : section.number === 1
-          ? 0
-          : section.number;
+  const live = sections.filter((s) => toLines(s.lines).length > 0);
+  const bilingual = live.some((s) => s.showAlt && toLines(s.altLines).length > 0);
 
-    if (isPlEn || hasBilingual) {
-      return {
-        Tag: tag,
-        ID: verseId,
-        TextPL: section.textPL,
-        TextEN: section.textEN || undefined,
-      };
+  const primarySections: SectionEntry[] = [];
+  const secondarySections: SectionEntry[] = [];
+
+  live.forEach((s, i) => {
+    const order = i + 1;
+    const slides = s.slidesLocked && s.slides.length > 0
+      ? s.slides
+      : generateSlides(s, bilingual);
+
+    const primarySlides = slides
+      .map((sl) => toLines(sl.lines))
+      .filter((l) => l.length > 0);
+
+    const entry: SectionEntry = {
+      order,
+      type: s.type,
+      number: s.number,
+      lines: primarySlides.flat(),
+      slides: primarySlides,
+    };
+    if (s.slidesLocked) entry.slidesLocked = true;
+    primarySections.push(entry);
+
+    const altSlides = slides.map((sl) => toLines(sl.altLines));
+    const altLines = altSlides.flat();
+    if (s.showAlt && altLines.length > 0) {
+      secondarySections.push({
+        order,
+        type: s.type,
+        number: s.number,
+        lines: altLines,
+        slides: altSlides.slice(0, primarySlides.length),
+      });
     }
-    return { Tag: tag, ID: verseId, Text: section.textPL };
   });
 
-  // Sekvence: pokud editujeme a počet sekcí se nezměnil, zachováme původní
-  // (kvůli opakování chorusu apod.). Jinak vygenerujeme z aktuálních sekcí.
-  const sequence =
-    existing && existing.Sequence && sections.length === existing.Verses.length
-      ? existing.Sequence
-      : sections.map((s) => formatSequencePart(s.type, s.number)).join(" ");
-
-  // Priorita: user customId > existing.ID > 0 (= "no ID").
-  // NEKTERUJEME auto-increment přes nextId — když user nezadá číslo, píseň
-  // dostane ID 0. Upsert v useSongbooks identifikuje píseň podle Guid (níž),
-  // takže duplicitní ID 0 nevadí.
-  const id = customId ?? existing?.ID ?? 0;
-  const guid = existing?.Guid ?? crypto.randomUUID();
-
-  if (isPlEn) {
-    return {
-      ID: id,
-      Guid: guid,
-      Verses: verses,
-      TextPL: songName,
-      Sequence: sequence,
-      Key: key,
-    };
+  const text = [{ isTranslation: false, sections: primarySections }];
+  if (secondarySections.length > 0) {
+    text.push({
+      isTranslation: secondaryIsTranslation,
+      sections: secondarySections,
+    });
   }
 
   return {
-    ID: id,
-    Guid: guid,
-    Verses: verses,
-    Text: songName,
-    Sequence: sequence,
-    Key: key,
+    id: existingId ?? crypto.randomUUID(),
+    number,
+    key: key || null,
+    title: songName.trim(),
+    sequence: deriveSequence(primarySections),
+    text,
   };
 }
 
-/** ApiItem → editor sections pro pre-fill při editaci. */
-export function apiItemToEditorSections(item: ApiItem): EditorSection[] {
-  return item.verses.map((v) => {
-    const type: SectionType =
-      v.Tag === 1 ? "chorus" : v.Tag === 2 ? "bridge" : "verse";
+export function songToEditorSections(song: SongEntry): EditorSection[] {
+  const secondary = song.text[1];
+  const byOrder = secondary
+    ? new Map(secondary.sections.map((s) => [s.order, s]))
+    : undefined;
 
-    let number: number;
-    if (type === "verse") {
-      number = v.ID && v.ID > 0 ? v.ID : 1;
-    } else {
-      number = !v.ID || v.ID === 0 ? 1 : v.ID;
-    }
-
-    const textPL = v.TextPL || v.Text || "";
-    const textEN = v.TextEN || "";
-
+  return song.text[0].sections.map((sec) => {
+    const alt = byOrder?.get(sec.order);
     return {
       id: crypto.randomUUID(),
-      type,
-      number,
-      textPL,
-      textEN,
-      showEN: !!textEN,
+      type: sec.type,
+      number: sec.number,
+      lines: sec.lines.join("\n"),
+      altLines: alt?.lines.join("\n") ?? "",
+      showAlt: (alt?.lines.length ?? 0) > 0,
+      slidesLocked: sec.slidesLocked === true,
+      slides: sec.slides.map((slide, i) => ({
+        id: crypto.randomUUID(),
+        lines: slide.join("\n"),
+        altLines: (alt?.slides[i] ?? []).join("\n"),
+      })),
     };
   });
-}
-
-/** Najde max ID napříč songbookem pro generování nového ID. */
-export function getNextSongbookId(songs: Song[], min = 1): number {
-  return songs.reduce((max, s) => Math.max(max, s.ID || 0), min);
 }

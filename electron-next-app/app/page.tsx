@@ -2,7 +2,7 @@
 
 import { Allotment } from "allotment";
 import "allotment/dist/style.css";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 import { getMessageText } from "./lib/messageIndex";
 
@@ -10,25 +10,20 @@ import type {
   ApiItem,
   DisplayInfo,
   SongBookKey,
+  SongEntry,
   SongSource,
 } from "./lib/types";
-import { LS_KEYS, STARTING_CUSTOM_ID } from "./lib/constants";
-import { buildSearchIndex } from "./lib/textUtils";
+import { LS_KEYS, TRANSLATION_LABEL_DEFAULT } from "./lib/constants";
 import {
   isMessageChunkIndexReady,
   prebuildMessageChunkIndex,
 } from "./lib/messageIndex";
 import { prebuildBibleVerseIndexes } from "./lib/bibleIndex";
 import { buildHdmiHtml, buildHdmi2Html } from "./lib/hdmiHtml";
-import {
-  apiItemToEditorSections,
-  buildSongFromEditor,
-  getNextSongbookId,
-} from "./lib/songSerialize";
-import {
-  processBilingualSongbook,
-  processPlOnlySongbook,
-} from "./lib/songProcessing";
+import { buildSongFromEditor, songToEditorSections } from "./lib/songSerialize";
+import { toApiItem } from "./lib/songAdapter";
+import { splitVerseIntoParts } from "./lib/bibleSlides";
+import { buildSectionsAndSlides } from "./lib/songSchema";
 
 import { usePersistedState } from "./hooks/usePersistedState";
 import {
@@ -61,7 +56,7 @@ interface EditorContext {
    * Při editaci existující písně – identifikuje původní záznam.
    * `guid` je autoritativní (vždy unikátní), `id` je jen pro custom (localStorage) písně.
    */
-  editing?: { source: SongSource; id: number; guid?: string };
+  editing?: { source: SongSource; id: string };
   lockTargetBook?: boolean;
 }
 
@@ -73,25 +68,20 @@ function HomeContent() {
     LS_KEYS.selectedItems,
     [],
   );
-  const [customSongs, setCustomSongs] = usePersistedState<ApiItem[]>(
-    LS_KEYS.customSongs,
-    [],
+  const [customSongEntries, setCustomSongEntries] = usePersistedState<
+    SongEntry[]
+  >(LS_KEYS.customSongs, []);
+  const customSongs = useMemo(
+    () => customSongEntries.map((s) => toApiItem(s, "custom", "")),
+    [customSongEntries],
   );
-  const [nextCustomId, setNextCustomId] = usePersistedState<number>(
-    LS_KEYS.nextCustomId,
-    STARTING_CUSTOM_ID,
-    (raw) => Number(raw) || STARTING_CUSTOM_ID,
-  );
-
   // ===== SONGBOOKS =====
   const {
     dataByBook,
-    raw: rawSongbooks,
-    findSong,
-    findSongByGuid,
+    bookNames,
+    findSongById,
     upsertSong,
-    deleteSong,
-    deleteSongByGuid,
+    deleteSongById,
     loaded: songbooksLoaded,
   } = useSongbooks();
 
@@ -146,24 +136,37 @@ function HomeContent() {
     bibleName: string,
     autoSelectVerseIdx?: number,
   ) => {
-    const verses = rawVerses.map((v, i) => ({
-      Text: v.Text || "",
-      ID: v.ID || i + 1,
-    }));
-    const sequence = verses.map((v) => `V${v.ID}`).join(" ");
-    const fullText = verses.map((v) => `${v.ID}. ${v.Text}`).join("\n\n");
     const title = `${bookName} ${chapter}`;
+    const entries = rawVerses.map((v, i) => {
+      const lines = (v.Text || "").split("\n").filter((l) => l.trim() !== "");
+      return {
+        order: i + 1,
+        type: "verse" as const,
+        number: v.ID || i + 1,
+        lines,
+        slides: splitVerseIntoParts(v.Text || "").map((part) =>
+          part.split("\n").filter((l) => l.trim() !== ""),
+        ),
+      };
+    });
+    const { sections, slides } = buildSectionsAndSlides(entries);
+    const fullText = rawVerses
+      .map((v, i) => `${v.ID || i + 1}. ${v.Text || ""}`)
+      .join("\n\n");
 
     const item: ApiItem = {
-      id: -1,
-      text: title,
+      id: `bible:${bookName}:${chapter}`,
+      number: null,
       title,
-      fullText,
-      selected: false,
-      sequence,
-      verses,
-      key: "",
+      key: null,
+      sequence: "",
       source: "custom",
+      bookName: bibleName,
+      secondaryIsTranslation: false,
+      translationLabel: TRANSLATION_LABEL_DEFAULT,
+      sections,
+      slides,
+      fullText,
       searchIndex: "",
       isBible: true,
       bibleMeta: { bookName, chapter, bibleName },
@@ -173,7 +176,7 @@ function HomeContent() {
     if (
       autoSelectVerseIdx !== undefined &&
       autoSelectVerseIdx >= 0 &&
-      autoSelectVerseIdx < verses.length
+      autoSelectVerseIdx < sections.length
     ) {
       player.goToSection(autoSelectVerseIdx);
     }
@@ -190,27 +193,33 @@ function HomeContent() {
     if (!entry || entry.chunks.length === 0) return;
 
     // Prefix: "1. text" pro první chunk paragrafu, "1. ... text" pro další chunky uvnitř.
-    const verses = entry.chunks.map((c, i) => {
+    const withOrder = entry.chunks.map((c, i) => {
       const isFirstOfParagraph = i === 0 || entry.chunks[i - 1].pnum !== c.pnum;
       const prefix = isFirstOfParagraph ? `${c.pnum}. ` : `${c.pnum}. ... `;
       return {
-        Text: prefix + c.text,
-        ID: i + 1,
+        order: i + 1,
+        type: "verse" as const,
+        number: i + 1,
+        lines: [prefix + c.text],
+        slides: [[prefix + c.text]],
       };
     });
-    const sequence = verses.map((v) => `V${v.ID}`).join(" ");
-    const fullText = verses.map((v) => v.Text).join("\n\n");
+    const { sections, slides } = buildSectionsAndSlides(withOrder);
+    const fullText = withOrder.map((v) => v.lines.join("\n")).join("\n\n");
 
     const item: ApiItem = {
-      id: -2,
-      text: title,
+      id: `msg:${dateKey}`,
+      number: null,
       title,
-      fullText,
-      selected: false,
-      sequence,
-      verses,
-      key: "",
+      key: null,
+      sequence: "",
       source: "custom",
+      bookName: "",
+      secondaryIsTranslation: false,
+      translationLabel: TRANSLATION_LABEL_DEFAULT,
+      sections,
+      slides,
+      fullText,
       searchIndex: "",
       isMessage: true,
       messageMeta: {
@@ -225,7 +234,7 @@ function HomeContent() {
     // a označí jako aktivní), ALE rovnou aktivuj blackout — text je sice připravený,
     // na preview/HDMI ale neviditelný. Uživatel si nejdřív v SectionsList ověří,
     // co to je, a teprve pak klikne Moon ikonu pro odhalení.
-    if (chunkIdx !== undefined && chunkIdx >= 0 && chunkIdx < verses.length) {
+    if (chunkIdx !== undefined && chunkIdx >= 0 && chunkIdx < sections.length) {
       player.goToSection(chunkIdx);
       setBlackoutActive(true);
     }
@@ -236,7 +245,7 @@ function HomeContent() {
     if (
       !selectedItems.find((i) => i.id === item.id && i.source === item.source)
     ) {
-      setSelectedItems([...selectedItems, { ...item, selected: true }]);
+      setSelectedItems([...selectedItems, item]);
     }
   };
 
@@ -247,15 +256,22 @@ function HomeContent() {
     const targetBook: TargetBook =
       item.source === "custom" ? "custom" : (item.source as SongBookKey);
 
+    const song =
+      item.source === "custom"
+        ? customSongEntries.find((s) => s.id === item.id)
+        : findSongById(item.source as SongBookKey, item.id);
+    if (!song) return;
+
     setEditorContext({
       initial: {
-        songName: item.title,
-        songId: item.id,
-        key: item.key || "C",
-        sections: apiItemToEditorSections(item),
+        songName: song.title,
+        songNumber: song.number,
+        key: song.key,
+        sections: songToEditorSections(song),
         targetBook,
+        secondaryIsTranslation: song.text[1]?.isTranslation ?? false,
       },
-      editing: { source: item.source, id: item.id, guid: item.guid },
+      editing: { source: item.source, id: item.id },
       lockTargetBook: true,
     });
   };
@@ -264,74 +280,40 @@ function HomeContent() {
 
   const handleSave = async (state: EditorState) => {
     const editing = editorContext?.editing;
-
-    if (state.targetBook === "custom") {
-      // Custom song saved to localStorage. User-set songId beats default.
-      const id =
-        state.songId ??
-        (editing?.source === "custom" ? editing.id : nextCustomId);
-      const apiItem: ApiItem = {
-        ...buildApiItemForCustom(state, id),
-      };
-
-      if (editing?.source === "custom") {
-        setCustomSongs(
-          customSongs.map((s) => (s.id === editing.id ? apiItem : s)),
-        );
-      } else {
-        setCustomSongs([...customSongs, apiItem]);
-        setNextCustomId(nextCustomId + 1);
-      }
-      closeEditor();
-      return;
-    }
-
-    // Save to a songbook file
-    const book = state.targetBook;
-    // Preferuj Guid — vždy unikátní. Fallback na ID pro custom / legacy případy.
-    const existingRaw =
-      editing && editing.source === book
-        ? editing.guid
-          ? findSongByGuid(book, editing.guid)
-          : findSong(book, editing.id)
-        : undefined;
-
-    const nextId =
-      existingRaw?.ID ?? getNextSongbookId(rawSongbooks[book] || []) + 1;
+    const existingId =
+      editing && editing.source === state.targetBook ? editing.id : undefined;
 
     const song = buildSongFromEditor({
       songName: state.songName,
       key: state.key,
+      number: state.songNumber,
       sections: state.sections,
-      targetBook: book,
-      existing: existingRaw,
-      nextId,
-      customId: state.songId,
+      secondaryIsTranslation: state.secondaryIsTranslation,
+      existingId,
     });
 
-    setSaveStatus("saving");
-    const result = await upsertSong(book, song);
-    if (result.cloudOk === true) setSaveStatus("saved");
-    else if (result.cloudOk === false) setSaveStatus("error");
-    else setSaveStatus("local"); // null = no token, local only
-    closeEditor();
-
-    // Pokud uživatel měl právě tu píseň otevřenou v playeru, refresh ji,
-    // ať se aktualizované sekce hned ukážou v SectionsList + preview/HDMI.
-    if (
-      editing?.source === book &&
-      player.currentSong?.id === editing.id &&
-      player.currentSong?.source === book
-    ) {
-      const newItem = (
-        book === "newSongPlGb" || book === "roboczy" || book === "children"
-          ? processBilingualSongbook(song, book)
-          : processPlOnlySongbook(song, book)
-      );
-      player.sendFirstPart(newItem);
+    if (state.targetBook === "custom") {
+      const next = existingId
+        ? customSongEntries.map((s) => (s.id === existingId ? song : s))
+        : [...customSongEntries, song];
+      setCustomSongEntries(next);
+      closeEditor();
+      return;
     }
 
-    // Auto-reset indicator
+    const book = state.targetBook;
+    setSaveStatus("saving");
+    const result = await upsertSong(book, song);
+    if (result.refused) setSaveStatus("error");
+    else if (result.cloudOk === true) setSaveStatus("saved");
+    else if (result.cloudOk === false) setSaveStatus("error");
+    else setSaveStatus("local");
+    closeEditor();
+
+    if (player.currentSong?.id === song.id) {
+      player.sendFirstPart(toApiItem(song, book, bookNames[book]));
+    }
+
     const resetMs =
       result.cloudOk === true ? 2000 : result.cloudOk === false ? 5000 : 3000;
     setTimeout(() => setSaveStatus("idle"), resetMs);
@@ -342,12 +324,9 @@ function HomeContent() {
     if (!editing) return;
 
     if (editing.source === "custom") {
-      setCustomSongs(customSongs.filter((s) => s.id !== editing.id));
-    } else if (editing.guid) {
-      // Autoritativní — smaže se přesně tato jedna píseň bez ohledu na ID
-      await deleteSongByGuid(editing.source, editing.guid);
+      setCustomSongEntries(customSongEntries.filter((s) => s.id !== editing.id));
     } else {
-      await deleteSong(editing.source, editing.id);
+      await deleteSongById(editing.source, editing.id);
     }
     closeEditor();
   };
@@ -386,19 +365,18 @@ function HomeContent() {
   };
 
   // ===== HDMI SYNC =====
-  /** Aktuální verš (v PL/EN módu) je jen překlad? → EN část se renderuje italic. */
   const currentVerseIsTranslation =
-    player.allVersesParts[player.currentVerseIndex]?.isTranslation === true;
+    player.liveSong?.secondaryIsTranslation === true;
 
   const hdmiHtml = buildHdmiHtml({
-    currentSong: player.currentSong,
-    output1Text: player.output1Text,
+    currentSong: player.liveSong,
+    output1: player.output1,
     sectionLabel,
     isTranslation: currentVerseIsTranslation,
   });
   const hdmi2Html = buildHdmi2Html(
-    player.currentSong,
-    player.output2Text,
+    player.liveSong,
+    player.output2,
     sectionLabel,
     currentVerseIsTranslation,
   );
@@ -492,6 +470,7 @@ function HomeContent() {
                 songbooksContent={
                   <SongbooksTree
                     dataByBook={dataByBook}
+          bookNames={bookNames}
                     selectedItems={selectedItems}
                     onShow={player.sendFirstPart}
                     onSelect={selectItem}
@@ -524,12 +503,9 @@ function HomeContent() {
             <Allotment.Pane preferredSize="40%">
               <div className="h-full flex gap-2 p-2 overflow-auto bg-surface">
                 <LocalPreview
-                  currentSong={player.currentSong}
-                  output1Text={player.output1Text}
-                  sectionLabel={sectionLabel}
+                  html={hdmiHtml}
                   blackoutActive={blackoutActive}
                   onToggleBlackout={toggleBlackout}
-                  isTranslation={currentVerseIsTranslation}
                   displays={displays}
                   selectedDisplayId={selectedDisplayId}
                   setSelectedDisplayId={setSelectedDisplayId}
@@ -538,12 +514,9 @@ function HomeContent() {
                   onRefreshDisplays={refreshDisplays}
                 />
                 <StreamPreview
-                  currentSong={player.currentSong}
-                  output2Text={player.output2Text}
-                  sectionLabel={sectionLabel}
+                  html={hdmi2Html}
                   positionText={positionText}
                   blackoutActive={blackoutActive}
-                  isTranslation={currentVerseIsTranslation}
                   displays={displays}
                   selectedDisplayId={selectedDisplayId2}
                   setSelectedDisplayId={setSelectedDisplayId2}
@@ -564,15 +537,25 @@ function HomeContent() {
                     onSave={handleSave}
                     onDelete={editorContext.editing ? handleDelete : undefined}
                     onCancel={closeEditor}
-                    onPlaySection={(item, idx) => {
-                      player.sendFirstPart(item);
-                      player.goToSection(idx);
-                      setBlackoutActive(false);
-                    }}
                   />
                 ) : (
                   <SectionsList
                     currentSong={player.currentSong}
+                    onAddToSelected={
+                      player.currentSong &&
+                      !player.currentSong.isBible &&
+                      !player.currentSong.isMessage
+                        ? () => selectItem(player.currentSong!)
+                        : undefined
+                    }
+                    isInSelected={
+                      !!player.currentSong &&
+                      selectedItems.some(
+                        (i) =>
+                          i.id === player.currentSong!.id &&
+                          i.source === player.currentSong!.source,
+                      )
+                    }
                     activeSectionIndex={activeSectionIndex}
                     onGoToSection={(idx) => {
                       player.goToSection(idx);
@@ -608,75 +591,6 @@ function HomeContent() {
       />
     </main>
   );
-}
-
-/** Sestaví ApiItem pro custom (localStorage) song bez prochodu přes Song. */
-function buildApiItemForCustom(state: EditorState, id: number): ApiItem {
-  const hasBilingual = state.sections.some((s) => s.textEN.trim() !== "");
-
-  const verses = state.sections.map((section) => {
-    const tag =
-      section.type === "chorus" ? 1 : section.type === "bridge" ? 2 : undefined;
-    const verseId =
-      section.type === "verse"
-        ? section.number
-        : section.number === 1
-          ? 0
-          : section.number;
-
-    if (hasBilingual) {
-      return {
-        Tag: tag,
-        ID: verseId,
-        TextPL: section.textPL,
-        TextEN: section.textEN || undefined,
-      };
-    }
-    return { Tag: tag, ID: verseId, Text: section.textPL };
-  });
-
-  const sequence = state.sections
-    .map((s) => {
-      if (s.type === "verse") return `V${s.number}`;
-      if (s.type === "chorus") return s.number === 1 ? "C" : `C${s.number}`;
-      if (s.type === "bridge") return s.number === 1 ? "B" : `B${s.number}`;
-      return "";
-    })
-    .join(" ");
-
-  const fullText = state.sections
-    .map((s) => {
-      const label =
-        s.type === "chorus"
-          ? `Ref.${s.number}`
-          : s.type === "bridge"
-            ? `Bridge ${s.number}`
-            : `${s.number}.`;
-      if (hasBilingual && s.textEN) {
-        return `${label}\n${s.textPL}\n\n${s.textEN}`;
-      }
-      return `${label} ${s.textPL}`;
-    })
-    .join("\n\n");
-
-  const searchIndex = buildSearchIndex(
-    `${id} ${state.songName} ${state.sections
-      .map((s) => `${s.textPL} ${s.textEN}`)
-      .join(" ")}`,
-  );
-
-  return {
-    id,
-    text: state.songName,
-    title: state.songName,
-    fullText,
-    selected: false,
-    sequence,
-    verses,
-    key: state.key,
-    source: "custom",
-    searchIndex,
-  };
 }
 
 // ===== BOOTSTRAP WRAPPER =====

@@ -1,108 +1,143 @@
-import type { ApiItem } from "./types";
-import { buildSongFooter, isBilingualSource } from "./songProcessing";
+import type { ApiItem, SlideText } from "./types";
+import { buildSongFooter } from "./songAdapter";
+
+const ESCAPES: Record<string, string> = {
+  "&": "&amp;",
+  "<": "&lt;",
+  ">": "&gt;",
+  '"': "&quot;",
+  "'": "&#39;",
+};
+
+const escapeHtml = (s: string): string => s.replace(/[&<>"']/g, (c) => ESCAPES[c]);
+
+const linesToHtml = (lines: string[]): string =>
+  lines.map(escapeHtml).join("<br>");
 
 interface BuildHdmiHtmlArgs {
   currentSong: ApiItem | null;
-  output1Text: string;
+  output1: SlideText;
   sectionLabel: string;
-  /** True když aktuální verš je jen "Translation" — EN část se renderuje italic. */
   isTranslation?: boolean;
 }
 
-/** Bible/Message layout: volitelný top label, uprostřed text, dole label. */
 function buildCenteredHtml(
-  text: string,
+  lines: string[],
   topLabel: string,
   bottomLabel: string,
   options: { justify?: boolean } = {},
 ) {
   const top = topLabel
-    ? `<div class="title-row"><span class="sequence">${topLabel}</span></div>`
+    ? `<div class="title-row"><span class="sequence">${escapeHtml(topLabel)}</span></div>`
     : "";
-  const textClass = options.justify ? "text-fit text-justify" : "text-fit";
+  const textClass = options.justify
+    ? "text-fit text-flow text-justify"
+    : "text-fit text-flow";
   return (
     top +
-    `<div class="text-block"><div class="${textClass}">${text}</div></div>` +
-    `<div class="title-row"><span class="sequence">${bottomLabel}</span></div>`
+    `<div class="text-block"><div class="${textClass}">${linesToHtml(lines)}</div></div>` +
+    `<div class="title-row"><span class="sequence">${escapeHtml(bottomLabel)}</span></div>`
   );
 }
 
+function buildBody(
+  primary: string[],
+  secondary: string[] | undefined,
+  isTranslation?: boolean,
+  translationLabel?: string,
+  hugDivider?: boolean,
+  roomy?: boolean,
+): string {
+  const hasPrimary = primary.length > 0;
+  const hasSecondary = (secondary?.length ?? 0) > 0;
+  const hug = hugDivider === true && hasPrimary && hasSecondary;
+  const split = hasPrimary && hasSecondary;
+  const topExtra = roomy ? (split ? " roomy-top" : " roomy") : "";
+  const bottomExtra = roomy ? (split ? " roomy-bottom" : " roomy") : "";
+
+  let html = "";
+  if (hasPrimary) {
+    const block = hug ? "text-block align-bottom" : `text-block${topExtra}`;
+    html += `<div class="${block}"><div class="text-fit">${linesToHtml(primary)}</div></div>`;
+  }
+  if (hasPrimary && hasSecondary) html += `<div class="divider"></div>`;
+  if (hasSecondary) {
+    const cls = isTranslation ? "text-fit text-italic" : "text-fit";
+    const block = hug ? "text-block align-top" : `text-block${bottomExtra}`;
+    const lines =
+      isTranslation && translationLabel
+        ? [translationLabel, ...secondary!]
+        : secondary!;
+    html += `<div class="${block}"><div class="${cls}">${linesToHtml(lines)}</div></div>`;
+  }
+  return html;
+}
+
+const isEmpty = (t: SlideText) =>
+  t.primary.length === 0 && (t.secondary?.length ?? 0) === 0;
+
 export function buildHdmiHtml({
   currentSong,
-  output1Text,
+  output1,
   sectionLabel,
   isTranslation,
 }: BuildHdmiHtmlArgs): string {
-  if (!currentSong) return "";
+  if (!currentSong || isEmpty(output1)) return "";
 
   if (currentSong.isBible && currentSong.bibleMeta) {
     return buildCenteredHtml(
-      output1Text,
+      output1.primary,
       sectionLabel,
       currentSong.bibleMeta.bibleName,
     );
   }
 
   if (currentSong.isMessage && currentSong.messageMeta) {
-    // Message: top prázdný, dole jde celý sectionLabel ("Title - 47-0412 par.5"),
-    // text block-justify.
-    return buildCenteredHtml(output1Text, "", sectionLabel, { justify: true });
+    return buildCenteredHtml(output1.primary, "", sectionLabel, { justify: true });
   }
 
-  const sequence = currentSong.sequence || "";
-  const footerText = buildSongFooter(currentSong);
+  const header = `<div class="header"><span class="sequence">${escapeHtml(sectionLabel)}</span><span class="sequence">${escapeHtml(currentSong.sequence || "")}</span></div>`;
+  const footer = `<div class="title-row"><span class="sequence">${escapeHtml(buildSongFooter(currentSong))}</span></div>`;
 
-  const header = `<div class="header"><span class="sequence">${sectionLabel}</span><span class="sequence">${sequence}</span></div>`;
-  const footer = `<div class="title-row"><span class="sequence">${footerText}</span></div>`;
-
-  if (isBilingualSource(currentSong)) {
-    const [plText = "", enText = ""] = output1Text.split("\n\n");
-    const enClass = isTranslation ? "text-fit text-italic" : "text-fit";
-    let html = header;
-    if (plText)
-      html += `<div class="text-block"><div class="text-fit">${plText}</div></div>`;
-    if (plText && enText) html += `<div class="divider"></div>`;
-    // Prázdný EN nerenderujeme — PL se tak vycentruje přes celou výšku.
-    if (enText)
-      html += `<div class="text-block"><div class="${enClass}">${enText}</div></div>`;
-    html += footer;
-    return html;
-  }
-
-  return `${header}<div class="text-block"><div class="text-fit">${output1Text}</div></div>${footer}`;
+  return (
+    header +
+    buildBody(
+      output1.primary,
+      output1.secondary,
+      isTranslation,
+      currentSong.translationLabel,
+      false,
+      true,
+    ) +
+    footer
+  );
 }
 
 export function buildHdmi2Html(
   currentSong: ApiItem | null,
-  output2Text: string,
+  output2: SlideText,
   sectionLabel: string,
   isTranslation?: boolean,
 ): string {
-  if (!currentSong) return "";
+  if (!currentSong || isEmpty(output2)) return "";
 
   if (currentSong.isBible && currentSong.bibleMeta) {
     return buildCenteredHtml(
-      output2Text,
+      output2.primary,
       sectionLabel,
       currentSong.bibleMeta.bibleName,
     );
   }
 
   if (currentSong.isMessage && currentSong.messageMeta) {
-    return buildCenteredHtml(output2Text, "", sectionLabel, { justify: true });
+    return buildCenteredHtml(output2.primary, "", sectionLabel, { justify: true });
   }
 
-  if (isBilingualSource(currentSong)) {
-    const [plPart = "", enPart = ""] = output2Text.split("\n\n");
-    const enClass = isTranslation ? "text-fit text-italic" : "text-fit";
-    let html = "";
-    if (plPart)
-      html += `<div class="text-block"><div class="text-fit">${plPart}</div></div>`;
-    if (plPart && enPart) html += `<div class="divider"></div>`;
-    if (enPart)
-      html += `<div class="text-block"><div class="${enClass}">${enPart}</div></div>`;
-    return html;
-  }
-
-  return `<div class="text-block"><div class="text-fit">${output2Text}</div></div>`;
+  return `<div class="out2">${buildBody(
+    output2.primary,
+    output2.secondary,
+    isTranslation,
+    currentSong.translationLabel,
+    true,
+  )}</div>`;
 }

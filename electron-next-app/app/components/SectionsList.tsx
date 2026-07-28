@@ -1,8 +1,8 @@
 "use client";
 
 import { useEffect, useRef } from "react";
-import type { ApiItem } from "../lib/types";
-import { getSongSections } from "../lib/songProcessing";
+import type { ApiItem, SectionListItem } from "../lib/types";
+import { getSongSections } from "../lib/songAdapter";
 import Icon from "./Icon";
 
 interface SectionsListProps {
@@ -12,6 +12,9 @@ interface SectionsListProps {
   onStartNewSong?: () => void;
   onEditCurrentSong?: () => void;
   onOpenSettings?: () => void;
+  /** Přidá aktuální píseň do vybraných. Chybí u bible/kázání. */
+  onAddToSelected?: () => void;
+  isInSelected?: boolean;
   /** Stejné jako ArrowLeft/ArrowUp na klávesnici. */
   onNavigatePrev?: () => void;
   /** Stejné jako ArrowRight/ArrowDown na klávesnici. */
@@ -27,12 +30,14 @@ export default function SectionsList({
   onStartNewSong,
   onEditCurrentSong,
   onOpenSettings,
+  onAddToSelected,
+  isInSelected,
   onNavigatePrev,
   onNavigateNext,
   saveStatus = "idle",
 }: SectionsListProps) {
   const activeRef = useRef<HTMLButtonElement>(null);
-  const lastSongIdRef = useRef<number | null>(null);
+  const lastSongIdRef = useRef<string | null>(null);
 
   // Když se změní aktivní sekce:
   // - Nová píseň/kapitola/kázání (jiné currentSong.id) → instant + center,
@@ -128,6 +133,24 @@ export default function SectionsList({
               <Icon name="Settings" size={16} />
             </button>
           )}
+          {currentSong && onAddToSelected && (
+            <button
+              onClick={onAddToSelected}
+              disabled={isInSelected}
+              className={`w-8 h-8 flex items-center justify-center rounded-full border transition-colors ${
+                isInSelected
+                  ? "bg-success/15 border-success/40 text-success cursor-default"
+                  : "bg-surface-secondary border-border text-text-secondary hover:bg-primary hover:text-white hover:border-primary"
+              }`}
+              title={
+                isInSelected
+                  ? "Already in selected songs"
+                  : "Add to selected songs"
+              }
+            >
+              <Icon name={isInSelected ? "Check" : "ListPlus"} size={15} />
+            </button>
+          )}
           {currentSong && onEditCurrentSong && (
             <button
               onClick={onEditCurrentSong}
@@ -154,10 +177,10 @@ export default function SectionsList({
           className={
             currentSong.isBible || currentSong.isMessage
               ? "space-y-0"
-              : "space-y-1"
+              : "space-y-0.5"
           }
         >
-            {getSongSections(currentSong).map((section, idx) => {
+            {getSongSections(currentSong).map((section: SectionListItem, idx: number) => {
               const isActive = idx === activeSectionIndex;
               const isBible = currentSong.isBible || currentSong.isMessage;
               return (
@@ -166,7 +189,7 @@ export default function SectionsList({
                   ref={isActive ? activeRef : null}
                   onClick={() => onGoToSection(idx)}
                   className={`w-full text-left rounded border transition-colors flex items-start ${
-                    isBible ? "px-2 py-0.5 gap-1.5" : "px-3 py-2 gap-3"
+                    isBible ? "px-2 py-0.5 gap-1.5" : "px-2 py-1 gap-2"
                   } ${
                     isActive
                       ? "bg-primary border-primary text-white"
@@ -184,7 +207,7 @@ export default function SectionsList({
                       {section.label}
                     </span>
                   )}
-                  <div className="flex-1 min-w-0 flex flex-col gap-0.5">
+                  <div className="flex-1 min-w-0 flex flex-col">
                     {currentSong.isMessage ? (
                       <div
                         onWheel={(e) => e.stopPropagation()}
@@ -196,22 +219,31 @@ export default function SectionsList({
                       </div>
                     ) : (
                       <>
-                        {section.previewPL && (
+                        {section.previewPrimary && (
                           <span
                             className={`text-xs truncate ${
                               isActive ? "text-white" : "text-text-secondary"
                             }`}
                           >
-                            {section.previewPL}
+                            {section.previewPrimary}
                           </span>
                         )}
-                        {section.previewEN && (
+                        {section.previewPrimary2 && (
+                          <span
+                            className={`text-xs truncate ${
+                              isActive ? "text-white" : "text-text-secondary"
+                            }`}
+                          >
+                            {section.previewPrimary2}
+                          </span>
+                        )}
+                        {section.previewSecondary && (
                           <span
                             className={`text-xs truncate italic ${
                               isActive ? "text-white/80" : "text-text-muted"
                             }`}
                           >
-                            {section.previewEN}
+                            {section.previewSecondary}
                           </span>
                         )}
                       </>

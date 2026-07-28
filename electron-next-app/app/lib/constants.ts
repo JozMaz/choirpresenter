@@ -1,22 +1,8 @@
 export const LS_KEYS = {
-  selectedItems: "app:selectedItems:v1",
-  customSongs: "app:customSongs:v1",
-  nextCustomId: "app:nextCustomId:v1",
+  selectedItems: "app:selectedItems:v2",
+  customSongs: "app:customSongs:v2",
+  legacyCustomSongs: "app:customSongs:v1",
 } as const;
 
-export const MUSICAL_KEYS = [
-  "C",
-  "C#",
-  "D",
-  "D#",
-  "E",
-  "F",
-  "F#",
-  "G",
-  "G#",
-  "A",
-  "A#",
-  "B",
-] as const;
-
-export const STARTING_CUSTOM_ID = 10000;
+export const TRANSLATION_LABEL_PL = "Tłumaczenie:";
+export const TRANSLATION_LABEL_DEFAULT = "Translation:";

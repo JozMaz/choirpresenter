@@ -1,27 +1,19 @@
 "use client";
 
 import type { ApiItem, SongSource } from "../lib/types";
+import { useState } from "react";
 import Icon from "./Icon";
 import SongListRow from "./SongListRow";
+import ConfirmDialog from "./ConfirmDialog";
 
 interface SelectedPanelProps {
   customSongs: ApiItem[];
   selectedItems: ApiItem[];
   onShow: (item: ApiItem) => void;
   onSelect: (item: ApiItem) => void;
-  onRemove: (id: number, source: SongSource) => void;
+  onRemove: (id: string, source: SongSource) => void;
   onClearAll: () => void;
 }
-
-const sourceLabel = (source: SongSource): string => {
-  if (source === "newSong") return "NS";
-  if (source === "newSongPlGb") return "NS-EN";
-  if (source === "pielgrzym") return "Pi";
-  if (source === "roboczy") return "Ro";
-  if (source === "children") return "Ch";
-  if (source === "custom") return "My";
-  return "PL/EN";
-};
 
 export default function SelectedPanel({
   customSongs,
@@ -31,11 +23,24 @@ export default function SelectedPanel({
   onRemove,
   onClearAll,
 }: SelectedPanelProps) {
+  const [confirmClear, setConfirmClear] = useState(false);
   const isSelected = (item: ApiItem) =>
     selectedItems.some((i) => i.id === item.id && i.source === item.source);
 
   return (
     <div className="h-full flex flex-col bg-surface overflow-hidden">
+      <ConfirmDialog
+        open={confirmClear}
+        title="Clear selected songs?"
+        message={`All ${selectedItems.length} songs will be removed from the selection. The songs themselves stay in their songbooks.`}
+        confirmLabel="Clear all"
+        icon="Trash2"
+        onConfirm={() => {
+          onClearAll();
+          setConfirmClear(false);
+        }}
+        onCancel={() => setConfirmClear(false)}
+      />
       {customSongs.length > 0 && (
         <div className="shrink-0 px-2 pt-2">
           <h2 className="text-xs font-semibold text-text-primary mb-1">
@@ -64,10 +69,7 @@ export default function SelectedPanel({
           </h2>
           {selectedItems.length > 0 && (
             <button
-              onClick={() => {
-                if (confirm(`Clear all ${selectedItems.length} selected songs?`))
-                  onClearAll();
-              }}
+              onClick={() => setConfirmClear(true)}
               title="Clear all selected"
               className="px-2 py-0.5 text-[10px] font-semibold text-danger hover:bg-danger hover:text-white rounded transition-colors flex items-center gap-1"
             >
@@ -77,15 +79,16 @@ export default function SelectedPanel({
           )}
         </div>
 
-        <div className="space-y-1">
+        <div className="space-y-0.5">
           {selectedItems.map((item) => (
             <div
               key={`${item.source}-${item.id}`}
               onClick={() => onShow(item)}
-              className="flex justify-between items-center px-2 py-1 bg-surface-secondary rounded border border-border hover:bg-border transition-colors cursor-pointer"
+              className="flex justify-between items-center gap-2 px-2 py-0.5 bg-surface-secondary rounded border border-border hover:bg-border transition-colors cursor-pointer"
             >
-              <span className="text-xs text-text-primary truncate">
-                [{sourceLabel(item.source)}] {item.text}
+              <span className="text-xs font-semibold text-primary truncate flex-1 min-w-0">
+                {item.number !== null ? `${item.number}. ` : ""}
+                {item.title}
               </span>
               <button
                 onClick={(e) => {
@@ -93,7 +96,7 @@ export default function SelectedPanel({
                   onRemove(item.id, item.source);
                 }}
                 title="Remove from selection"
-                className="shrink-0 w-6 h-6 flex items-center justify-center rounded text-danger hover:bg-danger hover:text-white transition-colors"
+                className="shrink-0 w-5 h-5 flex items-center justify-center rounded text-danger hover:bg-danger hover:text-white transition-colors"
               >
                 <Icon name="X" size={14} />
               </button>

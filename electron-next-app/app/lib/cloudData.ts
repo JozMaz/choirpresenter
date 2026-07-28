@@ -137,6 +137,11 @@ export function bootstrap(onProgress: BootstrapListener): Promise<void> {
       return;
     }
 
+    if (await api.dataLocalMode?.()) {
+      onProgress({ phase: "done", ratio: 1 });
+      return;
+    }
+
     const hasLocal = await api.dataHasLocal();
 
     if (hasLocal) {

@@ -12,7 +12,7 @@
  *   data/bibles/{key}.json
  *   data/messages/titles.json
  *   data/messages/texts/{date}.json
- *   data/songs/{book}-converted.json
+ *   data/songs/{book}.json
  */
 
 export interface Env {
