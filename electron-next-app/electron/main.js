@@ -649,9 +649,22 @@ ipcMain.handle("data-has-local", async () => {
     if (!fs.existsSync(dir)) return false;
     const stat = await fs.promises.stat(dir);
     if (!stat.isDirectory()) return false;
-    // Příznak že stažení proběhlo do konce = existuje manifest.json
-    return fs.existsSync(path.join(dir, "manifest.json"));
-  } catch {
+    const manifestPath = path.join(dir, "manifest.json");
+    if (!fs.existsSync(manifestPath)) return false;
+
+    const manifest = JSON.parse(await fs.promises.readFile(manifestPath, "utf8"));
+    const keys = Object.keys(manifest?.files || {});
+    if (keys.length === 0) return false;
+    const missing = keys.filter((k) => !fs.existsSync(dataCachePath(k)));
+    if (missing.length > 0) {
+      console.warn(
+        `[data-cache] ${missing.length}/${keys.length} files missing (e.g. ${missing[0]}) — re-downloading`,
+      );
+      return false;
+    }
+    return true;
+  } catch (err) {
+    console.error("[data-cache] integrity check failed:", err);
     return false;
   }
 });
@@ -796,18 +809,31 @@ async function migrateDataEpoch() {
   }
   if (cfg.dataEpoch === DATA_EPOCH) return;
   if (LOCAL_DATA_MODE) {
-    console.log("[data-epoch] local data mode — cache se nemaže");
+    console.log("[data-epoch] local data mode — cache left untouched");
     return;
   }
 
   try {
+    await fs.promises.rm(path.join(dataCacheDir(), "manifest.json"), {
+      force: true,
+    });
+  } catch (err) {
+    console.error("[data-epoch] manifest removal failed:", err);
+    return;
+  }
+
+  let wiped = true;
+  try {
     await fs.promises.rm(dataCacheDir(), { recursive: true, force: true });
     console.log(
-      `[data-epoch] cache wiped (${cfg.dataEpoch ?? "none"} -> ${DATA_EPOCH}), will re-download`,
+      `[data-epoch] cache wiped (${cfg.dataEpoch ?? "none"} -> ${DATA_EPOCH})`,
     );
   } catch (err) {
-    console.error("[data-epoch] cache wipe failed:", err);
+    wiped = false;
+    console.error("[data-epoch] cache wipe failed, will retry on next start:", err);
   }
+
+  if (!wiped) return;
 
   try {
     await fs.promises.writeFile(
