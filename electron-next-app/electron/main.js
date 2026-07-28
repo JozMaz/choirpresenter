@@ -279,7 +279,7 @@ async function readSongbookFile(book) {
   const cacheKey = SONGBOOK_CACHE_KEYS[book];
   if (cacheKey) {
     try {
-      const cached = path.join(dataCacheDir(), cacheKey);
+      const cached = dataCachePath(cacheKey);
       if (fs.existsSync(cached)) {
         const raw = await fs.promises.readFile(cached, "utf8");
         return JSON.parse(raw);
@@ -367,7 +367,7 @@ async function loadBibleRaw(bible) {
   // 1) userData cache (cloud download)
   const cacheKey = BIBLE_CACHE_KEYS[bible];
   if (cacheKey) {
-    const cached = path.join(dataCacheDir(), cacheKey);
+    const cached = dataCachePath(cacheKey);
     if (fs.existsSync(cached)) {
       return fs.promises.readFile(cached, "utf8");
     }
@@ -397,7 +397,7 @@ ipcMain.handle("read-bible", async (_, bible) => {
 /** Vrátí parsed JSON s message titles (titles.json) — z cache, jinak z bundle. */
 ipcMain.handle("read-message-titles", async () => {
   try {
-    const cached = path.join(dataCacheDir(), "data/messages/titles.json");
+    const cached = dataCachePath("data/messages/titles.json");
     if (fs.existsSync(cached)) {
       const raw = await fs.promises.readFile(cached, "utf8");
       return JSON.parse(raw);
@@ -419,11 +419,7 @@ ipcMain.handle("read-message-titles", async () => {
 ipcMain.handle("read-message-text", async (_, dateKey) => {
   if (!/^[\w-]+$/.test(String(dateKey || ""))) return null;
   try {
-    const cached = path.join(
-      dataCacheDir(),
-      "data/messages/texts",
-      `${dateKey}.json`,
-    );
+    const cached = dataCachePath(`data/messages/texts/${dateKey}.json`);
     if (fs.existsSync(cached)) {
       const raw = await fs.promises.readFile(cached, "utf8");
       return JSON.parse(raw);
@@ -449,7 +445,7 @@ ipcMain.handle("read-message-text", async (_, dateKey) => {
 ipcMain.handle("list-message-keys", async () => {
   const result = [];
   // 1) Cache
-  const cacheDir = path.join(dataCacheDir(), "data/messages/texts");
+  const cacheDir = dataCachePath("data/messages/texts");
   if (fs.existsSync(cacheDir)) {
     try {
       const names = await fs.promises.readdir(cacheDir);
@@ -522,7 +518,7 @@ ipcMain.handle("write-songbook", async (_, book, data) => {
   // co psaly {songs:[]} a smazaly celé songbooky.
   let localOk = false;
   try {
-    const localPath = path.join(dataCacheDir(), cacheKey);
+    const localPath = dataCachePath(cacheKey);
     if (fs.existsSync(localPath)) {
       try {
         const existingRaw = await fs.promises.readFile(localPath, "utf8");
@@ -634,8 +630,10 @@ function dataCacheDir() {
 }
 
 function dataCachePath(relPath) {
-  // Normalizace + bezpečnostní check — bez path traversal
-  const clean = relPath.replace(/^[/\\]+/, "").replace(/\\/g, "/");
+  const clean = String(relPath)
+    .replace(/^[/\\]+/, "")
+    .replace(/\\/g, "/")
+    .normalize("NFC");
   if (clean.includes("..")) throw new Error("invalid path");
   return path.join(dataCacheDir(), clean);
 }
@@ -814,7 +812,7 @@ async function migrateDataEpoch() {
   }
 
   try {
-    await fs.promises.rm(path.join(dataCacheDir(), "manifest.json"), {
+    await fs.promises.rm(dataCachePath("manifest.json"), {
       force: true,
     });
   } catch (err) {
