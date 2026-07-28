@@ -15,6 +15,8 @@ interface SectionsListProps {
   /** Přidá aktuální píseň do vybraných. Chybí u bible/kázání. */
   onAddToSelected?: () => void;
   isInSelected?: boolean;
+  blackoutActive?: boolean;
+  onToggleBlackout?: () => void;
   /** Stejné jako ArrowLeft/ArrowUp na klávesnici. */
   onNavigatePrev?: () => void;
   /** Stejné jako ArrowRight/ArrowDown na klávesnici. */
@@ -32,6 +34,8 @@ export default function SectionsList({
   onOpenSettings,
   onAddToSelected,
   isInSelected,
+  blackoutActive,
+  onToggleBlackout,
   onNavigatePrev,
   onNavigateNext,
   saveStatus = "idle",
@@ -82,6 +86,19 @@ export default function SectionsList({
                   title="Next section (→/↓)"
                 >
                   <Icon name="ChevronRight" size={16} />
+                </button>
+              )}
+              {onToggleBlackout && (
+                <button
+                  onClick={onToggleBlackout}
+                  title={blackoutActive ? "Show text" : "Hide text (blackout)"}
+                  className={`w-7 h-7 flex items-center justify-center rounded-full transition-colors ${
+                    blackoutActive
+                      ? "bg-primary text-white hover:bg-primary-hover"
+                      : "text-text-secondary hover:bg-surface-secondary hover:text-text-primary"
+                  }`}
+                >
+                  <Icon name="Moon" size={15} />
                 </button>
               )}
             </>

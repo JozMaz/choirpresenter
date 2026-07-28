@@ -336,9 +336,12 @@ function HomeContent() {
     if (!window.api?.getDisplays) return;
     const d = await window.api.getDisplays();
     setDisplays(d);
-    if (selectedDisplayId === null && d.length > 0) {
-      const secondary = d.find((x) => !x.primary);
-      setSelectedDisplayId(secondary?.id ?? d[0].id);
+    const usable = d.filter((x) => !x.isCurrent);
+    if (selectedDisplayId === null && usable.length > 0) {
+      setSelectedDisplayId(usable[0].id);
+    }
+    if (selectedDisplayId2 === null && usable.length > 0) {
+      setSelectedDisplayId2(usable[usable.length - 1].id);
     }
   };
 
@@ -563,6 +566,8 @@ function HomeContent() {
                     }}
                     onOpenSettings={() => setSettingsOpen(true)}
                     saveStatus={saveStatus}
+                    blackoutActive={blackoutActive}
+                    onToggleBlackout={toggleBlackout}
                     onNavigatePrev={() => player.navigatePart("prev")}
                     onNavigateNext={() => player.navigatePart("next")}
                     onStartNewSong={

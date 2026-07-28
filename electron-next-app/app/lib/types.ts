@@ -3,6 +3,7 @@ export interface DisplayInfo {
   label: string;
   bounds: { x: number; y: number; width: number; height: number };
   primary: boolean;
+  isCurrent: boolean;
 }
 
 export interface MessageTitleTranslator {

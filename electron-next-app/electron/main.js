@@ -69,6 +69,7 @@ const LOCAL_DATA_MODE =
       : !app.isPackaged &&
         fs.existsSync(path.join(API_BASE, "SongBooks", "new-song.json"));
 
+let mainWindow = null;
 let hdmiWindow = null;
 let hdmiWindow2 = null;
 
@@ -86,6 +87,11 @@ function createWindow() {
     webPreferences: {
       preload: path.join(__dirname, "preload.cjs"),
     },
+  });
+  mainWindow = win;
+  win.on("closed", () => {
+    mainWindow = null;
+    closeOutputWindows();
   });
 
   if (app.isPackaged) {
@@ -155,12 +161,16 @@ function createHdmiWindow(targetBounds) {
 
 ipcMain.handle("get-displays", () => {
   const displays = screen.getAllDisplays();
-  console.log("All displays:", JSON.stringify(displays.map(d => ({ id: d.id, label: d.label, bounds: d.bounds })), null, 2));
+  let currentId = null;
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    currentId = screen.getDisplayMatching(mainWindow.getBounds()).id;
+  }
   return displays.map((d) => ({
     id: d.id,
     label: d.label || `Display ${d.id}`,
     bounds: d.bounds,
     primary: d.bounds.x === 0 && d.bounds.y === 0,
+    isCurrent: d.id === currentId,
   }));
 });
 
@@ -719,6 +729,60 @@ ipcMain.handle("data-clear-local", async () => {
     console.error("data-clear-local failed:", err);
     return false;
   }
+});
+
+function outputWindows() {
+  return [hdmiWindow, hdmiWindow2].filter((w) => w && !w.isDestroyed());
+}
+
+function pinOutputs(pinned) {
+  for (const w of outputWindows()) {
+    if (pinned) {
+      w.setAlwaysOnTop(true, "screen-saver", 1);
+      w.moveTop();
+    } else {
+      w.setAlwaysOnTop(false);
+    }
+  }
+}
+
+let unpinTimer = null;
+
+app.on("browser-window-focus", () => {
+  if (unpinTimer) {
+    clearTimeout(unpinTimer);
+    unpinTimer = null;
+  }
+  pinOutputs(true);
+});
+
+app.on("browser-window-blur", () => {
+  if (unpinTimer) clearTimeout(unpinTimer);
+  unpinTimer = setTimeout(() => {
+    unpinTimer = null;
+    const ours = BrowserWindow.getAllWindows().some(
+      (w) => !w.isDestroyed() && w.isFocused(),
+    );
+    if (!ours) pinOutputs(false);
+  }, 250);
+});
+
+function closeOutputWindows() {
+  if (unpinTimer) {
+    clearTimeout(unpinTimer);
+    unpinTimer = null;
+  }
+  for (const w of [hdmiWindow, hdmiWindow2]) {
+    if (w && !w.isDestroyed()) w.destroy();
+  }
+  hdmiWindow = null;
+  hdmiWindow2 = null;
+}
+
+app.on("before-quit", closeOutputWindows);
+
+app.on("window-all-closed", () => {
+  app.quit();
 });
 
 async function migrateDataEpoch() {

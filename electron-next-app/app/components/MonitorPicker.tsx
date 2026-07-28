@@ -1,6 +1,8 @@
 "use client";
 
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { DisplayInfo } from "../lib/types";
+import Icon from "./Icon";
 
 interface MonitorPickerProps {
   displays: DisplayInfo[];
@@ -11,6 +13,8 @@ interface MonitorPickerProps {
   onToggleHdmi: () => void;
 }
 
+const resolution = (d: DisplayInfo) => `${d.bounds.width}×${d.bounds.height}`;
+
 export default function MonitorPicker({
   displays,
   selectedDisplayId,
@@ -19,35 +23,119 @@ export default function MonitorPicker({
   hdmiActive,
   onToggleHdmi,
 }: MonitorPickerProps) {
+  const [open, setOpen] = useState(false);
+  const rootRef = useRef<HTMLDivElement>(null);
+
+  const available = useMemo(
+    () => displays.filter((d) => !d.isCurrent),
+    [displays],
+  );
+  const selected = available.find((d) => d.id === selectedDisplayId) ?? null;
+
+  useEffect(() => {
+    if (
+      selectedDisplayId !== null &&
+      !available.some((d) => d.id === selectedDisplayId)
+    ) {
+      onSelectDisplayId(null);
+    }
+  }, [available, selectedDisplayId, onSelectDisplayId]);
+
+  useEffect(() => {
+    if (!open) return;
+    const onDown = (e: MouseEvent) => {
+      if (!rootRef.current?.contains(e.target as Node)) setOpen(false);
+    };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setOpen(false);
+    };
+    document.addEventListener("mousedown", onDown);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("mousedown", onDown);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [open]);
+
+  const toggleOpen = () => {
+    if (!open) onRefreshDisplays();
+    setOpen((v) => !v);
+  };
+
   return (
-    <>
-      <select
-        className="ml-auto text-xs px-1 py-0.5 rounded border border-border-secondary bg-surface text-text-primary"
-        value={selectedDisplayId ?? ""}
-        onMouseDown={onRefreshDisplays}
-        onChange={(e) =>
-          onSelectDisplayId(e.target.value ? Number(e.target.value) : null)
-        }
-      >
-        <option value="">Monitor…</option>
-        {displays.map((d) => (
-          <option key={d.id} value={d.id}>
-            {d.label}
-            {d.primary ? " (primary)" : ""}
-          </option>
-        ))}
-      </select>
+    <div ref={rootRef} className="ml-auto relative flex items-center gap-2">
       <button
-        disabled={!selectedDisplayId}
+        onClick={toggleOpen}
+        disabled={hdmiActive}
+        title={
+          hdmiActive ? "Stop the output to change monitor" : "Choose monitor"
+        }
+        className="flex items-center gap-1.5 text-xs px-2 py-1 rounded border border-border-secondary bg-surface text-text-primary hover:bg-surface-secondary disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+      >
+        <Icon name="Monitor" size={13} />
+        <span className="truncate max-w-32">
+          {selected ? selected.label : "Choose monitor"}
+        </span>
+        <Icon name={open ? "ChevronUp" : "ChevronDown"} size={13} />
+      </button>
+
+      {open && (
+        <div className="absolute top-full left-0 mt-1 z-30 min-w-56 bg-surface border border-border-secondary rounded-md shadow-xl overflow-hidden">
+          {available.length === 0 ? (
+            <p className="px-3 py-2 text-[11px] text-text-muted leading-relaxed">
+              No other monitor connected.
+              <span className="block text-text-secondary mt-0.5">
+                Connect a projector or a second screen.
+              </span>
+            </p>
+          ) : (
+            available.map((d) => {
+              const isSel = d.id === selectedDisplayId;
+              return (
+                <button
+                  key={d.id}
+                  onClick={() => {
+                    onSelectDisplayId(d.id);
+                    setOpen(false);
+                  }}
+                  className={`w-full flex items-center gap-2 px-3 py-2 text-left transition-colors ${
+                    isSel
+                      ? "bg-primary text-white"
+                      : "text-text-secondary hover:bg-surface-secondary"
+                  }`}
+                >
+                  <Icon name="Monitor" size={14} />
+                  <span className="flex-1 min-w-0">
+                    <span className="block text-xs font-semibold truncate">
+                      {d.label}
+                    </span>
+                    <span
+                      className={`block text-[10px] ${
+                        isSel ? "text-white/70" : "text-text-muted"
+                      }`}
+                    >
+                      {resolution(d)}
+                    </span>
+                  </span>
+                  {isSel && <Icon name="Check" size={14} />}
+                </button>
+              );
+            })
+          )}
+        </div>
+      )}
+
+      <button
+        disabled={!selected}
         onClick={onToggleHdmi}
-        className={`text-xs px-2 py-0.5 rounded font-medium ${
+        className={`text-xs px-2 py-1 rounded font-semibold transition-colors ${
           hdmiActive
-            ? "bg-red-600 hover:bg-red-700 text-white"
+            ? "bg-danger hover:bg-danger-hover text-white"
             : "bg-primary hover:bg-primary-hover text-white disabled:opacity-40 disabled:cursor-not-allowed"
         }`}
       >
-        {hdmiActive ? "Stop" : "HDMI"}
+        {hdmiActive ? "Stop" : "Start"}
       </button>
-    </>
+    </div>
   );
 }
