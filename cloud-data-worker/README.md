@@ -1,110 +1,110 @@
 # ChoirPresenter — Cloud Data Worker
 
-Cloudflare Worker + R2 backend pro hosting písní, biblí a kázání pro ChoirPresenter Electron app.
+Cloudflare Worker + R2 backend hosting songs, Bibles and sermons for the ChoirPresenter Electron app.
 
-## Co to dělá
+## What it does
 
-- `GET /manifest.json` — vrátí aktuální verzi + hash všech souborů (Electron tohle volá při startu pro detekci updates)
-- `GET /data/{path}` — vrátí jeden datový JSON (bible, kázání, songbook)
-- `PUT /data/songs/{path}` — uloží píseň (vyžaduje `Authorization: Bearer <token>`)
+- `GET /manifest.json` — returns the current version + hash of every file (Electron calls this on startup to detect updates)
+- `GET /data/{path}` — returns a single data JSON (Bible, sermon, songbook)
+- `PUT /data/songs/{path}` — saves a song (requires `Authorization: Bearer <token>`)
 
-R2 bucket `choirpresenter-data` slouží jako blob storage.
+The R2 bucket `choirpresenter-data` serves as blob storage.
 
-## Setup (jednou)
+## Setup (one-time)
 
-### 1. Instalace deps
+### 1. Install deps
 
 ```bash
 cd cloud-data-worker
 npm install
 ```
 
-### 2. Login do Cloudflare
+### 2. Log in to Cloudflare
 
 ```bash
 npx wrangler login
 ```
 
-Otevře browser, schválíš access.
+Opens a browser; approve access.
 
-### 3. Vytvoř R2 bucket
+### 3. Create the R2 bucket
 
 ```bash
 npx wrangler r2 bucket create choirpresenter-data
 ```
 
-(Nebo přes Cloudflare dashboard → R2 → Create bucket → název `choirpresenter-data`)
+(Or via the Cloudflare dashboard → R2 → Create bucket → name `choirpresenter-data`)
 
-### 4. Deploy Worker
+### 4. Deploy the Worker
 
 ```bash
 npm run deploy
 ```
 
-Po deployi ti wrangler vypíše URL, něco jako:
+After deploying, wrangler prints a URL, something like:
 ```
 https://choirpresenter-data.<your-subdomain>.workers.dev
 ```
 
-Tu URL si poznamenej — Electron appka ji bude potřebovat.
+Note that URL down — the Electron app will need it.
 
-### 5. Nahraj data do R2
+### 5. Upload data to R2
 
 ```bash
 node scripts/upload-to-r2.mjs
 ```
 
-Vezme všechny JSONy z `../electron-next-app/api/{Bibles,Messages,SongBooks}/` a uploadne je do R2, plus vygeneruje `manifest.json`.
+Takes every JSON from `../electron-next-app/api/{Bibles,Messages,SongBooks}/`, uploads them to R2, and generates `manifest.json`.
 
-Trvá to chvilku (přes 500 souborů kázání + ostatní). Sleduj progress.
+It takes a while (over 500 sermon files plus the rest). Watch the progress.
 
-### 6. Otestuj
+### 6. Test it
 
-V prohlížeči zkus:
-- `https://<your-worker>.workers.dev/` → JSON s info o servisu
-- `https://<your-worker>.workers.dev/manifest.json` → seznam všech uploadovaných souborů
-- `https://<your-worker>.workers.dev/data/bibles/gdanska.json` → bible Gdańská
+In a browser try:
+- `https://<your-worker>.workers.dev/` → JSON with service info
+- `https://<your-worker>.workers.dev/manifest.json` → list of all uploaded files
+- `https://<your-worker>.workers.dev/data/bibles/gdanska.json` → the Gdańsk Bible
 
-Pokud všechno funguje → backend je hotový, můžeš pokračovat na refactor Electron appky.
+If everything works → the backend is done and you can move on to the Electron app refactor.
 
 ## Phase 2: Write tokens
 
-Až budeš mít writes hotové, nastav allowed write tokeny:
+Once writes are implemented, set the allowed write tokens:
 
 ```bash
 npx wrangler secret put WRITE_TOKENS
 ```
 
-Wrangler tě poprosí o hodnotu — zadej čárkami oddělené tokeny:
+Wrangler asks for the value — enter comma-separated tokens:
 
 ```
 tok-josh-abc123,tok-pastor-xyz789
 ```
 
-Token = libovolný náhodný řetězec (např. `openssl rand -hex 24`). Pošli každému uživateli jeho token a oni si ho vloží do ChoirPresenter Settings.
+A token is any random string (e.g. `openssl rand -hex 24`). Send each user their token and they paste it into ChoirPresenter Settings.
 
-Token sám o sobě je identifikátor + secret zároveň. Když chceš někomu odebrat write přístup → znovu nastav `WRITE_TOKENS` bez jeho tokenu, deploy proběhne automaticky.
+The token is both the identifier and the secret. To revoke someone's write access → set `WRITE_TOKENS` again without their token; the deploy happens automatically.
 
-## Update dat
+## Updating data
 
-Když chceš nahrát novou verzi dat (např. po opravě nějaké písně):
+When you want to upload a new version of the data (e.g. after fixing a song):
 
 ```bash
 node scripts/upload-to-r2.mjs
 ```
 
-Manifest dostane novou `version` (timestamp). Electron appky to detekují přes manifest poll a nabídnou "Update available".
+The manifest gets a new `version` (timestamp). Electron apps detect it via the manifest poll and offer "Update available".
 
 ## Useful commands
 
 ```bash
-npm run dev     # lokální dev server (http://localhost:8787)
-npm run deploy  # deploy do production
-npm run logs    # streaming logs z live workeru (debug)
+npm run dev     # local dev server (http://localhost:8787)
+npm run deploy  # deploy to production
+npm run logs    # streaming logs from the live worker (debug)
 ```
 
 ## Bucket size / costs
 
-Free tier: 10 GB storage, **neomezený egress** (zdarma), 1M class A operations (uploads), 10M class B operations (downloads) měsíčně.
+Free tier: 10 GB storage, **unlimited egress** (free), 1M class A operations (uploads), 10M class B operations (downloads) per month.
 
-Současné data ~50 MB → 0.5 % free tieru. Klidně další roky bez výdajů.
+Current data is ~50 MB → 0.5% of the free tier. Easily years ahead with zero cost.
