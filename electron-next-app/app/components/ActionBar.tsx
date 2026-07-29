@@ -8,7 +8,7 @@ interface ActionBarProps {
   onToggleBlackout: () => void;
   onNavigatePrev: () => void;
   onNavigateNext: () => void;
-  onAddToSelected?: () => void;
+  onToggleSelected?: () => void;
   isInSelected?: boolean;
   onStartNewSong?: () => void;
   onEditCurrentSong?: () => void;
@@ -22,7 +22,7 @@ export default function ActionBar({
   onToggleBlackout,
   onNavigatePrev,
   onNavigateNext,
-  onAddToSelected,
+  onToggleSelected,
   isInSelected,
   onStartNewSong,
   onEditCurrentSong,
@@ -30,39 +30,8 @@ export default function ActionBar({
   saveDetail = null,
 }: ActionBarProps) {
   return (
-    <div className="shrink-0 flex justify-between items-center px-4 pt-2 pb-1">
-      <div className="flex items-center gap-2">
-        {hasSong && (
-          <>
-            <button
-              onClick={onNavigatePrev}
-              className="w-7 h-7 flex items-center justify-center rounded-full text-text-secondary hover:bg-surface-secondary hover:text-text-primary transition-colors"
-              title="Previous section (←/↑)"
-            >
-              <Icon name="ChevronLeft" size={16} />
-            </button>
-            <button
-              onClick={onNavigateNext}
-              className="w-7 h-7 flex items-center justify-center rounded-full text-text-secondary hover:bg-surface-secondary hover:text-text-primary transition-colors"
-              title="Next section (→/↓)"
-            >
-              <Icon name="ChevronRight" size={16} />
-            </button>
-          </>
-        )}
-        <button
-          onClick={onToggleBlackout}
-          title={blackoutActive ? "Show text (X)" : "Hide text (X)"}
-          className={`w-7 h-7 flex items-center justify-center rounded-full transition-colors ${
-            blackoutActive
-              ? "bg-primary text-white hover:bg-primary-hover"
-              : "text-text-secondary hover:bg-surface-secondary hover:text-text-primary"
-          }`}
-        >
-          <Icon name="Moon" size={15} />
-        </button>
-      </div>
-      <div className="flex items-center gap-2">
+    <div className="shrink-0 flex items-center px-4 py-2">
+      <div className="flex-1 flex items-center gap-2">
         {saveStatus === "saving" && (
           <span
             className="flex items-center gap-1 px-2 py-1 text-[11px] font-semibold text-text-secondary"
@@ -109,18 +78,17 @@ export default function ActionBar({
             </span>
           </span>
         )}
-        {hasSong && onAddToSelected && (
+        {hasSong && onToggleSelected && (
           <button
-            onClick={onAddToSelected}
-            disabled={isInSelected}
+            onClick={onToggleSelected}
             className={`w-8 h-8 flex items-center justify-center rounded-full border transition-colors ${
               isInSelected
-                ? "bg-success/15 border-success/40 text-success cursor-default"
+                ? "bg-success/15 border-success/40 text-success hover:bg-danger hover:border-danger hover:text-white"
                 : "bg-surface-secondary border-border text-text-secondary hover:bg-primary hover:text-white hover:border-primary"
             }`}
             title={
               isInSelected
-                ? "Already in selected songs"
+                ? "Remove from selected songs"
                 : "Add to selected songs"
             }
           >
@@ -145,6 +113,39 @@ export default function ActionBar({
             +
           </button>
         )}
+      </div>
+      <div className="flex items-center gap-2">
+        {hasSong && (
+          <>
+            <button
+              onClick={onNavigatePrev}
+              className="w-8 h-8 flex items-center justify-center rounded-full bg-surface-secondary border border-border text-text-secondary hover:bg-primary hover:text-white hover:border-primary transition-colors"
+              title="Previous part (↑)"
+            >
+              <Icon name="ChevronLeft" size={16} />
+            </button>
+            <button
+              onClick={onNavigateNext}
+              className="w-8 h-8 flex items-center justify-center rounded-full bg-surface-secondary border border-border text-text-secondary hover:bg-primary hover:text-white hover:border-primary transition-colors"
+              title="Next part (↓/Space)"
+            >
+              <Icon name="ChevronRight" size={16} />
+            </button>
+          </>
+        )}
+      </div>
+      <div className="flex-1 flex items-center justify-end">
+        <button
+          onClick={onToggleBlackout}
+          title={blackoutActive ? "Show text (X)" : "Hide text (X)"}
+          className={`w-8 h-8 flex items-center justify-center rounded-full border transition-colors ${
+            blackoutActive
+              ? "bg-primary border-primary text-white hover:bg-primary-hover"
+              : "bg-surface-secondary border-border text-text-secondary hover:bg-primary hover:text-white hover:border-primary"
+          }`}
+        >
+          <Icon name="Moon" size={15} />
+        </button>
       </div>
     </div>
   );

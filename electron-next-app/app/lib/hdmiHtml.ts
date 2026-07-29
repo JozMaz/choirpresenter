@@ -118,28 +118,39 @@ export function buildHdmi2Html(
   output2: SlideText,
   sectionLabel: string,
   isTranslation?: boolean,
+  includeSecondary = true,
 ): string {
   if (!currentSong || isEmpty(output2)) return "";
 
-  let inner: string;
   if (currentSong.isBible && currentSong.bibleMeta) {
-    inner = buildCenteredHtml(
+    return buildCenteredHtml(
       output2.primary,
       sectionLabel,
       currentSong.bibleMeta.bibleName,
     );
-  } else if (currentSong.isMessage && currentSong.messageMeta) {
-    inner = buildCenteredHtml(output2.primary, "", sectionLabel, {
+  }
+
+  if (currentSong.isMessage && currentSong.messageMeta) {
+    return buildCenteredHtml(output2.primary, "", sectionLabel, {
       justify: true,
     });
-  } else {
-    inner = buildBody(
-      output2.primary,
-      output2.secondary,
-      isTranslation,
-      currentSong.translationLabel,
-      true,
-    );
   }
-  return `<div class="out2">${inner}</div>`;
+
+  if (!includeSecondary) {
+    return `<div class="out2">${buildBody(
+      output2.primary,
+      undefined,
+      false,
+      undefined,
+      false,
+    )}</div>`;
+  }
+
+  return `<div class="out2">${buildBody(
+    output2.primary,
+    output2.secondary,
+    isTranslation,
+    currentSong.translationLabel,
+    true,
+  )}</div>`;
 }

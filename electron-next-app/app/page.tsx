@@ -47,18 +47,19 @@ import LocalPreview from "./components/LocalPreview";
 import StreamPreview from "./components/StreamPreview";
 import SectionsList from "./components/SectionsList";
 import SettingsModal from "./components/SettingsModal";
+import SongChunks from "./components/SongChunks";
 import SongEditor, {
   type EditorState,
   type TargetBook,
 } from "./components/SongEditor";
 
-const readPaneSizes = (key: string): number[] | undefined => {
+const readPaneSizes = (key: string, count: number): number[] | undefined => {
   try {
     const raw = localStorage.getItem(key);
     if (!raw) return undefined;
     const v = JSON.parse(raw);
     return Array.isArray(v) &&
-      v.length > 0 &&
+      v.length === count &&
       v.every((n) => typeof n === "number" && n >= 0)
       ? v
       : undefined;
@@ -130,10 +131,13 @@ function HomeContent() {
     "#000000",
     (raw) => raw,
   );
+  const [out2SecondLang, setOut2SecondLang] = usePersistedState<boolean>(
+    LS_KEYS.out2SecondLang,
+    false,
+  );
 
-  const [mainSizes] = useState(() => readPaneSizes(LS_KEYS.layoutMain));
-  const [leftSizes] = useState(() => readPaneSizes(LS_KEYS.layoutLeft));
-  const [rightSizes] = useState(() => readPaneSizes(LS_KEYS.layoutRight));
+  const [mainSizes] = useState(() => readPaneSizes(LS_KEYS.layoutMain, 3));
+  const [leftSizes] = useState(() => readPaneSizes(LS_KEYS.layoutLeft, 2));
 
   useEffect(() => watchSystemTheme(), []);
 
@@ -277,7 +281,6 @@ function HomeContent() {
         key: song.key,
         sections: songToEditorSections(song),
         targetBook,
-        secondaryIsTranslation: song.text[1]?.isTranslation ?? false,
       },
       editing: { source: item.source, id: item.id },
     });
@@ -324,7 +327,6 @@ function HomeContent() {
       key: state.key,
       number: state.songNumber,
       sections: state.sections,
-      secondaryIsTranslation: state.secondaryIsTranslation,
       existingId: editing?.id,
     });
 
@@ -493,20 +495,18 @@ function HomeContent() {
     setHdmi2Active(true);
   };
 
-  const currentVerseIsTranslation =
-    player.liveSong?.secondaryIsTranslation === true;
-
   const hdmiHtml = buildHdmiHtml({
     currentSong: player.liveSong,
     output1: player.output1,
     sectionLabel,
-    isTranslation: currentVerseIsTranslation,
+    isTranslation: player.output1.isTranslation === true,
   });
   const hdmi2Html = buildHdmi2Html(
     player.liveSong,
     player.output2,
     sectionLabel,
-    currentVerseIsTranslation,
+    player.output2.isTranslation === true,
+    out2SecondLang,
   );
   useHdmiSync(1, hdmiActive, hdmiHtml, blackoutActive);
   useHdmiSync(2, hdmi2Active, hdmi2Html, blackoutActive);
@@ -566,12 +566,18 @@ function HomeContent() {
       }
 
       if (!player.currentSong) return;
-      if (e.key === "ArrowRight" || e.key === "ArrowDown") {
+      if (e.key === "ArrowDown" || e.key === " ") {
         e.preventDefault();
         player.navigatePart("next");
-      } else if (e.key === "ArrowLeft" || e.key === "ArrowUp") {
+      } else if (e.key === "ArrowUp") {
         e.preventDefault();
         player.navigatePart("prev");
+      } else if (e.key === "ArrowRight") {
+        e.preventDefault();
+        player.navigateSection("next");
+      } else if (e.key === "ArrowLeft") {
+        e.preventDefault();
+        player.navigateSection("prev");
       }
     };
     window.addEventListener("keydown", handleKeyDown);
@@ -630,89 +636,103 @@ function HomeContent() {
           </Allotment>
         </Allotment.Pane>
 
-        <Allotment.Pane>
-          <Allotment
-            vertical
-            defaultSizes={rightSizes}
-            onDragEnd={savePaneSizes(LS_KEYS.layoutRight)}
-          >
-            <Allotment.Pane preferredSize={rightSizes ? undefined : "60%"}>
-              <div className="h-full flex flex-col bg-surface overflow-hidden">
-                {editorMode && editorContext ? (
-                  <SongEditor
-                    initial={editorContext.initial}
-                    lockTargetBook={editorContext.lockTargetBook}
-                    isEditing={!!editorContext.editing}
-                    onSave={handleSave}
-                    onDelete={editorContext.editing ? handleDelete : undefined}
-                    onCancel={closeEditor}
-                  />
-                ) : (
-                  <SectionsList
-                    currentSong={player.currentSong}
-                    activeSectionIndex={activeSectionIndex}
-                    onGoToSection={(idx) => {
-                      player.goToSection(idx);
-                      setBlackoutActive(false);
-                    }}
-                  />
-                )}
-              </div>
-            </Allotment.Pane>
+        <Allotment.Pane preferredSize={mainSizes ? undefined : "32%"}>
+          <div className="h-full flex flex-col bg-surface overflow-hidden">
+            {editorMode && editorContext ? (
+              <SongEditor
+                initial={editorContext.initial}
+                lockTargetBook={editorContext.lockTargetBook}
+                isEditing={!!editorContext.editing}
+                onSave={handleSave}
+                onDelete={editorContext.editing ? handleDelete : undefined}
+                onCancel={closeEditor}
+              />
+            ) : player.currentSong &&
+              !player.currentSong.isBible &&
+              !player.currentSong.isMessage ? (
+              <SongChunks
+                currentSong={player.currentSong}
+                activeSlideIndex={player.slideIndex}
+                onGoToSlide={(idx) => {
+                  player.goToSlide(idx);
+                  setBlackoutActive(false);
+                }}
+              />
+            ) : (
+              <SectionsList
+                currentSong={player.currentSong}
+                activeSectionIndex={activeSectionIndex}
+                onGoToSection={(idx) => {
+                  player.goToSection(idx);
+                  setBlackoutActive(false);
+                }}
+              />
+            )}
+            <div className="shrink-0 border-t border-border">
+              <ActionBar
+                hasSong={!!player.currentSong}
+                blackoutActive={blackoutActive}
+                onToggleBlackout={toggleBlackout}
+                onNavigatePrev={() => player.navigatePart("prev")}
+                onNavigateNext={() => player.navigatePart("next")}
+                saveStatus={saveStatus}
+                saveDetail={saveDetail}
+                onToggleSelected={
+                  !editorMode &&
+                  player.currentSong &&
+                  !player.currentSong.isBible &&
+                  !player.currentSong.isMessage
+                    ? () => {
+                        const song = player.currentSong!;
+                        const isIn = selectedItems.some(
+                          (i) => i.id === song.id && i.source === song.source,
+                        );
+                        if (isIn) {
+                          setSelectedItems(
+                            selectedItems.filter(
+                              (i) =>
+                                !(i.id === song.id && i.source === song.source),
+                            ),
+                          );
+                        } else {
+                          selectItem(song);
+                        }
+                      }
+                    : undefined
+                }
+                isInSelected={
+                  !!player.currentSong &&
+                  selectedItems.some(
+                    (i) =>
+                      i.id === player.currentSong!.id &&
+                      i.source === player.currentSong!.source,
+                  )
+                }
+                onStartNewSong={
+                  editorMode ||
+                  player.currentSong?.isBible ||
+                  player.currentSong?.isMessage
+                    ? undefined
+                    : openEditorForNew
+                }
+                onEditCurrentSong={
+                  !editorMode &&
+                  player.currentSong &&
+                  !player.currentSong.isBible &&
+                  !player.currentSong.isMessage
+                    ? () => openEditorForExisting(player.currentSong!)
+                    : undefined
+                }
+              />
+            </div>
+          </div>
+        </Allotment.Pane>
 
-            <Allotment.Pane>
-              <div className="h-full flex flex-col bg-surface overflow-hidden">
-                <ActionBar
-                  hasSong={!!player.currentSong}
-                  blackoutActive={blackoutActive}
-                  onToggleBlackout={toggleBlackout}
-                  onNavigatePrev={() => player.navigatePart("prev")}
-                  onNavigateNext={() => player.navigatePart("next")}
-                  saveStatus={saveStatus}
-                  saveDetail={saveDetail}
-                  onAddToSelected={
-                    !editorMode &&
-                    player.currentSong &&
-                    !player.currentSong.isBible &&
-                    !player.currentSong.isMessage
-                      ? () => selectItem(player.currentSong!)
-                      : undefined
-                  }
-                  isInSelected={
-                    !!player.currentSong &&
-                    selectedItems.some(
-                      (i) =>
-                        i.id === player.currentSong!.id &&
-                        i.source === player.currentSong!.source,
-                    )
-                  }
-                  onStartNewSong={
-                    editorMode ||
-                    player.currentSong?.isBible ||
-                    player.currentSong?.isMessage
-                      ? undefined
-                      : openEditorForNew
-                  }
-                  onEditCurrentSong={
-                    !editorMode &&
-                    player.currentSong &&
-                    !player.currentSong.isBible &&
-                    !player.currentSong.isMessage
-                      ? () => openEditorForExisting(player.currentSong!)
-                      : undefined
-                  }
-                />
-                <div className="flex-1 min-h-0 flex gap-2 px-2 pb-2 overflow-auto">
-                  <LocalPreview
-                    html={hdmiHtml}
-                    blackoutActive={blackoutActive}
-                    displays={displays}
-                    selectedDisplayId={selectedDisplayId}
-                    setSelectedDisplayId={setSelectedDisplayId}
-                    hdmiActive={hdmiActive}
-                    onToggleHdmi={toggleHdmi}
-                    onRefreshDisplays={refreshDisplays}
-                  />
+        <Allotment.Pane>
+          <div className="h-full flex flex-col bg-surface overflow-hidden">
+            <div className="flex-1 min-h-0 overflow-y-auto px-2 py-2 flex">
+              <div className="m-auto w-full flex flex-col items-center gap-2">
+                <div className="w-full" style={{ maxWidth: "calc(36vh * 16 / 9)" }}>
                   <StreamPreview
                     html={hdmi2Html}
                     positionText={positionText}
@@ -726,9 +746,21 @@ function HomeContent() {
                     onRefreshDisplays={refreshDisplays}
                   />
                 </div>
+                <div className="w-full" style={{ maxWidth: "calc(36vh * 16 / 9)" }}>
+                  <LocalPreview
+                    html={hdmiHtml}
+                    blackoutActive={blackoutActive}
+                    displays={displays}
+                    selectedDisplayId={selectedDisplayId}
+                    setSelectedDisplayId={setSelectedDisplayId}
+                    hdmiActive={hdmiActive}
+                    onToggleHdmi={toggleHdmi}
+                    onRefreshDisplays={refreshDisplays}
+                  />
+                </div>
               </div>
-            </Allotment.Pane>
-          </Allotment>
+            </div>
+          </div>
         </Allotment.Pane>
       </Allotment>
       </div>
@@ -737,6 +769,8 @@ function HomeContent() {
         onClose={() => setSettingsOpen(false)}
         out2Bg={out2Bg}
         onChangeOut2Bg={setOut2Bg}
+        out2SecondLang={out2SecondLang}
+        onChangeOut2SecondLang={setOut2SecondLang}
       />
     </main>
   );

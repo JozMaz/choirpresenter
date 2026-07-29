@@ -5,14 +5,13 @@ import type {
   SongEntry,
 } from "./types";
 import { deriveSequence } from "./songSchema";
-import { splitLinesMono, splitLinesBilingual, alignSecondary } from "./slideSplit";
+import { splitLines, alignSecondary } from "./slideSplit";
 
 export interface BuildSongArgs {
   songName: string;
   key: string | null;
   number: number | null;
   sections: EditorSection[];
-  secondaryIsTranslation: boolean;
   existingId?: string;
 }
 
@@ -24,12 +23,11 @@ export const toLines = (text: string): string[] =>
 
 export function generateSlides(
   section: Pick<EditorSection, "lines" | "altLines" | "showAlt">,
-  bilingual: boolean,
 ): EditorSlide[] {
   const lines = toLines(section.lines);
   if (lines.length === 0) return [];
 
-  const parts = bilingual ? splitLinesBilingual(lines) : splitLinesMono(lines);
+  const parts = splitLines(lines);
   const alt = section.showAlt ? toLines(section.altLines) : [];
   const altParts = alt.length ? alignSecondary(alt, parts.length) : [];
 
@@ -41,11 +39,9 @@ export function generateSlides(
 }
 
 export function buildSongFromEditor(args: BuildSongArgs): SongEntry {
-  const { songName, key, number, sections, secondaryIsTranslation, existingId } =
-    args;
+  const { songName, key, number, sections, existingId } = args;
 
   const live = sections.filter((s) => toLines(s.lines).length > 0);
-  const bilingual = live.some((s) => s.showAlt && toLines(s.altLines).length > 0);
 
   const primarySections: SectionEntry[] = [];
   const secondarySections: SectionEntry[] = [];
@@ -54,7 +50,7 @@ export function buildSongFromEditor(args: BuildSongArgs): SongEntry {
     const order = i + 1;
     const slides = s.slidesLocked && s.slides.length > 0
       ? s.slides
-      : generateSlides(s, bilingual);
+      : generateSlides(s);
 
     const primarySlides = slides
       .map((sl) => toLines(sl.lines))
@@ -79,6 +75,7 @@ export function buildSongFromEditor(args: BuildSongArgs): SongEntry {
         number: s.number,
         lines: altLines,
         slides: altSlides.slice(0, primarySlides.length),
+        isTranslation: s.isTranslation === true,
       });
     }
   });
@@ -86,7 +83,7 @@ export function buildSongFromEditor(args: BuildSongArgs): SongEntry {
   const text = [{ isTranslation: false, sections: primarySections }];
   if (secondarySections.length > 0) {
     text.push({
-      isTranslation: secondaryIsTranslation,
+      isTranslation: secondarySections.some((e) => e.isTranslation === true),
       sections: secondarySections,
     });
   }
@@ -116,6 +113,9 @@ export function songToEditorSections(song: SongEntry): EditorSection[] {
       lines: sec.lines.join("\n"),
       altLines: alt?.lines.join("\n") ?? "",
       showAlt: (alt?.lines.length ?? 0) > 0,
+      isTranslation: alt
+        ? (alt.isTranslation ?? secondary?.isTranslation ?? false)
+        : false,
       slidesLocked: sec.slidesLocked === true,
       slides: sec.slides.map((slide, i) => ({
         id: crypto.randomUUID(),

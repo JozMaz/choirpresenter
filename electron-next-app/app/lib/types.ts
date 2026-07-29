@@ -102,6 +102,7 @@ export interface SectionEntry {
   lines: string[];
   slides: string[][];
   slidesLocked?: true;
+  isTranslation?: boolean;
 }
 
 export interface LangBlock {
@@ -139,6 +140,7 @@ export interface MessageMeta {
 export interface SlideText {
   primary: string[];
   secondary?: string[];
+  isTranslation?: boolean;
 }
 
 export interface Slide extends SlideText {
@@ -152,6 +154,7 @@ export interface Section extends SlideText {
   number: number;
   slideStart: number;
   slideCount: number;
+  secondaryIsTranslation?: boolean;
 }
 
 export interface EditorSlide {
@@ -187,6 +190,7 @@ export interface EditorSection {
   lines: string;
   altLines: string;
   showAlt: boolean;
+  isTranslation: boolean;
   slides: EditorSlide[];
   slidesLocked: boolean;
 }

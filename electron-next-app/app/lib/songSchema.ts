@@ -43,6 +43,7 @@ export function sectionLabel(type: SectionType, number: number): string {
 export function buildSectionsAndSlides(
   primary: SectionEntry[],
   secondary?: SectionEntry[],
+  defaultSecondaryIsTranslation = false,
 ): { sections: Section[]; slides: Slide[] } {
   const secondaryByOrder = secondary
     ? new Map(secondary.map((s) => [s.order, s]))
@@ -63,6 +64,9 @@ export function buildSectionsAndSlides(
       secondary: alt?.lines.length ? alt.lines : undefined,
       slideStart: slides.length,
       slideCount: sec.slides.length,
+      secondaryIsTranslation: alt
+        ? (alt.isTranslation ?? defaultSecondaryIsTranslation)
+        : false,
     });
 
     const sectionIndex = sections.length - 1;

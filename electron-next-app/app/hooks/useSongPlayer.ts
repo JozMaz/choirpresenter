@@ -65,6 +65,39 @@ export function useSongPlayer() {
     });
   };
 
+  const navigateSection = (direction: "next" | "prev") => {
+    setState((prev) => {
+      const song = prev.currentSong;
+      if (!song || song.sections.length === 0) return prev;
+      let sectionIndex: number;
+      if (prev.slideIndex < 0) {
+        sectionIndex = 0;
+      } else {
+        const current = song.slides[prev.slideIndex].sectionIndex;
+        const last = song.sections.length - 1;
+        sectionIndex =
+          direction === "next"
+            ? current >= last
+              ? 0
+              : current + 1
+            : current <= 0
+              ? last
+              : current - 1;
+      }
+      const slideIndex = song.sections[sectionIndex].slideStart;
+      return { ...prev, slideIndex, live: { song, slideIndex } };
+    });
+  };
+
+  const goToSlide = (slideIndex: number) => {
+    setState((prev) => {
+      const song = prev.currentSong;
+      if (!song) return prev;
+      if (slideIndex < 0 || slideIndex >= song.slides.length) return prev;
+      return { ...prev, slideIndex, live: { song, slideIndex } };
+    });
+  };
+
   const live = state.live;
   const slide = live ? live.song.slides[live.slideIndex] : null;
   const section = slide ? live!.song.sections[slide.sectionIndex] : null;
@@ -73,14 +106,24 @@ export function useSongPlayer() {
     ...state,
     liveSong: live?.song ?? null,
     output1: section
-      ? { primary: section.primary, secondary: section.secondary }
+      ? {
+          primary: section.primary,
+          secondary: section.secondary,
+          isTranslation: section.secondaryIsTranslation === true,
+        }
       : EMPTY_TEXT,
     output2: slide
-      ? { primary: slide.primary, secondary: slide.secondary }
+      ? {
+          primary: slide.primary,
+          secondary: slide.secondary,
+          isTranslation: section?.secondaryIsTranslation === true,
+        }
       : EMPTY_TEXT,
     sendFirstPart: loadSong,
     navigatePart,
+    navigateSection,
     goToSection,
+    goToSlide,
   };
 }
 

@@ -9,6 +9,7 @@ import {
 import { getThemePref, setThemePref, type ThemePref } from "../lib/theme";
 import { LS_KEYS } from "../lib/constants";
 import Icon from "./Icon";
+import Toggle from "./Toggle";
 
 export const OUT2_BG_OPTIONS = [
   { value: "#000000", label: "Black", hint: "vMix luma key" },
@@ -27,6 +28,8 @@ interface SettingsModalProps {
   onClose: () => void;
   out2Bg: string;
   onChangeOut2Bg: (bg: string) => void;
+  out2SecondLang: boolean;
+  onChangeOut2SecondLang: (enabled: boolean) => void;
 }
 
 export default function SettingsModal({
@@ -34,6 +37,8 @@ export default function SettingsModal({
   onClose,
   out2Bg,
   onChangeOut2Bg,
+  out2SecondLang,
+  onChangeOut2SecondLang,
 }: SettingsModalProps) {
   const [token, setToken] = useState("");
   const [savedToken, setSavedToken] = useState<string | null>(null);
@@ -201,12 +206,19 @@ export default function SettingsModal({
           </div>
 
           <div className={card}>
-            <label className="block text-xs font-semibold text-text-primary mb-1">
-              Stream output background
+            <label className="block text-xs font-semibold text-text-primary mb-2">
+              Stream output
             </label>
+            <Toggle
+              checked={out2SecondLang}
+              onChange={onChangeOut2SecondLang}
+              label="Second language on stream"
+              description="Off: stream shows only the main text, without divider and translation. Local output always shows both languages."
+              className="mb-3 pb-3 border-b border-border"
+            />
             <p className="text-[11px] text-text-muted mb-2 leading-snug">
-              Background of the second output (Stream). Black works with vMix
-              luma key, green/blue with chroma key.
+              Background of the stream output. Black works with vMix luma key,
+              green/blue with chroma key.
             </p>
             <div className="flex items-center gap-1.5">
               {OUT2_BG_OPTIONS.map((opt) => (

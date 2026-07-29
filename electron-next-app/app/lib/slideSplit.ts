@@ -10,34 +10,7 @@ export function alignSecondary(lines: string[], partCount: number): string[][] {
   return out;
 }
 
-export function splitLinesMono(lines: string[]): string[][] {
-  const n = lines.length;
-  if (n <= 4) return [lines];
-
-  const slice = (...ranges: [number, number][]) =>
-    ranges.map(([a, b]) => lines.slice(a, b));
-
-  if (n === 5) return slice([0, 2], [2, 5]);
-  if (n === 6) return slice([0, 3], [3, 6]);
-  if (n === 7) return slice([0, 3], [3, 7]);
-  if (n === 8) return slice([0, 2], [2, 5], [5, 8]);
-  if (n === 9) return slice([0, 3], [3, 6], [6, 9]);
-  if (n === 10) return slice([0, 3], [3, 6], [6, 10]);
-
-  const partsCount = Math.ceil(n / 4);
-  const baseSize = Math.floor(n / partsCount);
-  const remainder = n % partsCount;
-  const out: string[][] = [];
-  let start = 0;
-  for (let i = 0; i < partsCount; i++) {
-    const size = baseSize + (i < remainder ? 1 : 0);
-    out.push(lines.slice(start, start + size));
-    start += size;
-  }
-  return out;
-}
-
-export function splitLinesBilingual(lines: string[]): string[][] {
+export function splitLines(lines: string[]): string[][] {
   const n = lines.length;
   if (n <= 3) return [lines];
 

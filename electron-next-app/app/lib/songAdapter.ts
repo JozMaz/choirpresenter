@@ -1,5 +1,6 @@
 import type { ApiItem, SectionListItem, SongEntry, SongSource } from "./types";
 import { buildSectionsAndSlides } from "./songSchema";
+import { splitLines } from "./slideSplit";
 import { buildSearchIndex } from "./textUtils";
 import { formatKey } from "./musicKeys";
 import { translationLabelFor } from "./language";
@@ -21,9 +22,19 @@ export function toApiItem(
   const primary = song.text[0];
   const secondary = song.text[1];
 
+  const altByOrder = secondary
+    ? new Map(secondary.sections.map((s) => [s.order, s]))
+    : undefined;
+  const normalizedPrimary = primary.sections.map((sec) => {
+    const alt = altByOrder?.get(sec.order);
+    if (sec.slidesLocked || (alt?.lines.length ?? 0) > 0) return sec;
+    return { ...sec, slides: splitLines(sec.lines) };
+  });
+
   const { sections, slides } = buildSectionsAndSlides(
-    primary.sections,
+    normalizedPrimary,
     secondary?.sections,
+    secondary?.isTranslation ?? false,
   );
 
   const fullText = sections.map((s) => s.primary.join("\n")).join("\n\n");
@@ -40,7 +51,7 @@ export function toApiItem(
     source,
     bookName,
     secondaryIsTranslation: secondary?.isTranslation ?? false,
-    translationLabel: secondary?.isTranslation
+    translationLabel: secondary
       ? translationLabelFor(secondary.sections.flatMap((s) => s.lines))
       : TRANSLATION_LABEL_DEFAULT,
     sections,
@@ -64,7 +75,7 @@ export function getSongSections(item: ApiItem): SectionListItem[] {
 
 export function buildSongFooter(song: ApiItem): string {
   const parts: string[] = [];
-  if (song.title) parts.push(song.title);
+  if (song.title && song.source !== "roboczy") parts.push(song.title);
   const key = formatKey(song.key);
   if (key) parts.push(`(${key})`);
   if (song.number) parts.push(String(song.number));
