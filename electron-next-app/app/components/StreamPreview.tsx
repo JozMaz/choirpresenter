@@ -8,6 +8,7 @@ interface StreamPreviewProps {
   html: string;
   positionText: string;
   blackoutActive: boolean;
+  bg: string;
   displays: DisplayInfo[];
   selectedDisplayId: number | null;
   setSelectedDisplayId: (id: number | null) => void;
@@ -20,6 +21,7 @@ export default function StreamPreview({
   html,
   positionText,
   blackoutActive,
+  bg,
   displays,
   selectedDisplayId,
   setSelectedDisplayId,
@@ -41,7 +43,7 @@ export default function StreamPreview({
         />
       </div>
       <div className="border border-border rounded overflow-hidden">
-        <OutputFrame html={html} blackout={blackoutActive} />
+        <OutputFrame html={html} blackout={blackoutActive} bg={bg} />
       </div>
       <div className="mt-2 h-7 flex justify-end items-center">
         <span className="text-xs text-text-muted">{positionText}</span>

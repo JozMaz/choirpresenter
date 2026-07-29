@@ -4,15 +4,10 @@ import type { HighlightResult } from "../lib/searchHighlight";
 
 interface HighlightedTextProps {
   result: HighlightResult;
-  /** CSS třídy pro vyznačené slovo (pill). */
   hitClassName?: string;
-  /** Render-fallback když nejsou žádné segmenty (např. mimo search). */
   fallback?: string;
 }
 
-/**
- * Zobrazí výsledek z highlightSnippet: prefix … {segments s pills} … suffix.
- */
 export default function HighlightedText({
   result,
   hitClassName = "bg-primary/20 text-primary rounded px-0.5",

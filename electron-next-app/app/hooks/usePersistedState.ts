@@ -2,11 +2,6 @@
 
 import { useEffect, useState } from "react";
 
-/**
- * Stejné API jako useState, ale stav se hydratuje z localStorage při mountu
- * a každá změna se zapisuje zpět. Nepřepíše uložená data initialValue, protože
- * write probíhá až po hydrataci.
- */
 export function usePersistedState<T>(
   key: string,
   initialValue: T,

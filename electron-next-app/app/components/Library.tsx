@@ -6,7 +6,6 @@ import BibleBrowser from "./BibleBrowser";
 import MessagesBrowser from "./MessagesBrowser";
 
 interface LibraryProps {
-  /** Songbooks tab obsah (typicky <SongLists />). */
   songbooksContent: React.ReactNode;
   bibles: Record<BibleKey, Bible | null>;
   biblesLoaded: boolean;
@@ -37,7 +36,6 @@ export default function Library({
 
   return (
     <div className="h-full flex flex-col bg-surface overflow-hidden">
-      {/* Tab bar */}
       <div className="shrink-0 flex border-b border-border bg-surface">
         <button
           onClick={() => setTab("songbooks")}
@@ -71,7 +69,6 @@ export default function Library({
         </button>
       </div>
 
-      {/* Tab content */}
       <div className="flex-1 min-h-0">
         {tab === "songbooks" && songbooksContent}
         {tab === "bibles" && (

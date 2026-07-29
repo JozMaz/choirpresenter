@@ -29,10 +29,6 @@ export function isMessageChunkIndexReady(): boolean {
   return cachedChunks !== null;
 }
 
-/**
- * Build celé struktury — načte titles + všechny per-message texty z lokální
- * cache přes Electron IPC, pak postaví search index.
- */
 async function build(): Promise<ChunkRow[]> {
   const api = typeof window !== "undefined" ? window.api : undefined;
   if (!api) {
@@ -44,8 +40,6 @@ async function build(): Promise<ChunkRow[]> {
   const titles = (await api.readMessageTitles()) ?? [];
   cachedTitles = titles;
 
-  // Načti všechny zprávy paralelně (limit konkurence, aby IPC roundtripy
-  // nezasypaly main proces). 16 paralelních readů je rozumný.
   const list: ChunkRow[] = [];
   const CONCURRENCY = 16;
   let i = 0;
@@ -80,7 +74,6 @@ async function build(): Promise<ChunkRow[]> {
   return list;
 }
 
-/** Asynchronní getter — vrátí cached nebo vybuilduje. */
 export async function getMessageChunkIndex(): Promise<ChunkRow[]> {
   if (cachedChunks) return cachedChunks;
   if (buildPromise) return buildPromise;
@@ -92,10 +85,6 @@ export async function getMessageChunkIndex(): Promise<ChunkRow[]> {
   return result;
 }
 
-/**
- * Nakopne build na pozadí (idle / next tick). Idempotentní.
- * Volitelný onDone callback se zavolá až je hotovo.
- */
 export function prebuildMessageChunkIndex(onDone?: () => void): void {
   if (cachedChunks) {
     onDone?.();
@@ -117,7 +106,6 @@ export function prebuildMessageChunkIndex(onDone?: () => void): void {
   }
 }
 
-/** Vrátí texty jedné konkrétní zprávy. Z cache, jinak load přes IPC. */
 export async function getMessageText(
   dateKey: string,
 ): Promise<MessageTextEntry | null> {

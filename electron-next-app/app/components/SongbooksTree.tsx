@@ -10,7 +10,6 @@ import Icon from "./Icon";
 import SongListRow from "./SongListRow";
 
 interface SongbooksTreeProps {
-  /** Per-songbook ApiItem[] map. */
   dataByBook: Record<SongBookKey, ApiItem[]>;
   bookNames: Record<SongBookKey, string>;
   selectedItems: ApiItem[];
@@ -60,14 +59,6 @@ export default function SongbooksTree({
 
   const isSearching = normalizeSearch(deferredTerm).length > 0;
 
-  /**
-   * Filtrované songbooky. Při searchi:
-   * - Filtr přes searchIndex.includes všech tokenů
-   * - Score per píseň (count matched chars) — sort items desc
-   * - Předpočítané highlighty (title + body) — render je jen JSX,
-   *   žádný highlightSnippet na hot pathu
-   * - Cap MAX_RESULTS_PER_BOOK aby pro běžná slova nesplodit stovky pills
-   */
   const MAX_RESULTS_PER_BOOK = 50;
   type Row = { item: ApiItem; titleHl?: HighlightResult; bodyHl?: HighlightResult };
   const filteredByBook = useMemo(() => {
@@ -114,7 +105,6 @@ export default function SongbooksTree({
 
   return (
     <div className="h-full flex flex-col bg-surface overflow-hidden">
-      {/* Search */}
       <div className="shrink-0 pt-2 px-2">
         <div className="relative">
           <input
@@ -146,11 +136,9 @@ export default function SongbooksTree({
         </div>
       )}
 
-      {/* Tree */}
       <div className="flex-1 overflow-y-auto px-2 pt-2 pb-2 mt-1">
         <div>
           {filteredByBook.map((book) => {
-            // Při hledání rozbalujeme všechny skupiny s match, jinak respektujeme openBook
             const isOpen = isSearching ? book.rows.length > 0 : openBook === book.key;
             if (isSearching && book.rows.length === 0) return null;
 

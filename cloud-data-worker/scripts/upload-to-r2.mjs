@@ -1,19 +1,4 @@
 #!/usr/bin/env node
-/**
- * Nahraje současné JSON data do R2 bucketu "choirpresenter-data".
- *
- * Použití (z cloud-data-worker/):
- *   node scripts/upload-to-r2.mjs
- *
- * Co dělá:
- * 1. Walking přes ../electron-next-app/api/{Bibles,Messages,SongBooks}/
- * 2. Pro každý JSON: spočítá sha256 hash + size
- * 3. Postaví manifest.json se seznamem všech souborů + verzí (= today ISO)
- * 4. Nahraje VŠE do R2 přes `wrangler r2 object put`
- *
- * Vyžaduje: wrangler CLI authenticated (`wrangler login`)
- *           a R2 bucket "choirpresenter-data" už vytvořený.
- */
 
 import { createHash } from "node:crypto";
 import { execSync } from "node:child_process";
@@ -26,8 +11,6 @@ const ROOT = path.join(__dirname, "..");
 const APP_ROOT = path.join(ROOT, "..", "electron-next-app");
 const BUCKET = "choirpresenter-data";
 
-// Mapování: lokální src dir → R2 key prefix.
-// Jen JSON soubory. Per-soubor JSONy (pl-texts/) jdou jako data/messages/texts/{name}.json.
 const SONGBOOK_FILES = new Set([
   "new-song.json",
   "new-song-pl-gb.json",
@@ -60,8 +43,6 @@ const MAPPINGS = [
   },
 ];
 
-// Používáme MD5 (= R2 ETag), aby manifesty z upload-script a Worker auto-refresh
-// měly konzistentní formát hash. MD5 zde je jen pro diff detekci, ne crypto.
 function md5File(file) {
   const h = createHash("md5");
   h.update(fs.readFileSync(file));
@@ -94,7 +75,6 @@ function collectFiles() {
 }
 
 function uploadOne(file) {
-  // wrangler r2 object put <bucket>/<key> --file=<path> --content-type=application/json
   const cmd = `npx wrangler r2 object put "${BUCKET}/${file.key}" --file="${file.localPath}" --content-type="application/json" --remote`;
   execSync(cmd, { stdio: ["ignore", "pipe", "pipe"] });
 }
@@ -110,8 +90,6 @@ function uploadManifest(manifest) {
   }
 }
 
-// Worker URL pro fetch remote manifestu (pro differential upload).
-// Override přes env: WORKER_URL=https://your-worker.workers.dev
 const WORKER_URL =
   process.env.WORKER_URL ||
   "https://choirpresenter-data.joz-maz-work.workers.dev";
@@ -129,7 +107,6 @@ async function fetchRemoteManifest() {
   }
 }
 
-// === MAIN ===
 const version = new Date().toISOString().slice(0, 19).replace(/[T:]/g, "-");
 const forceAll = process.argv.includes("--all");
 
@@ -179,14 +156,9 @@ for (const f of files) {
 console.log(""); // newline after skip counter
 console.log(`Uploaded ${uploaded}, skipped ${skipped} unchanged.`);
 
-// Když nic nenahráno (vše unchanged), Worker nemá důvod přebuilďovat manifest.
-// Nicméně uploadneme i tak — drobné ujistění že verze je aktualizovaná.
 if (uploaded === 0) {
   console.log("Nothing changed. Manifest stays as-is on cloud.");
 } else {
-  // Manifest mergujeme: lokální files se updatují, cloud-only entries
-  // (= soubory které jsou jen v cloudu, např. nahrané přes app PUT)
-  // ZACHOVÁME, aby se nesmazaly.
   const mergedFiles = { ...remoteFiles };
   for (const f of files) {
     mergedFiles[f.key] = { hash: f.hash, size: f.size };

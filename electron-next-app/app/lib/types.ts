@@ -43,6 +43,8 @@ declare global {
       updateHdmi2: (html: string) => void;
       closeHdmi2: () => void;
       setHdmi2Blackout: (active: boolean) => void;
+      setHdmi2Config: (config: { bg: string }) => void;
+      getAppVersion: () => Promise<string>;
       readSongBook: (book: SongBookKey) => Promise<Songbook | null>;
       writeSongBook: (
         book: SongBookKey,
@@ -62,6 +64,16 @@ declare global {
       dataFetchCloud: (relPath: string) => Promise<string | null>;
       dataFetchManifest: () => Promise<string | null>;
       dataClearLocal: () => Promise<boolean>;
+      exportData: (
+        categories: string[],
+        customSongsJson?: string,
+      ) => Promise<{
+        ok?: boolean;
+        canceled?: boolean;
+        path?: string;
+        files?: number;
+        error?: string;
+      }>;
     };
   }
 }

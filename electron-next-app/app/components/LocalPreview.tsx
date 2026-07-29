@@ -1,14 +1,12 @@
 "use client";
 
 import type { DisplayInfo } from "../lib/types";
-import Icon from "./Icon";
 import MonitorPicker from "./MonitorPicker";
 import OutputFrame from "./OutputFrame";
 
 interface LocalPreviewProps {
   html: string;
   blackoutActive: boolean;
-  onToggleBlackout: () => void;
   displays: DisplayInfo[];
   selectedDisplayId: number | null;
   setSelectedDisplayId: (id: number | null) => void;
@@ -20,7 +18,6 @@ interface LocalPreviewProps {
 export default function LocalPreview({
   html,
   blackoutActive,
-  onToggleBlackout,
   displays,
   selectedDisplayId,
   setSelectedDisplayId,
@@ -43,19 +40,6 @@ export default function LocalPreview({
       </div>
       <div className="border border-border rounded overflow-hidden">
         <OutputFrame html={html} blackout={blackoutActive} />
-      </div>
-      <div className="mt-2 h-7 flex justify-start items-center">
-        <button
-          onClick={onToggleBlackout}
-          title={blackoutActive ? "Show text" : "Hide text (blackout)"}
-          className={`w-7 h-7 flex items-center justify-center rounded transition-colors ${
-            blackoutActive
-              ? "bg-primary text-white hover:bg-primary-hover"
-              : "text-text-secondary hover:bg-surface-secondary"
-          }`}
-        >
-          <Icon name="Moon" size={16} />
-        </button>
       </div>
     </div>
   );

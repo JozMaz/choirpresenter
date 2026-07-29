@@ -10,10 +10,6 @@ const initialState: BiblesState = {
   gdanska: null,
 };
 
-/**
- * Načte obě polské bible přes Electron IPC. Main proces už vrací JSON string
- * (parsovaný přes V8/vm), takže tady stačí JSON.parse.
- */
 export function useBibles() {
   const [bibles, setBibles] = useState<BiblesState>(initialState);
   const [loaded, setLoaded] = useState(false);

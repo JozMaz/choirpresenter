@@ -2,7 +2,6 @@ const { contextBridge, ipcRenderer } = require("electron");
 
 contextBridge.exposeInMainWorld("api", {
   ping: () => "pong",
-  // ===== Display / HDMI =====
   getDisplays: () => ipcRenderer.invoke("get-displays"),
   openHdmi: (displayId) => ipcRenderer.invoke("open-hdmi", displayId),
   updateHdmi: (html) => ipcRenderer.send("update-hdmi", html),
@@ -12,8 +11,10 @@ contextBridge.exposeInMainWorld("api", {
   updateHdmi2: (html) => ipcRenderer.send("update-hdmi2", html),
   closeHdmi2: () => ipcRenderer.send("close-hdmi2"),
   setHdmi2Blackout: (active) => ipcRenderer.send("hdmi2-blackout", active),
+  setHdmi2Config: (config) => ipcRenderer.send("hdmi2-config", config),
 
-  // ===== Data čtené z lokální cache (nebo bundle fallback) =====
+  getAppVersion: () => ipcRenderer.invoke("get-app-version"),
+
   readSongBook: (book) => ipcRenderer.invoke("read-songbook", book),
   writeSongBook: (book, data) =>
     ipcRenderer.invoke("write-songbook", book, data),
@@ -23,7 +24,6 @@ contextBridge.exposeInMainWorld("api", {
     ipcRenderer.invoke("read-message-text", dateKey),
   listMessageKeys: () => ipcRenderer.invoke("list-message-keys"),
 
-  // ===== Cloud + local cache management =====
   dataLocalMode: () => ipcRenderer.invoke("data-local-mode"),
   dataCacheDir: () => ipcRenderer.invoke("data-cache-dir"),
   dataHasLocal: () => ipcRenderer.invoke("data-has-local"),
@@ -33,8 +33,9 @@ contextBridge.exposeInMainWorld("api", {
   dataFetchCloud: (relPath) => ipcRenderer.invoke("data-fetch-cloud", relPath),
   dataFetchManifest: () => ipcRenderer.invoke("data-fetch-manifest"),
   dataClearLocal: () => ipcRenderer.invoke("data-clear-local"),
+  exportData: (categories, customSongsJson) =>
+    ipcRenderer.invoke("export-data", categories, customSongsJson),
 
-  // ===== Write token (auth pro cloud PUT) =====
   getWriteToken: () => ipcRenderer.invoke("get-write-token"),
   setWriteToken: (token) => ipcRenderer.invoke("set-write-token", token),
 });

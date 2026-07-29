@@ -12,9 +12,7 @@ interface SongListRowProps {
   onSelect: () => void;
   onEdit?: () => void;
   showId?: boolean;
-  /** Zvýraznění matchnutých výrazů v title — vázané na aktivní search. */
   titleHl?: HighlightResult;
-  /** Snippet z fullText s highlighty — zobrazí se pod titulem při searchi. */
   bodyHl?: HighlightResult;
 }
 

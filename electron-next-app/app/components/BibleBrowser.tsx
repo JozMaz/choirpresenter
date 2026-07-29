@@ -68,10 +68,6 @@ export default function BibleBrowser({
     return getBookByFlatIndex(bible, openBookIdx);
   }, [bible, openBookIdx]);
 
-  /**
-   * Plochý seznam VŠECH veršů pro vyhledávání. Module-level cache —
-   * pokud byl tento bible-key prebuildnutý při startu, je tahle call instant.
-   */
   const allVerses = useMemo<FlatVerse[]>(() => {
     if (!bible) return [];
     return getBibleVerseIndex(bible, activeBible);
@@ -82,7 +78,6 @@ export default function BibleBrowser({
     return norm ? norm.split(" ").filter(Boolean) : [];
   }, [deferredTerm]);
 
-  /** Vyfiltrované verše se skórem (max 200). Sortění by max-score-per-book. */
   const searchResults = useMemo<{ v: FlatVerse; score: number }[]>(() => {
     if (tokens.length === 0) return [];
     const out: { v: FlatVerse; score: number }[] = [];
@@ -95,10 +90,6 @@ export default function BibleBrowser({
     return out;
   }, [tokens, allVerses]);
 
-  /**
-   * Výsledky seskupené podle knihy — group sortění by maxScore desc
-   * (nejrelevantnější knihy nahoře). Uvnitř group zachováme doc-order (bible čtení).
-   */
   const groupedResults = useMemo(() => {
     const map = new Map<
       string,
@@ -118,8 +109,6 @@ export default function BibleBrowser({
     return arr;
   }, [searchResults]);
 
-  // Vázat na okamžitý searchTerm — UI přepne do search módu hned,
-  // i když výsledky čekají na debounce.
   const isSearching = normalizeSearch(deferredTerm).length > 0;
 
   const toggleBook = (idx: number) => {
@@ -170,7 +159,6 @@ export default function BibleBrowser({
 
   return (
     <div className="h-full flex flex-col bg-surface overflow-hidden">
-      {/* Bible picker */}
       <div className="shrink-0 px-2 pt-2">
         <select
           value={activeBible}
@@ -190,7 +178,6 @@ export default function BibleBrowser({
         </select>
       </div>
 
-      {/* Search */}
       <div className="shrink-0 px-2 pt-1">
         <div className="relative">
           <input
@@ -216,7 +203,6 @@ export default function BibleBrowser({
         </div>
       </div>
 
-      {/* Result count when searching */}
       {isSearching && (
         <div className="shrink-0 px-2 pt-1 text-[10px] text-text-muted">
           Results: {searchResults.length}
@@ -224,7 +210,6 @@ export default function BibleBrowser({
         </div>
       )}
 
-      {/* Content: search results OR tree */}
       <div className="flex-1 overflow-y-auto px-2 pt-2 pb-2 mt-1">
         {isSearching ? (
           <div>

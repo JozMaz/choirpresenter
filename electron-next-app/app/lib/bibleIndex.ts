@@ -4,9 +4,7 @@ import { buildSearchIndex } from "./textUtils";
 
 export interface FlatVerse {
   bookFlatIdx: number;
-  /** Display name s aliasem (např. "Ks. Lamentacje (Treny)"). */
   bookDisplayName: string;
-  /** Reference name bez aliasu. */
   bookReferenceName: string;
   chapterIdx: number;
   verseIdx: number;
@@ -61,7 +59,6 @@ export function isBibleVerseIndexReady(activeBible: BibleKey): boolean {
   return cache.has(activeBible);
 }
 
-/** Vrátí cached FlatVerse[] nebo postaví synchronně (a nacachuje). */
 export function getBibleVerseIndex(
   bible: Bible,
   activeBible: BibleKey,
@@ -74,11 +71,6 @@ export function getBibleVerseIndex(
   return v;
 }
 
-/**
- * Build na pozadí pro všechny dostupné bible. `bibles` mapa může mít null.
- * Volat až po useBibles.loaded === true. Idempotentní.
- * `onDone` zavolán jednou až všechny dostupné bible jsou nacachované.
- */
 export function prebuildBibleVerseIndexes(
   bibles: Record<BibleKey, Bible | null>,
   onDone?: () => void,
@@ -103,7 +95,6 @@ export function prebuildBibleVerseIndexes(
       ? w.requestIdleCallback(cb)
       : setTimeout(cb, 0);
 
-  // Postupně po sobě (sequence) — nezamknout main thread víc bibliemi naráz.
   let i = 0;
   const next = () => {
     if (i >= keys.length) {
@@ -117,7 +108,6 @@ export function prebuildBibleVerseIndexes(
       return;
     }
     if (scheduled.has(k)) {
-      // Někdo jiný už buildy spustil; registruj listener a počkej.
       const arr = listeners.get(k) ?? [];
       arr.push(next);
       listeners.set(k, arr);

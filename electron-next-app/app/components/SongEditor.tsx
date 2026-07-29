@@ -6,6 +6,7 @@ import { MUSICAL_KEYS, formatKey } from "../lib/musicKeys";
 import { deriveSequence, sectionLabel } from "../lib/songSchema";
 import { generateSlides, toLines } from "../lib/songSerialize";
 import { translationLabelFor } from "../lib/language";
+import ConfirmDialog from "./ConfirmDialog";
 import Icon from "./Icon";
 
 export type TargetBook = SongBookKey | "custom";
@@ -86,6 +87,7 @@ export default function SongEditor({
   const [targetBook, setTargetBook] = useState<TargetBook>(
     initial?.targetBook ?? "custom",
   );
+  const [confirmDelete, setConfirmDelete] = useState(false);
 
   const bilingual = sections.some(
     (s) => s.showAlt && toLines(s.altLines).length > 0,
@@ -190,6 +192,9 @@ export default function SongEditor({
   const canSave =
     songName.trim() !== "" && sections.some((s) => s.lines.trim() !== "");
 
+  const initialBook = initial?.targetBook;
+  const isMoving = !!isEditing && !!initialBook && targetBook !== initialBook;
+
   const inputClass =
     "w-full px-3 py-2 text-sm border border-border-secondary rounded focus:outline-none focus:ring-1 focus:ring-primary bg-surface text-text-primary placeholder-text-muted";
   const areaClass =
@@ -220,7 +225,7 @@ export default function SongEditor({
               disabled={!canSave}
               className="px-4 py-1.5 text-xs font-semibold bg-primary text-white rounded hover:bg-primary-hover disabled:bg-disabled disabled:cursor-not-allowed transition-colors"
             >
-              {isEditing ? "Update" : "Save"}
+              {isMoving ? "Update & Move" : isEditing ? "Update" : "Save"}
             </button>
           </div>
         </div>
@@ -243,6 +248,17 @@ export default function SongEditor({
                   </option>
                 ))}
               </select>
+              {isMoving && (
+                <p className="mt-1 text-[11px] text-amber-500 leading-snug">
+                  On save, the song will be moved from{" "}
+                  <span className="font-semibold">
+                    {BOOK_LABEL[initialBook!]}
+                  </span>{" "}
+                  to{" "}
+                  <span className="font-semibold">{BOOK_LABEL[targetBook]}</span>
+                  .
+                </p>
+              )}
             </div>
             <div className="w-20">
               <label className="block text-xs font-semibold text-text-secondary mb-1">
@@ -529,13 +545,27 @@ export default function SongEditor({
               </p>
             </div>
             <button
-              onClick={onDelete}
+              onClick={() => setConfirmDelete(true)}
               className="px-3 py-1.5 bg-danger text-white rounded text-xs font-semibold hover:bg-danger-hover transition-colors shrink-0"
             >
               Delete
             </button>
           </div>
         )}
+        <ConfirmDialog
+          open={confirmDelete}
+          title="Delete this song?"
+          message={`"${songName}" will be permanently removed from the songbook${
+            targetBook === "custom" ? " on this device" : " for everyone"
+          }.`}
+          confirmLabel="Delete"
+          icon="Trash2"
+          onConfirm={() => {
+            setConfirmDelete(false);
+            onDelete?.();
+          }}
+          onCancel={() => setConfirmDelete(false)}
+        />
       </div>
     </div>
   );

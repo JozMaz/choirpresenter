@@ -121,23 +121,25 @@ export function buildHdmi2Html(
 ): string {
   if (!currentSong || isEmpty(output2)) return "";
 
+  let inner: string;
   if (currentSong.isBible && currentSong.bibleMeta) {
-    return buildCenteredHtml(
+    inner = buildCenteredHtml(
       output2.primary,
       sectionLabel,
       currentSong.bibleMeta.bibleName,
     );
+  } else if (currentSong.isMessage && currentSong.messageMeta) {
+    inner = buildCenteredHtml(output2.primary, "", sectionLabel, {
+      justify: true,
+    });
+  } else {
+    inner = buildBody(
+      output2.primary,
+      output2.secondary,
+      isTranslation,
+      currentSong.translationLabel,
+      true,
+    );
   }
-
-  if (currentSong.isMessage && currentSong.messageMeta) {
-    return buildCenteredHtml(output2.primary, "", sectionLabel, { justify: true });
-  }
-
-  return `<div class="out2">${buildBody(
-    output2.primary,
-    output2.secondary,
-    isTranslation,
-    currentSong.translationLabel,
-    true,
-  )}</div>`;
+  return `<div class="out2">${inner}</div>`;
 }

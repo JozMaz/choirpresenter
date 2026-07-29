@@ -1,4 +1,3 @@
-/** Klíče biblí podporovaných ve filesystemu */
 export type BibleKey = "warszawska" | "gdanska";
 
 export const BIBLE_LABELS: Record<BibleKey, string> = {
@@ -7,14 +6,13 @@ export const BIBLE_LABELS: Record<BibleKey, string> = {
 };
 
 export interface BibleVerse {
-  /** ID je 1 pro první verš, pak chybí pro některé následující (VideoPsalm konvence) */
   ID?: number;
   Text?: string;
   Style?: unknown;
 }
 
 export interface BibleChapter {
-  ID?: number; // ID kapitoly (1 pro první, pak chybí)
+  ID?: number;
   Verses?: BibleVerse[];
 }
 
@@ -101,7 +99,6 @@ export const BOOK_NAMES: string[] = [
   "Objawienie Jana",
 ];
 
-/** Vrátí knihu podle plochého indexu (0-based, 0 = Genesis, 65 = Zjevení) */
 export function getBookByFlatIndex(
   bible: Bible,
   flatIndex: number,
@@ -119,17 +116,14 @@ export function getBookByFlatIndex(
   return null;
 }
 
-/** Vrátí jméno knihy podle překladu a plochého indexu (s případným aliasem v "(...)") */
 export function getBookName(flatIndex: number): string {
   return BOOK_NAMES[flatIndex] ?? `Book ${flatIndex + 1}`;
 }
 
-/** Strip "(alias)" suffixu — pro referenci v previews/HDMI nechceme alias. */
 export function stripBookAlias(name: string): string {
   return name.replace(/\s*\([^)]*\)\s*$/, "").trim();
 }
 
-/** Celkový počet knih v bibli */
 export function getTotalBookCount(bible: Bible): number {
   return (bible.Testaments || []).reduce(
     (sum, t) => sum + (t.Books?.length || 0),

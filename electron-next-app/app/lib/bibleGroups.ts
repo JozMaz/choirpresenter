@@ -11,7 +11,6 @@ export type BibleGroupKey =
 interface BibleGroup {
   key: BibleGroupKey;
   label: string;
-  /** Poslední flat index knihy patřící do skupiny (0-65). */
   lastIndex: number;
   color: string;
 }

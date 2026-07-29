@@ -1,22 +1,4 @@
 #!/usr/bin/env node
-/**
- * Stáhne aktuální cloudu data → ../electron-next-app/api/...
- *
- * Použití (z cloud-data-worker/):
- *   node scripts/sync-down.mjs       (differential — jen co se liší od lokálu)
- *   node scripts/sync-down.mjs --all (force, přestáhne všechno)
- *
- * Reverz upload-to-r2.mjs:
- *   data/bibles/{name}.json            → ../electron-next-app/api/Bibles/{name}.json
- *   data/messages/titles.json          → ../electron-next-app/api/Messages/pl-titles.json
- *   data/messages/texts/{date}.json    → ../electron-next-app/api/Messages/pl-texts/{date}.json
- *   data/songs/{book}-converted.json   → ../electron-next-app/api/SongBooks/{book}-converted.json
- *
- * Workflow pro admina (typicky):
- *   1. node scripts/sync-down.mjs            ← pulluj aktuální cloud (než budeš editovat)
- *   2. (lokální edity, nová kázání, atd.)
- *   3. node scripts/upload-to-r2.mjs         ← pushni jen změněné soubory
- */
 
 import { createHash } from "node:crypto";
 import fs from "node:fs";
@@ -33,10 +15,6 @@ const WORKER_URL =
 
 const forceAll = process.argv.includes("--all");
 
-/**
- * Mapuje R2 klíč → lokální cesta.
- * Pro klíče které neumíme přiřadit (nečekané) vrátíme null a soubor přeskočíme.
- */
 function keyToLocalPath(key) {
   if (key.startsWith("data/bibles/")) {
     return path.join(APP_ROOT, "api/Bibles", key.slice("data/bibles/".length));
@@ -73,7 +51,6 @@ async function fetchUrl(url) {
   return res.text();
 }
 
-// === MAIN ===
 console.log(`Sync-down from ${WORKER_URL}`);
 console.log(forceAll ? "Mode: FULL (--all)" : "Mode: differential (skip files matching local)");
 

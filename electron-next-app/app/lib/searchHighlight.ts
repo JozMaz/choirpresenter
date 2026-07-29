@@ -2,28 +2,14 @@ export interface HighlightResult {
   prefix: string;
   segments: { text: string; hit: boolean }[];
   suffix: string;
-  /**
-   * Skóre relevance — celkový počet znaků matchnutých v textu.
-   * Vyšší = víc/delší shod. Pro sortění výsledků desc.
-   */
   score: number;
 }
 
 export interface HighlightOptions {
-  /** Délka snippetu okolo prvního matche. Default 200, 0 = bez snippetu (vrátí celý text). */
   snippetLen?: number;
-  /** Kolik znaků kontextu před prvním matchem. Default 60. */
   before?: number;
 }
 
-/**
- * Najde matchnuté tokeny v textu (case + diacritics + ł insensitive),
- * vrátí snippet okolo prvního matche s vyznačenými segmenty a skóre.
- *
- * Token bez mezer (např. "wiarajestsubstancja") matchne i text se mezerami
- * ("Wiara jest substancją") — výsledný highlight je rozsekaný po slovech,
- * takže každé slovo má vlastní "pill".
- */
 const CHAR_CACHE = new Map<string, string>();
 
 function normChar(ch: string): string {
@@ -49,8 +35,6 @@ export function highlightSnippet(
   const SNIPPET_LEN = opts.snippetLen ?? 200;
   const BEFORE = opts.before ?? 60;
 
-  // Position-preserving normalizace char-by-char.
-  // Pravidla = normalizeSearch (kromě \s+ collapse).
   const parts: string[] = [];
   const origIdx: number[] = [];
   for (let i = 0; i < text.length; i++) {
@@ -62,7 +46,6 @@ export function highlightSnippet(
   }
   const normalized = parts.join("");
 
-  // Verze bez mezer s mapováním zpět — fallback pro tokeny psané spolu.
   const nospaceParts: string[] = [];
   const nospaceOrigIdx: number[] = [];
   for (let i = 0; i < normalized.length; i++) {
@@ -74,7 +57,6 @@ export function highlightSnippet(
   }
   const nospace = nospaceParts.join("");
 
-  // Najdi všechny matche
   const ranges: [number, number][] = [];
   for (const t of tokens) {
     let pos = 0;
@@ -89,8 +71,6 @@ export function highlightSnippet(
     }
     if (foundAny) continue;
 
-    // Fallback: nospace match — rozsekej na slova podle whitespace v originále,
-    // aby zvýraznění vypadalo jako pills per slovo.
     let nspos = 0;
     while ((nspos = nospace.indexOf(t, nspos)) !== -1) {
       const startO = nospaceOrigIdx[nspos] ?? 0;
@@ -109,7 +89,6 @@ export function highlightSnippet(
   }
   ranges.sort((a, b) => a[0] - b[0]);
 
-  // Merge overlapping
   const merged: [number, number][] = [];
   for (const r of ranges) {
     const last = merged[merged.length - 1];
@@ -117,11 +96,9 @@ export function highlightSnippet(
     else merged.push([...r]);
   }
 
-  // Skóre = počet matchnutých znaků (suma délek merged rozsahů).
   let score = 0;
   for (const [s, e] of merged) score += e - s;
 
-  // Snippet okolo prvního matche (nebo celý text když snippetLen=0).
   let snipStart = 0;
   let snipEnd = text.length;
   let prefix = "";
@@ -138,7 +115,6 @@ export function highlightSnippet(
     if (snipEnd < text.length) suffix = " …";
   }
 
-  // Postav segmenty
   const segments: { text: string; hit: boolean }[] = [];
   let cursor = snipStart;
   for (const [rs, re] of merged) {

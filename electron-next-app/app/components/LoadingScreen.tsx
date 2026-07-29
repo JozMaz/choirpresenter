@@ -1,19 +1,11 @@
 "use client";
 
 interface LoadingScreenProps {
-  /** 0..1 — progress fraction. */
   progress: number;
-  /** Volitelná zpráva pod % (např. "Downloading messages..."). */
   message?: string;
 }
 
-/**
- * Full-screen splash: app icon (music note pill) + jméno + progress bar.
- * Pozadí matchne hlavní pozadí appky (var(--background)).
- */
 export default function LoadingScreen({ progress, message }: LoadingScreenProps) {
-  // Bar šířka: floating-point pro plynulý 60fps pohyb.
-  // Label: zaokrouhleno na celé %.
   const barWidth = Math.max(0, Math.min(100, progress * 100));
   const pct = Math.round(barWidth);
   return (

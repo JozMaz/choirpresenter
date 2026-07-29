@@ -63,8 +63,6 @@
         width: 100vw;
         white-space: pre-wrap;
         text-align: center;
-        /* Základní velikost textu — trochu menší než dřív (5vw → 4vw)
-           aby "pár slov" nebylo obří. Dlouhý text se pořád scale-uje dolů. */
         font-size: 4vw;
         padding: 3vh 2vw;
         overflow: hidden;
@@ -100,15 +98,12 @@
       .layer.active {
         opacity: 1;
       }
-      /* Silnější viditelný divider mezi PL a EN. Bylo 1px #444 (skoro neviditelný). */
       .divider {
         border-top: 3px solid #aaaaaa;
         width: 55%;
         margin: 2vh auto;
         opacity: 0.85;
       }
-      /* Sequence / labels nahoře a dole — dřív 0.8vw (nečitelné na velké obrazovce).
-         1.8vw = na 4K screenu ~70px, na 1080p ~35px. Čitelné z několika metrů. */
       .sequence {
         font-size: 1.8vw;
         color: #cccccc;
@@ -146,15 +141,27 @@
         display: flex;
         flex-direction: column;
         align-items: stretch;
-        justify-content: stretch;
+        justify-content: flex-end;
         width: 100%;
         height: 100%;
         flex: 1 1 auto;
         min-height: 0;
+        padding-bottom: 2vh;
       }
       .out2 .divider {
-        margin: 0 auto;
+        margin: 0.6vh auto;
         flex: 0 0 auto;
+      }
+      .out2 .text-block {
+        flex: 0 1 auto;
+        max-height: 36vh;
+        padding: 0.5vh 0;
+      }
+      .out2 .text-block.align-bottom {
+        padding: 0.5vh 0 0;
+      }
+      .out2 .text-block.align-top {
+        padding: 0 0 0.5vh;
       }
       .text-block.roomy {
         padding: 4vh 0;
@@ -382,14 +389,23 @@
         else el.classList.remove("blackout");
       }
 
+      function applyConfig(config) {
+        if (config && typeof config.bg === "string") {
+          document.documentElement.style.background = config.bg;
+          document.body.style.background = config.bg;
+        }
+      }
+
       ipcRenderer.on("hdmi-update", (_, html) => applyUpdate(html));
       ipcRenderer.on("hdmi-blackout", (_, active) => applyBlackout(active));
+      ipcRenderer.on("hdmi-config", (_, config) => applyConfig(config));
 
       window.addEventListener("message", (e) => {
         const d = e.data;
         if (!d || typeof d !== "object") return;
         if (d.type === "view-update") applyUpdate(d.html);
         else if (d.type === "view-blackout") applyBlackout(d.active);
+        else if (d.type === "view-config") applyConfig(d.config);
       });
 
       window.addEventListener("resize", () => {

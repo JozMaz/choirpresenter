@@ -1,19 +1,9 @@
-import { app, BrowserWindow, screen, ipcMain } from "electron";
+import { app, BrowserWindow, dialog, screen, shell, ipcMain } from "electron";
 import fs from "fs";
 import path from "path";
 import vm from "vm";
 import { fileURLToPath } from "url";
 
-/**
- * URL Cloudflare Workeru s cloud daty.
- * Endpoints:
- *   GET /manifest.json
- *   GET /data/{path}
- *   PUT /data/songs/{path}  (auth, Phase 2)
- *
- * Po prvním deployi Workeru sem dej skutečnou URL.
- * Nebo override přes env CHOIRPRESENTER_DATA_URL.
- */
 const CLOUD_DATA_URL =
   process.env.CHOIRPRESENTER_DATA_URL ||
   "https://choirpresenter-data.joz-maz-work.workers.dev";
@@ -21,25 +11,13 @@ const CLOUD_DATA_URL =
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-/**
- * Base path k api/ folderu — různé v dev vs packed app.
- * V packed app jsou JSONs v `app.asar.unpacked/api/` (kvůli asarUnpack configu).
- * `__dirname` ukazuje do app.asar/electron/, takže relative path by mířil do asar
- * archive a fs.readFile by nemusel transparentně rozpoznat unpacked redirect
- * (zejména s non-ASCII chars v názvu jako "Uwspółcześniona").
- */
 const HDMI_VIEW = () =>
   app.isPackaged
     ? path.join(__dirname, "..", "out", "hdmi-view.html")
     : path.join(__dirname, "..", "public", "hdmi-view.html");
 
-const API_BASE = app.isPackaged
-  ? path.join(process.resourcesPath, "app.asar.unpacked", "api")
-  : path.join(__dirname, "..", "api");
+const API_BASE = path.join(__dirname, "..", "api");
 
-// ===== SONGBOOK FILE PATHS =====
-// Bundle fallback (jen pro dev, kdy ještě nemusí být stažené cloud data).
-// V produkci je bundle prázdný a vše čteme z userData cache (níže).
 const SONGBOOK_BUNDLE_PATHS = {
   newSong: path.join(API_BASE, "SongBooks", "new-song.json"),
   newSongPlGb: path.join(API_BASE, "SongBooks", "new-song-pl-gb.json"),
@@ -56,9 +34,6 @@ const SONGBOOK_CACHE_KEYS = {
   children: "data/songs/children.json",
 };
 
-// Zvedni když se změní formát dat v cache — při startu se cache smaže
-// a stáhne znovu. Bez toho by stará cache držela soubory ve starém schématu
-// a appka by nabootovala s prázdnými zpěvníky bez chybové hlášky.
 const DATA_EPOCH = 2;
 
 const LOCAL_DATA_MODE =
@@ -73,9 +48,24 @@ let mainWindow = null;
 let hdmiWindow = null;
 let hdmiWindow2 = null;
 
-// Vypneme animace přechodů oken na macOS, aby HDMI okno nikdy „neproblesklo"
+const hdmiState = {
+  1: { html: null, blackout: true },
+  2: { html: null, blackout: true, bg: null },
+};
+
+app.setName("ChoirPresenter");
+
+process.on("uncaughtException", (err) => {
+  console.error("[uncaught]", err);
+});
+process.on("unhandledRejection", (reason) => {
+  console.error("[unhandled-rejection]", reason);
+});
+
+const FETCH_TIMEOUT_MS = 20000;
+const PUT_TIMEOUT_MS = 30000;
+
 app.commandLine.appendSwitch("disable-features", "WindowsScrollingFromInactive");
-// Zakážeme background throttling globálně – HDMI okno renderuje plynule i bez focusu
 app.commandLine.appendSwitch("disable-renderer-backgrounding");
 app.commandLine.appendSwitch("disable-background-timer-throttling");
 app.commandLine.appendSwitch("disable-backgrounding-occluded-windows");
@@ -84,6 +74,7 @@ function createWindow() {
   const win = new BrowserWindow({
     width: 1200,
     height: 800,
+    title: "ChoirPresenter",
     webPreferences: {
       preload: path.join(__dirname, "preload.cjs"),
     },
@@ -93,24 +84,20 @@ function createWindow() {
     mainWindow = null;
     closeOutputWindows();
   });
+  win.webContents.on("render-process-gone", (_, details) => {
+    console.error("[main-window] renderer gone:", details.reason);
+    if (details.reason !== "clean-exit" && !win.isDestroyed()) {
+      win.webContents.reload();
+    }
+  });
 
   if (app.isPackaged) {
-    // Production: načte statický Next.js export z out/index.html
     win.loadFile(path.join(__dirname, "..", "out", "index.html"));
   } else {
-    // Development: dev server běží na portu 3002
     win.loadURL("http://localhost:3002");
   }
 }
 
-/**
- * Vytvoří HDMI okno optimalizované pro prezentace:
- * - vždy nahoře nad VŠÍM (i nad fullscreen aplikacemi jako PowerPoint)
- * - viditelné na všech macOS Spaces (přechod mezi aplikacemi nezpůsobí blink)
- * - černé pozadí už od okamžiku vytvoření (žádný bílý záblesk)
- * - renderuje plynule bez ohledu na focus
- * - bez stínu, bez frame, bez animace zobrazení
- */
 function createHdmiWindow(targetBounds) {
   const win = new BrowserWindow({
     x: targetBounds.x,
@@ -118,7 +105,7 @@ function createHdmiWindow(targetBounds) {
     width: targetBounds.width,
     height: targetBounds.height,
     frame: false,
-    show: false, // zobrazíme až po načtení – žádný flash
+    show: false,
     alwaysOnTop: true,
     backgroundColor: "#000000",
     hasShadow: false,
@@ -128,23 +115,21 @@ function createHdmiWindow(targetBounds) {
     maximizable: false,
     fullscreenable: true,
     skipTaskbar: true,
-    focusable: false, // okno nikdy nezíská focus – přepínání aplikací ho ignoruje
+    focusable: false,
     transparent: false,
     enableLargerThanScreen: true,
     type: process.platform === "darwin" ? "panel" : undefined,
     webPreferences: {
       nodeIntegration: true,
       contextIsolation: false,
-      backgroundThrottling: false, // klíčové: render běží i bez focusu
+      backgroundThrottling: false,
       offscreen: false,
       disableHtmlFullscreenWindowResize: true,
     },
   });
 
-  // Nejvyšší možná vrstva – nad PowerPoint slideshow, nad fullscreen aplikacemi
   win.setAlwaysOnTop(true, "screen-saver", 1);
 
-  // Viditelné napříč všemi macOS Spaces (zabrání blackoutu při alt-tabu / fullscreen v PowerPointu)
   if (process.platform === "darwin") {
     win.setVisibleOnAllWorkspaces(true, {
       visibleOnFullScreen: true,
@@ -156,8 +141,6 @@ function createHdmiWindow(targetBounds) {
 
   return win;
 }
-
-// ===== IPC HANDLERS =====
 
 ipcMain.handle("get-displays", () => {
   const displays = screen.getAllDisplays();
@@ -174,100 +157,93 @@ ipcMain.handle("get-displays", () => {
   }));
 });
 
-ipcMain.handle("open-hdmi", (_, displayId) => {
-  if (hdmiWindow && !hdmiWindow.isDestroyed()) {
-    hdmiWindow.close();
-  }
+function getHdmiWindow(variant) {
+  const win = variant === 2 ? hdmiWindow2 : hdmiWindow;
+  return win && !win.isDestroyed() ? win : null;
+}
+
+function setHdmiWindow(variant, win) {
+  if (variant === 2) hdmiWindow2 = win;
+  else hdmiWindow = win;
+}
+
+function syncHdmiWindow(variant) {
+  const win = getHdmiWindow(variant);
+  if (!win) return;
+  const state = hdmiState[variant];
+  if (state.bg) win.webContents.send("hdmi-config", { bg: state.bg });
+  if (state.html !== null) win.webContents.send("hdmi-update", state.html);
+  win.webContents.send("hdmi-blackout", state.blackout);
+}
+
+function openHdmi(variant, displayId) {
+  const existing = getHdmiWindow(variant);
+  if (existing) existing.close();
 
   const displays = screen.getAllDisplays();
   const target = displays.find((d) => d.id === displayId);
   if (!target) return;
 
-  hdmiWindow = createHdmiWindow(target.bounds);
-  hdmiWindow.loadFile(HDMI_VIEW());
+  const win = createHdmiWindow(target.bounds);
+  setHdmiWindow(variant, win);
+  win.loadFile(HDMI_VIEW());
 
-  hdmiWindow.once("ready-to-show", () => {
-    hdmiWindow.showInactive(); // zobrazí, ale nepřevezme focus
-    // simpleFullscreen = překryje displej, ALE nevytváří nový macOS Space (žádné animace přechodu)
+  win.once("ready-to-show", () => {
+    win.showInactive();
     if (process.platform === "darwin") {
-      hdmiWindow.setSimpleFullScreen(true);
+      win.setSimpleFullScreen(true);
     } else {
-      hdmiWindow.setFullScreen(true);
+      win.setFullScreen(true);
+    }
+    syncHdmiWindow(variant);
+  });
+
+  win.webContents.on("render-process-gone", (_, details) => {
+    console.error(`[hdmi${variant}] renderer gone:`, details.reason);
+    if (details.reason !== "clean-exit" && !win.isDestroyed()) {
+      win.webContents.reload();
     }
   });
+  win.webContents.on("did-finish-load", () => syncHdmiWindow(variant));
 
-  hdmiWindow.on("closed", () => {
-    hdmiWindow = null;
-  });
-});
-
-ipcMain.on("update-hdmi", (_, html) => {
-  if (hdmiWindow && !hdmiWindow.isDestroyed()) {
-    hdmiWindow.webContents.send("hdmi-update", html);
-  }
-});
-
-ipcMain.on("close-hdmi", () => {
-  if (hdmiWindow && !hdmiWindow.isDestroyed()) {
-    hdmiWindow.close();
-    hdmiWindow = null;
-  }
-});
-
-ipcMain.on("hdmi-blackout", (_, active) => {
-  if (hdmiWindow && !hdmiWindow.isDestroyed()) {
-    hdmiWindow.webContents.send("hdmi-blackout", active);
-  }
-});
-
-// ===== HDMI2 (Output 2) =====
-
-ipcMain.handle("open-hdmi2", (_, displayId) => {
-  if (hdmiWindow2 && !hdmiWindow2.isDestroyed()) {
-    hdmiWindow2.close();
-  }
-
-  const displays = screen.getAllDisplays();
-  const target = displays.find((d) => d.id === displayId);
-  if (!target) return;
-
-  hdmiWindow2 = createHdmiWindow(target.bounds);
-  hdmiWindow2.loadFile(HDMI_VIEW());
-
-  hdmiWindow2.once("ready-to-show", () => {
-    hdmiWindow2.showInactive();
-    if (process.platform === "darwin") {
-      hdmiWindow2.setSimpleFullScreen(true);
-    } else {
-      hdmiWindow2.setFullScreen(true);
+  win.on("closed", () => {
+    if ((variant === 2 ? hdmiWindow2 : hdmiWindow) === win) {
+      setHdmiWindow(variant, null);
     }
   });
+}
 
-  hdmiWindow2.on("closed", () => {
-    hdmiWindow2 = null;
-  });
-});
+function updateHdmi(variant, html) {
+  hdmiState[variant].html = html;
+  getHdmiWindow(variant)?.webContents.send("hdmi-update", html);
+}
 
-ipcMain.on("update-hdmi2", (_, html) => {
-  if (hdmiWindow2 && !hdmiWindow2.isDestroyed()) {
-    hdmiWindow2.webContents.send("hdmi-update", html);
+function blackoutHdmi(variant, active) {
+  hdmiState[variant].blackout = active;
+  getHdmiWindow(variant)?.webContents.send("hdmi-blackout", active);
+}
+
+function closeHdmi(variant) {
+  getHdmiWindow(variant)?.close();
+  setHdmiWindow(variant, null);
+}
+
+ipcMain.handle("open-hdmi", (_, displayId) => openHdmi(1, displayId));
+ipcMain.on("update-hdmi", (_, html) => updateHdmi(1, html));
+ipcMain.on("close-hdmi", () => closeHdmi(1));
+ipcMain.on("hdmi-blackout", (_, active) => blackoutHdmi(1, active));
+
+ipcMain.handle("open-hdmi2", (_, displayId) => openHdmi(2, displayId));
+ipcMain.on("update-hdmi2", (_, html) => updateHdmi(2, html));
+ipcMain.on("close-hdmi2", () => closeHdmi(2));
+ipcMain.on("hdmi2-blackout", (_, active) => blackoutHdmi(2, active));
+
+ipcMain.on("hdmi2-config", (_, config) => {
+  if (config && typeof config.bg === "string") {
+    hdmiState[2].bg = config.bg;
+    getHdmiWindow(2)?.webContents.send("hdmi-config", { bg: config.bg });
   }
 });
-
-ipcMain.on("close-hdmi2", () => {
-  if (hdmiWindow2 && !hdmiWindow2.isDestroyed()) {
-    hdmiWindow2.close();
-    hdmiWindow2 = null;
-  }
-});
-
-ipcMain.on("hdmi2-blackout", (_, active) => {
-  if (hdmiWindow2 && !hdmiWindow2.isDestroyed()) {
-    hdmiWindow2.webContents.send("hdmi-blackout", active);
-  }
-});
-
-// ===== SONGBOOK IPC =====
 
 async function readSongbookFile(book) {
   if (LOCAL_DATA_MODE) {
@@ -275,7 +251,6 @@ async function readSongbookFile(book) {
     if (!target || !fs.existsSync(target)) return null;
     return JSON.parse(await fs.promises.readFile(target, "utf8"));
   }
-  // 1) Pokus se z userData cache (po cloud downloadu)
   const cacheKey = SONGBOOK_CACHE_KEYS[book];
   if (cacheKey) {
     try {
@@ -288,7 +263,6 @@ async function readSongbookFile(book) {
       console.warn(`Cache read failed for ${book}, falling back to bundle:`, err);
     }
   }
-  // 2) Bundle fallback (dev / přechodné období)
   const target = SONGBOOK_BUNDLE_PATHS[book];
   if (!target || !fs.existsSync(target)) return null;
   const raw = await fs.promises.readFile(target, "utf8");
@@ -318,12 +292,6 @@ const BIBLE_CACHE_KEYS = {
   gdanska: "data/bibles/Uwspółcześniona Biblia Gdańska.json",
 };
 
-/**
- * Projde řetězec a uvnitř všech dvojitě uvozených stringů escapuje
- * raw newlines (\n, \r) na \\n. Mimo stringy nechá vše jak je.
- * Potřeba protože VideoPsalm bible JSONy mají literální newlines uvnitř
- * textů veršů, což JS nedovoluje v string literalech.
- */
 function escapeNewlinesInStrings(src) {
   let out = "";
   let inStr = false;
@@ -364,7 +332,6 @@ function escapeNewlinesInStrings(src) {
 }
 
 async function loadBibleRaw(bible) {
-  // 1) userData cache (cloud download)
   const cacheKey = BIBLE_CACHE_KEYS[bible];
   if (cacheKey) {
     const cached = dataCachePath(cacheKey);
@@ -372,7 +339,6 @@ async function loadBibleRaw(bible) {
       return fs.promises.readFile(cached, "utf8");
     }
   }
-  // 2) Bundle fallback
   const target = BIBLE_BUNDLE_PATHS[bible];
   if (target && fs.existsSync(target)) {
     return fs.promises.readFile(target, "utf8");
@@ -394,7 +360,6 @@ ipcMain.handle("read-bible", async (_, bible) => {
   }
 });
 
-/** Vrátí parsed JSON s message titles (titles.json) — z cache, jinak z bundle. */
 ipcMain.handle("read-message-titles", async () => {
   try {
     const cached = dataCachePath("data/messages/titles.json");
@@ -402,7 +367,6 @@ ipcMain.handle("read-message-titles", async () => {
       const raw = await fs.promises.readFile(cached, "utf8");
       return JSON.parse(raw);
     }
-    // Bundle fallback (dev)
     const bundlePath = path.join(API_BASE, "Messages", "pl-titles.json");
     if (fs.existsSync(bundlePath)) {
       const raw = await fs.promises.readFile(bundlePath, "utf8");
@@ -415,7 +379,6 @@ ipcMain.handle("read-message-titles", async () => {
   }
 });
 
-/** Vrátí parsed JSON jednoho kázání podle date klíče. */
 ipcMain.handle("read-message-text", async (_, dateKey) => {
   if (!/^[\w-]+$/.test(String(dateKey || ""))) return null;
   try {
@@ -441,10 +404,8 @@ ipcMain.handle("read-message-text", async (_, dateKey) => {
   }
 });
 
-/** Vrátí seznam date klíčů (např. ["47-0412", "49-1225"]) — pro pre-build indexu. */
 ipcMain.handle("list-message-keys", async () => {
   const result = [];
-  // 1) Cache
   const cacheDir = dataCachePath("data/messages/texts");
   if (fs.existsSync(cacheDir)) {
     try {
@@ -457,7 +418,6 @@ ipcMain.handle("list-message-keys", async () => {
       console.warn("list-message-keys cache scan failed:", err);
     }
   }
-  // 2) Bundle fallback
   const bundleDir = path.join(API_BASE, "Messages", "pl-texts");
   if (fs.existsSync(bundleDir)) {
     try {
@@ -472,16 +432,6 @@ ipcMain.handle("list-message-keys", async () => {
   return result.sort();
 });
 
-/**
- * Zapíše songbook do:
- *   1) lokální cache (userData/data/data/songs/{book}-converted.json) — vždy
- *   2) cloud (Worker PUT) — pokud má uživatel write token
- *
- * Vrací { localOk, cloudOk } kde:
- *   - localOk: true/false jestli local write prošel
- *   - cloudOk: true/false jestli cloud PUT prošel, null pokud nemá token
- *              (= local-only mode, ostatní uživatelé tu změnu neuvidí)
- */
 ipcMain.handle("write-songbook", async (_, book, data) => {
   const cacheKey = SONGBOOK_CACHE_KEYS[book];
   if (!cacheKey) return { localOk: false, cloudOk: null };
@@ -513,9 +463,6 @@ ipcMain.handle("write-songbook", async (_, book, data) => {
     }
   }
 
-  // SAFETY: pokud nový soubor má ≥10× méně písní než ten co je teď na disku,
-  // odmítni zapis a zachovej backup. Chrání proti race-condition bugům
-  // co psaly {songs:[]} a smazaly celé songbooky.
   let localOk = false;
   try {
     const localPath = dataCachePath(cacheKey);
@@ -530,13 +477,11 @@ ipcMain.handle("write-songbook", async (_, book, data) => {
           console.error(
             `[write-songbook] REFUSED: existing has ${existingCount} songs, new has only ${newCount}. Likely a bug — keeping existing file untouched. Backup created.`,
           );
-          // Backup pro debug — kdyby byl nový soubor přesto správný
           const backupPath = `${localPath}.attempted-${Date.now()}.json`;
           await fs.promises.writeFile(backupPath, body, "utf8");
           return { localOk: false, cloudOk: null, refused: true };
         }
       } catch {
-        // Existing soubor nečitelný — povolíme write (pravděpodobně recovery).
       }
     }
     await fs.promises.mkdir(path.dirname(localPath), { recursive: true });
@@ -546,7 +491,6 @@ ipcMain.handle("write-songbook", async (_, book, data) => {
     console.error("Local write failed:", err);
   }
 
-  // 2) Cloud PUT (jen pokud máme write token)
   let cloudOk = null;
   const token = await readWriteTokenFromDisk();
   if (token) {
@@ -559,6 +503,7 @@ ipcMain.handle("write-songbook", async (_, book, data) => {
           Authorization: `Bearer ${token}`,
         },
         body,
+        signal: AbortSignal.timeout(PUT_TIMEOUT_MS),
       });
       cloudOk = res.ok;
       if (!res.ok) {
@@ -573,8 +518,6 @@ ipcMain.handle("write-songbook", async (_, book, data) => {
   return { localOk, cloudOk };
 });
 
-// ===== WRITE TOKEN =====
-// Token pro autorizaci PUT requests do cloudu. Uloženo v userData/config.json.
 const CONFIG_PATH = () => path.join(app.getPath("userData"), "config.json");
 
 async function readWriteTokenFromDisk() {
@@ -619,12 +562,6 @@ ipcMain.handle("set-write-token", async (_, token) => {
   }
 });
 
-// ===== CLOUD + LOCAL DATA IPC =====
-// Veškerá data (písně/bible/kázání) jsou primárně v cloudu (Cloudflare R2).
-// Při prvním spuštění Electron stáhne vše do `userData/data/` a od té doby
-// čte z disku. Manifest poll detekuje nové verze → app nabídne Update.
-
-/** Adresář s lokálním cache datem. Per-user, mimo app bundle. */
 function dataCacheDir() {
   return path.join(app.getPath("userData"), "data");
 }
@@ -637,6 +574,8 @@ function dataCachePath(relPath) {
   if (clean.includes("..")) throw new Error("invalid path");
   return path.join(dataCacheDir(), clean);
 }
+
+ipcMain.handle("get-app-version", () => app.getVersion());
 
 ipcMain.handle("data-local-mode", () => LOCAL_DATA_MODE);
 ipcMain.handle("data-cache-dir", () => dataCacheDir());
@@ -689,20 +628,17 @@ ipcMain.handle("data-write-local", async (_, relPath, contents) => {
 });
 
 ipcMain.handle("data-fetch-cloud", async (_, relPath) => {
-  // URL-encode po segmentech (kvůli mezerám / diakritice v názvech bible souborů).
   const safe = relPath
     .replace(/^[/\\]+/, "")
     .split("/")
     .map(encodeURIComponent)
     .join("/");
-  // Cache-busting query param + no-cache headers — Cloudflare CDN by jinak
-  // mohl vracet starý cached response (max-age=3600 v Worker odpovědi) i když
-  // se R2 obsah mezitím změnil. Pro nás je každý fetch fresh = aktuální R2.
   const url = `${CLOUD_DATA_URL}/${safe}?_t=${Date.now()}`;
   try {
     const res = await fetch(url, {
       cache: "no-store",
       headers: { "Cache-Control": "no-cache", Pragma: "no-cache" },
+      signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
     });
     if (!res.ok) {
       console.error(`Cloud fetch ${url} failed: ${res.status}`);
@@ -717,11 +653,11 @@ ipcMain.handle("data-fetch-cloud", async (_, relPath) => {
 
 ipcMain.handle("data-fetch-manifest", async () => {
   try {
-    // Cache-bust manifest taky — manifest se nemění často ale když jo, musíme to vidět hned.
     const url = `${CLOUD_DATA_URL}/manifest.json?_t=${Date.now()}`;
     const res = await fetch(url, {
       cache: "no-store",
       headers: { "Cache-Control": "no-cache", Pragma: "no-cache" },
+      signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
     });
     if (!res.ok) return null;
     return await res.text();
@@ -731,7 +667,90 @@ ipcMain.handle("data-fetch-manifest", async () => {
   }
 });
 
-/** Smaže celý lokální cache (pro "Re-download from scratch" funkci). */
+const EXPORT_CATEGORIES = {
+  songs: "data/songs",
+  bibles: "data/bibles",
+  messages: "data/messages",
+};
+
+async function countFilesRecursive(dir) {
+  let count = 0;
+  const entries = await fs.promises.readdir(dir, { withFileTypes: true });
+  for (const e of entries) {
+    if (e.isDirectory()) {
+      count += await countFilesRecursive(path.join(dir, e.name));
+    } else {
+      count++;
+    }
+  }
+  return count;
+}
+
+ipcMain.handle("export-data", async (_, categories, customSongsJson) => {
+  const cats = (Array.isArray(categories) ? categories : []).filter(
+    (c) => EXPORT_CATEGORIES[c],
+  );
+  if (cats.length === 0) return { ok: false, error: "Nothing selected." };
+
+  const cacheDir = dataCacheDir();
+  const available = cats.filter((c) =>
+    fs.existsSync(path.join(cacheDir, EXPORT_CATEGORIES[c])),
+  );
+  if (available.length === 0) {
+    return { ok: false, error: "No local data to export yet." };
+  }
+
+  const res = await dialog.showOpenDialog(mainWindow ?? undefined, {
+    title: "Choose backup destination",
+    defaultPath: app.getPath("downloads"),
+    buttonLabel: "Export here",
+    properties: ["openDirectory", "createDirectory"],
+  });
+  if (res.canceled || !res.filePaths[0]) return { canceled: true };
+
+  const now = new Date();
+  const pad = (n) => String(n).padStart(2, "0");
+  const stamp = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}-${pad(now.getHours())}${pad(now.getMinutes())}`;
+  const suffix = available.length === 3 ? "all" : available.join("-");
+  const target = path.join(
+    res.filePaths[0],
+    `ChoirPresenter-backup-${stamp}-${suffix}`,
+  );
+
+  try {
+    let files = 0;
+    for (const c of available) {
+      const src = path.join(cacheDir, EXPORT_CATEGORIES[c]);
+      const dst = path.join(target, EXPORT_CATEGORIES[c]);
+      await fs.promises.cp(src, dst, { recursive: true });
+      files += await countFilesRecursive(dst);
+    }
+    if (available.length === 3) {
+      const manifest = path.join(cacheDir, "manifest.json");
+      if (fs.existsSync(manifest)) {
+        await fs.promises.copyFile(
+          manifest,
+          path.join(target, "manifest.json"),
+        );
+        files++;
+      }
+    }
+    if (available.includes("songs") && typeof customSongsJson === "string") {
+      await fs.promises.writeFile(
+        path.join(target, "my-songs.json"),
+        customSongsJson,
+        "utf8",
+      );
+      files++;
+    }
+    shell.showItemInFolder(target);
+    return { ok: true, path: target, files };
+  } catch (err) {
+    console.error("export-data failed:", err);
+    return { ok: false, error: String(err?.message || err) };
+  }
+});
+
 ipcMain.handle("data-clear-local", async () => {
   try {
     await fs.promises.rm(dataCacheDir(), { recursive: true, force: true });

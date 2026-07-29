@@ -1,23 +1,6 @@
-/**
- * ChoirPresenter data worker.
- *
- * Routes:
- *   GET  /manifest.json       → veřejně, poslední verze + hash per soubor
- *   GET  /data/*              → veřejně, jeden datový JSON z R2
- *   PUT  /data/songs/*        → s Bearer tokenem (Phase 2), zapíše do R2
- *   OPTIONS *                 → CORS preflight
- *
- * R2 layout:
- *   manifest.json
- *   data/bibles/{key}.json
- *   data/messages/titles.json
- *   data/messages/texts/{date}.json
- *   data/songs/{book}.json
- */
 
 export interface Env {
   DATA_BUCKET: R2Bucket;
-  /** Csv tokenů s write přístupem. Pokud není set, PUT je zablokovaný. */
   WRITE_TOKENS?: string;
   API_VERSION: string;
 }
@@ -74,9 +57,6 @@ async function handleGetData(env: Env, path: string): Promise<Response> {
 
   const headers: Record<string, string> = {
     "Content-Type": obj.httpMetadata?.contentType ?? "application/json",
-    // Krátký cache window — když admin re-uploaduje píseň, klient by jinak
-    // dostával stale verzi z Cloudflare CDN. Client posílá ?_t=now query
-    // param, takže CDN miss bývá vždy. Tahle hlavička je belt-and-suspenders.
     "Cache-Control": "public, max-age=60, must-revalidate",
     ETag: obj.httpEtag,
     ...CORS_HEADERS,
@@ -110,22 +90,13 @@ async function handlePutData(
   await env.DATA_BUCKET.put(path, body, {
     httpMetadata: { contentType },
   });
-  // Auto-refresh manifestu po každém PUT, aby ostatní devices uviděly novou
-  // verzi. Slow path (~500ms na list+rebuild), ale není v hot path UI.
   await rebuildManifest(env);
   return corsJson({ ok: true, path, size: body.byteLength });
 }
 
-/**
- * Projde všechny data/* objekty v R2, zbuilduje manifest s novou verzí
- * a uloží ho jako manifest.json.
- *
- * Hash používáme R2 httpEtag (= MD5 obsahu) — pro diff detekci postačí.
- */
 async function rebuildManifest(env: Env): Promise<void> {
   const files: Record<string, { hash: string; size: number }> = {};
   let cursor: string | undefined;
-  // R2 list paginuje (max 1000 per call). Iteruj dokud nedojde.
   do {
     const listed = await env.DATA_BUCKET.list({
       prefix: "data/",
@@ -134,7 +105,6 @@ async function rebuildManifest(env: Env): Promise<void> {
     });
     for (const obj of listed.objects) {
       files[obj.key] = {
-        // R2 etag je MD5 hex obsahu, někdy s uvozovkami — strip je.
         hash: obj.etag.replace(/^"|"$/g, ""),
         size: obj.size,
       };
@@ -165,21 +135,17 @@ export default {
       return new Response(null, { status: 204, headers: CORS_HEADERS });
     }
 
-    // /manifest.json
     if (url.pathname === "/manifest.json" && method === "GET") {
       return handleGetManifest(env);
     }
 
-    // /data/*
     if (url.pathname.startsWith("/data/")) {
-      // URL-decode pro názvy se mezerami / diakritikou (bible mají oba)
       const key = decodeURIComponent(url.pathname.slice(1));
       if (method === "GET") return handleGetData(env, key);
       if (method === "PUT") return handlePutData(env, req, key);
       return corsText("method not allowed", 405);
     }
 
-    // Root health-check.
     if (url.pathname === "/" || url.pathname === "") {
       return corsJson({
         service: "choirpresenter-data",

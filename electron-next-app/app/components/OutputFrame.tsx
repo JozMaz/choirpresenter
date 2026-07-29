@@ -8,9 +8,10 @@ const VIEW_HEIGHT = 1080;
 interface OutputFrameProps {
   html: string;
   blackout: boolean;
+  bg?: string;
 }
 
-export default function OutputFrame({ html, blackout }: OutputFrameProps) {
+export default function OutputFrame({ html, blackout, bg }: OutputFrameProps) {
   const boxRef = useRef<HTMLDivElement>(null);
   const frameRef = useRef<HTMLIFrameElement>(null);
   const [scale, setScale] = useState(0);
@@ -41,6 +42,14 @@ export default function OutputFrame({ html, blackout }: OutputFrameProps) {
       "*",
     );
   }, [blackout, ready]);
+
+  useEffect(() => {
+    if (!ready || !bg) return;
+    frameRef.current?.contentWindow?.postMessage(
+      { type: "view-config", config: { bg } },
+      "*",
+    );
+  }, [bg, ready]);
 
   return (
     <div

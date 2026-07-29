@@ -2,30 +2,12 @@
 
 import type { CloudManifest } from "./types";
 
-/**
- * Cloud data bootstrap & sync.
- *
- * Datový tok:
- *   1) App startuje → `bootstrap()` zkontroluje lokální cache
- *   2) Bez cache → fetch manifest → download všech souborů → save na disk
- *   3) S cache → fetch manifest async → porovnání verzí → "Update available"
- *      (samotný download až na klik tlačítka v UI)
- *
- * Veškeré IO běží přes window.api (Electron IPC). V čistém browseru
- * (Next dev server bez Electronu) tato logika gracefully selže a appka
- * spadne do bundle fallback módu, který je v hlavním procesu zachován.
- */
-
 const MANIFEST_KEY = "manifest.json";
 
 export interface BootstrapProgress {
-  /** "checking", "downloading", "done", "error". */
   phase: "init" | "checking" | "downloading" | "done" | "error";
-  /** Ratio 0..1 — combined progress (jen smysl má phase=downloading). */
   ratio: number;
-  /** Aktuální soubor — pro splash UI. */
   currentFile?: string;
-  /** Pro debug. */
   message?: string;
 }
 
@@ -78,10 +60,6 @@ async function fetchCloudManifest(): Promise<CloudManifest | null> {
   }
 }
 
-/**
- * Stáhne všechny soubory z manifestu na disk, ohlašuje progress.
- * Po dokončení uloží i samotný manifest (= signál že download proběhl celý).
- */
 async function downloadAll(
   manifest: CloudManifest,
   onProgress: BootstrapListener,
@@ -108,8 +86,6 @@ async function downloadAll(
     done++;
   }
 
-  // Manifest se zapisuje POSLEDNÍ — slouží jako sentinel "download kompletní".
-  // Při příštím startu data-has-local detekuje jeho přítomnost.
   await api.dataWriteLocal(
     MANIFEST_KEY,
     JSON.stringify(manifest, null, 2),
@@ -119,20 +95,12 @@ async function downloadAll(
   onProgress({ phase: "done", ratio: 1 });
 }
 
-/**
- * Spustí bootstrap. Pokud běží, vrátí existující promise.
- * Jednotky:
- *   - First start (no cache): downloadne všechno, ratio 0→1 lineárně
- *   - Subsequent start (cache exists): fetch manifest na pozadí (instant ratio=1
- *     z hlediska UI), pokud version diff → setUpdateAvailable(true)
- */
 export function bootstrap(onProgress: BootstrapListener): Promise<void> {
   if (inflight) return inflight;
   inflight = (async () => {
     onProgress({ phase: "init", ratio: 0 });
     const api = typeof window !== "undefined" ? window.api : undefined;
     if (!api) {
-      // Bez Electronu (browser preview) — neumíme nic
       onProgress({ phase: "done", ratio: 1 });
       return;
     }
@@ -145,12 +113,10 @@ export function bootstrap(onProgress: BootstrapListener): Promise<void> {
     const hasLocal = await api.dataHasLocal();
 
     if (hasLocal) {
-      // Načti lokální manifest pro info
       const local = await loadLocalManifest();
       lastManifest = local;
       onProgress({ phase: "done", ratio: 1 });
 
-      // Async fetch cloud manifest pro update check (nečekáme na to)
       void (async () => {
         const remote = await fetchCloudManifest();
         if (remote && local && remote.version !== local.version) {
@@ -160,7 +126,6 @@ export function bootstrap(onProgress: BootstrapListener): Promise<void> {
       return;
     }
 
-    // Bez cache → musíme downloadnout
     onProgress({ phase: "checking", ratio: 0 });
     const remote = await fetchCloudManifest();
     if (!remote) {
@@ -170,7 +135,6 @@ export function bootstrap(onProgress: BootstrapListener): Promise<void> {
         message:
           "Cloud unavailable and no local cache. Connect to internet and restart.",
       });
-      // Pošli i error event, ale promise rejectujeme aby caller mohl reagovat
       throw new Error("No cloud and no cache");
     }
 
@@ -179,15 +143,6 @@ export function bootstrap(onProgress: BootstrapListener): Promise<void> {
   return inflight;
 }
 
-/**
- * Manuální update: aplikuje aktuální cloud manifest.
- *
- * - `forceAll: false` (default) → jen soubory s diff hashem oproti lokálnímu
- *   manifestu. Rychlé, ale pokud je lokální cache rozjetá (file na disku
- *   neodpovídá hashe v manifestu), nepomůže.
- * - `forceAll: true` → re-downloaduje VŠE z manifestu, ignoruje lokální hashe.
- *   Pomalé, ale spolehlivé. Použít pro "Force re-sync" button.
- */
 export async function applyUpdate(
   onProgress: BootstrapListener,
   opts: { forceAll?: boolean } = {},

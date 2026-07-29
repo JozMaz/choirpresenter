@@ -2,17 +2,12 @@
 
 import { useEffect } from "react";
 
-/**
- * Posílá obsah do HDMI okna a udržuje blackout stav v sync.
- * Variant = 1 → primární HDMI; variant = 2 → druhý HDMI.
- */
 export function useHdmiSync(
   variant: 1 | 2,
   active: boolean,
   html: string,
   blackout: boolean,
 ) {
-  // Update content
   useEffect(() => {
     if (!active) return;
     const api = window.api;
@@ -21,7 +16,6 @@ export function useHdmiSync(
     if (variant === 2 && api.updateHdmi2 && html) api.updateHdmi2(html);
   }, [active, html, variant]);
 
-  // Sync blackout
   useEffect(() => {
     if (!active) return;
     const api = window.api;

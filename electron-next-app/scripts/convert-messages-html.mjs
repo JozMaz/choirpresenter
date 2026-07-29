@@ -1,25 +1,4 @@
 #!/usr/bin/env node
-/**
- * Konvertuje sermon HTML soubory na strukturovaný JSON pro Messages tab.
- *
- * Vstup:  ../api/Messages/pl-html/{date}.html   (např. 47-0412.html)
- * Výstup: ../api/Messages/pl-texts/{date}.json  (jeden soubor per kázání)
- *
- * Použití:
- *   node scripts/convert-messages-html.mjs pl
- *
- * Struktura každého výstupního souboru (pl-texts/{date}.json):
- * {
- *   "title": "Wiara jest substancją",
- *   "location": "Oakland, Kalifornia, USA",
- *   "chunks": [
- *     { "pnum": 1, "text": "Otrzymaliśmy kilka..." },
- *     { "pnum": 1, "text": "Ufam, że..." },
- *     { "pnum": 2, "text": "Więc ja myślę..." },
- *     ...
- *   ]
- * }
- */
 
 import fs from "node:fs";
 import path from "node:path";
@@ -32,7 +11,6 @@ const lang = process.argv[2] || "pl";
 const inputDir = path.join(ROOT, "api", "Messages", `${lang}-html`);
 const outputDir = path.join(ROOT, "api", "Messages", `${lang}-texts`);
 
-// Pomocné regexy
 const HEADER_RE = /<div class="message-header">([\s\S]*?)<\/div>/;
 const H1_RE = /<h1>([\s\S]*?)<\/h1>/;
 const H2_RE = /<h2>([\s\S]*?)<\/h2>/;
@@ -40,14 +18,10 @@ const TEXTBLOCK_RE = /<div class="textBlock">([\s\S]*?)<\/div>\s*(?=<div class="
 const WMB_RE = /<div class="wmb">([\s\S]*?)<\/div>(?=\s*<div class="wmb"|\s*<\/div>|\s*$)/g;
 const PNUM_RE = /<div class="pnum">(\d+)<\/div>/;
 
-/**
- * Strip HTML tagy, decode entity, normalizuj whitespace.
- * Funguje bez DOM (cheerio by byla další dependence).
- */
 function cleanText(html) {
   return html
-    .replace(/<div class="pnum">\d+<\/div>/g, "") // odstraň pnum div
-    .replace(/<[^>]+>/g, " ") // strip ostatní tagy
+    .replace(/<div class="pnum">\d+<\/div>/g, "")
+    .replace(/<[^>]+>/g, " ")
     .replace(/&nbsp;/g, " ")
     .replace(/&amp;/g, "&")
     .replace(/&lt;/g, "<")
@@ -58,11 +32,7 @@ function cleanText(html) {
     .trim();
 }
 
-/**
- * Parsuje jeden HTML soubor → { title, location, chunks: [{pnum, text}] }
- */
 function parseHtml(html) {
-  // Header
   const headerMatch = html.match(HEADER_RE);
   let title = "";
   let location = "";
@@ -74,7 +44,6 @@ function parseHtml(html) {
     location = h2 ? cleanText(h2[1]) : "";
   }
 
-  // Robustnější parsing přes balanced div counting (regex selhává na nested divs)
   const chunks = [];
   let currentPnum = 0;
   const wmbRegex =
@@ -92,7 +61,6 @@ function parseHtml(html) {
   return { title, location, chunks };
 }
 
-// === MAIN ===
 if (!fs.existsSync(inputDir)) {
   console.error(`Input dir does not exist: ${inputDir}`);
   console.error(`Create it and put {date}.html files inside.`);
@@ -129,9 +97,6 @@ for (const file of files) {
   }
 }
 
-// Vygeneruj index.ts který staticky importuje všechny per-soubor JSONy
-// a re-exportuje je jako jeden objekt { [dateKey]: MessageTexts }.
-// Tohle používá Next/webpack pro full-text search v MessagesBrowser.
 const indexEntries = files
   .map((f) => path.basename(f, ".html"))
   .filter((dateKey) => fs.existsSync(path.join(outputDir, `${dateKey}.json`)));

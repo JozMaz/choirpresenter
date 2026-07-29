@@ -1,10 +1,13 @@
-"use client";
-
+import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import localFont from "next/font/local";
 import "./globals.css";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { useState } from "react";
+import { THEME_INIT_SCRIPT } from "./lib/theme";
+
+export const metadata: Metadata = {
+  title: "ChoirPresenter",
+  description: "Presentation app for songs, Bible and sermons",
+};
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -16,8 +19,6 @@ const geistMono = Geist_Mono({
   subsets: ["latin"],
 });
 
-// next/font/local hostuje font souborů v JS bundle s relativními cestami →
-// funguje v Electron file:// protokolu (na rozdíl od @font-face url('/fonts/...')).
 const myriadPro = localFont({
   src: [
     {
@@ -45,16 +46,15 @@ export default function RootLayout({
 }: Readonly<{
   children: React.ReactNode;
 }>) {
-  const [queryClient] = useState(() => new QueryClient());
-
   return (
-    <html lang="en">
+    <html lang="en" data-theme="dark">
+      <head>
+        <script dangerouslySetInnerHTML={{ __html: THEME_INIT_SCRIPT }} />
+      </head>
       <body
         className={`${geistSans.variable} ${geistMono.variable} ${myriadPro.variable} antialiased`}
       >
-        <QueryClientProvider client={queryClient}>
-          {children}
-        </QueryClientProvider>
+        {children}
       </body>
     </html>
   );
