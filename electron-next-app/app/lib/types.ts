@@ -97,6 +97,9 @@ declare global {
         orgId: string,
         patch: { name?: string; revoked?: boolean },
       ) => Promise<AdminResult<{ org: OrgRecord }>>;
+      adminRotateToken: (
+        orgId: string,
+      ) => Promise<AdminResult<{ org: OrgRecord; token: string }>>;
       adminPatchCatalog: (catalog: unknown) => Promise<AdminResult<unknown>>;
       pickJsonFile: () => Promise<{ name: string; contents: string } | null>;
       dataClearLocal: () => Promise<boolean>;

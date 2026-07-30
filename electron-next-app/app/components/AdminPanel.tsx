@@ -80,6 +80,19 @@ export default function AdminPanel() {
     void loadOrgs();
   };
 
+  const rotateToken = async (org: OrgRecord) => {
+    setBusy(true);
+    const result = await window.api?.adminRotateToken(org.orgId);
+    setBusy(false);
+    if (!result?.ok || !result.data) {
+      setError(result?.error || "Could not issue a new token.");
+      return;
+    }
+    setError(null);
+    setIssuedToken(result.data.token);
+    void loadOrgs();
+  };
+
   const setRevoked = async (org: OrgRecord, revoked: boolean) => {
     setBusy(true);
     const result = await window.api?.adminPatchOrg(org.orgId, { revoked });

@@ -110,8 +110,10 @@ node scripts/manage-tokens.mjs revoke org_1a2b3c4d
 node scripts/manage-tokens.mjs restore org_1a2b3c4d
 ```
 
-The same operations will be available in the app's admin panel (Settings → Admin). Revoking is
-a single KV write; that organization's machines lose access on their next check.
+The same operations are available in the app's admin panel (Settings → Admin), which also has
+**New token** for an organization: it issues a fresh token, kills the old one and un-revokes the
+organization. Since only the hash is stored, that is the way to recover a lost token — there is
+nothing to read back.
 
 ### Legacy `WRITE_TOKENS`
 
@@ -134,6 +136,7 @@ GET   /auth/whoami            validate a token -> { role, orgId, name }
 GET   /admin/orgs             list organizations (admin)
 POST  /admin/orgs             create one, returns the token once (admin)
 PATCH /admin/orgs/{orgId}     rename or revoke (admin)
+POST  /admin/orgs/{orgId}/token  issue a new token, the old one dies (admin)
 PATCH /admin/catalog          set what is offered for download (admin)
 ```
 

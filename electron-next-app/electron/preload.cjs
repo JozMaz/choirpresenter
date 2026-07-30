@@ -40,6 +40,7 @@ contextBridge.exposeInMainWorld("api", {
     ipcRenderer.invoke("admin-create-org", name, role),
   adminPatchOrg: (orgId, patch) =>
     ipcRenderer.invoke("admin-patch-org", orgId, patch),
+  adminRotateToken: (orgId) => ipcRenderer.invoke("admin-rotate-token", orgId),
   adminPatchCatalog: (catalog) =>
     ipcRenderer.invoke("admin-patch-catalog", catalog),
   pickJsonFile: () => ipcRenderer.invoke("pick-json-file"),

@@ -80,6 +80,7 @@ Admin only:
 GET   /admin/orgs              list organizations
 POST  /admin/orgs              create one → returns the generated token once
 PATCH /admin/orgs/{orgId}      rename or revoke
+POST  /admin/orgs/{orgId}/token  issue a new token; the old one stops working
 PATCH /admin/catalog           mark songbooks/Bibles as offered for download
 ```
 

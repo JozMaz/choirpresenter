@@ -652,6 +652,10 @@ ipcMain.handle("admin-patch-org", (_, orgId, patch) =>
   adminRequest(`/admin/orgs/${encodeURIComponent(orgId)}`, "PATCH", patch || {}),
 );
 
+ipcMain.handle("admin-rotate-token", (_, orgId) =>
+  adminRequest(`/admin/orgs/${encodeURIComponent(orgId)}/token`, "POST", {}),
+);
+
 ipcMain.handle("admin-patch-catalog", (_, catalog) =>
   adminRequest("/admin/catalog", "PATCH", catalog),
 );

@@ -278,6 +278,28 @@ async function handlePatchOrg(
   return corsJson({ org: publicOrg(record) });
 }
 
+async function handleRotateToken(env: Env, orgId: string): Promise<Response> {
+  const raw = await env.TOKENS.get(`org:${orgId}`);
+  if (!raw) return corsJson({ error: "unknown organization" }, 404);
+  const record = JSON.parse(raw) as TokenRecord;
+
+  const token = randomToken();
+  const tokenHash = await sha256Hex(token);
+  const previousHash = record.tokenHash;
+
+  record.tokenHash = tokenHash;
+  record.revokedAt = null;
+  const json = JSON.stringify(record);
+
+  await env.TOKENS.put(`token:${tokenHash}`, json);
+  await env.TOKENS.put(`org:${orgId}`, json);
+  if (previousHash && previousHash !== tokenHash) {
+    await env.TOKENS.delete(`token:${previousHash}`);
+  }
+
+  return corsJson({ org: publicOrg(record), token });
+}
+
 async function handlePatchCatalog(env: Env, req: Request): Promise<Response> {
   const body = await req.json().catch(() => null);
   if (!body || typeof body !== "object") {
@@ -337,6 +359,13 @@ export default {
         return handlePatchOrg(env, req, decodeURIComponent(orgMatch[1]));
       }
 
+      const rotateMatch = url.pathname.match(
+        /^\/admin\/orgs\/([^/]+)\/token$/,
+      );
+      if (rotateMatch && method === "POST") {
+        return handleRotateToken(env, decodeURIComponent(rotateMatch[1]));
+      }
+
       if (url.pathname === "/admin/catalog" && method === "PATCH") {
         return handlePatchCatalog(env, req);
       }
@@ -364,6 +393,7 @@ export default {
           "GET /admin/orgs  (admin)",
           "POST /admin/orgs  (admin)",
           "PATCH /admin/orgs/{orgId}  (admin)",
+          "POST /admin/orgs/{orgId}/token  (admin)",
           "PATCH /admin/catalog  (admin)",
         ],
       });
