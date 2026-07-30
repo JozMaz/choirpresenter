@@ -4,6 +4,10 @@ export const LS_KEYS = {
   legacyCustomSongs: "app:customSongs:v1",
   out2Bg: "app:out2Bg",
   out2SecondLang: "app:out2SecondLang",
+  songFooter: "app:songFooter",
+  contentSelection: "app:contentSelection",
+  identity: "app:identity",
+  seenCatalog: "app:seenCatalog",
   layoutMain: "app:layout:main",
   layoutLeft: "app:layout:left",
 } as const;

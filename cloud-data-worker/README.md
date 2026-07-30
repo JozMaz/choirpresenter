@@ -67,23 +67,78 @@ In a browser try:
 
 If everything works → the backend is done and you can move on to the Electron app refactor.
 
-## Phase 2: Write tokens
+## Tokens and organizations
 
-Once writes are implemented, set the allowed write tokens:
+Access is controlled by a token registry in KV, not by a list of secrets. A token *is* the
+user: it says which organization you are and whether you are the admin. The same token works
+on any number of devices — identity lives in the token, not in the machine.
+
+| Role | Sees | Cloud writes |
+|---|---|---|
+| `admin` | everything | yes — adds and publishes songbooks |
+| `org` | everything published | no |
+| no token | nothing, the app stays locked | no |
+
+Organizations do not author shared songbooks. When one wants a songbook added, it sends the
+admin a JSON and the admin imports and publishes it.
+
+### 1. Create the KV namespace (one-time)
 
 ```bash
-npx wrangler secret put WRITE_TOKENS
+npx wrangler kv namespace create TOKENS
 ```
 
-Wrangler asks for the value — enter comma-separated tokens:
+Paste the printed id into `wrangler.toml` under the `TOKENS` binding, then `npm run deploy`.
+
+### 2. Create your admin token (one-time)
+
+The admin endpoints need an admin token, so the first one is written straight into KV:
+
+```bash
+node scripts/manage-tokens.mjs create-admin "Josh"
+```
+
+It prints the token exactly once — only its SHA-256 hash is stored. Paste it into
+ChoirPresenter → Settings on every device you want to administer from.
+
+### 3. Create organization tokens
+
+```bash
+node scripts/manage-tokens.mjs create-org "Zbór Jeffersonville"
+node scripts/manage-tokens.mjs list
+node scripts/manage-tokens.mjs revoke org_1a2b3c4d
+node scripts/manage-tokens.mjs restore org_1a2b3c4d
+```
+
+The same operations will be available in the app's admin panel (Settings → Admin). Revoking is
+a single KV write; that organization's machines lose access on their next check.
+
+### Legacy `WRITE_TOKENS`
+
+The old comma-separated secret still works and is treated as an admin token, so the current app
+keeps saving to the cloud during the migration. Remove the secret once every device uses a
+registry token:
+
+```bash
+npx wrangler secret delete WRITE_TOKENS
+```
+
+## API
 
 ```
-tok-josh-abc123,tok-pastor-xyz789
+GET   /manifest.json          version + hash of every file (public)
+GET   /catalog.json           what the app offers for download (public)
+GET   /data/{path}            a single data JSON (public)
+PUT   /data/songs/{path}      save a songbook (admin only)
+GET   /auth/whoami            validate a token -> { role, orgId, name }
+GET   /admin/orgs             list organizations (admin)
+POST  /admin/orgs             create one, returns the token once (admin)
+PATCH /admin/orgs/{orgId}     rename or revoke (admin)
+PATCH /admin/catalog          set what is offered for download (admin)
 ```
 
-A token is any random string (e.g. `openssl rand -hex 24`). Send each user their token and they paste it into ChoirPresenter Settings.
-
-The token is both the identifier and the secret. To revoke someone's write access → set `WRITE_TOKENS` again without their token; the deploy happens automatically.
+Reads stay unauthenticated and CDN-cached — everything in the bucket is content the admin chose
+to publish. The token gates the app, not the bucket.
 
 ## Updating data
 

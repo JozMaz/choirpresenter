@@ -25,6 +25,7 @@ import { getBibleVerseIndex, type FlatVerse } from "../lib/bibleIndex";
 import HighlightedText from "./HighlightedText";
 import { bibleGroupTint } from "../lib/bibleGroups";
 import Icon from "./Icon";
+import Dropdown, { type DropdownOption } from "./Dropdown";
 
 const VerseResultRow = memo(function VerseResultRow({
   v,
@@ -42,7 +43,7 @@ const VerseResultRow = memo(function VerseResultRow({
   return (
     <div
       onClick={() => onClick(v)}
-      className="flex items-start gap-2 px-2 py-0.5 bg-surface-secondary rounded border border-border hover:bg-border transition-colors cursor-pointer"
+      className="flex items-start gap-2 px-2 py-0.5 bg-surface-secondary rounded border border-border hover:bg-surface-hover transition-colors cursor-pointer"
     >
       <span className="text-xs font-semibold text-primary shrink-0 pt-0.5">
         {v.chapterIdx + 1}:{v.verseId}
@@ -99,6 +100,16 @@ export default function BibleBrowser({
 
   const bible = bibles[activeBible];
   const totalBooks = bible ? getTotalBookCount(bible) : 0;
+
+  const bibleOptions = useMemo<DropdownOption<BibleKey>[]>(
+    () =>
+      (Object.keys(BIBLE_LABELS) as BibleKey[]).map((b) => ({
+        value: b,
+        label: bibles[b] ? BIBLE_LABELS[b] : `${BIBLE_LABELS[b]} (unavailable)`,
+        disabled: !bibles[b],
+      })),
+    [bibles],
+  );
 
   const openBook = useMemo(() => {
     if (!bible || openBookIdx === null) return null;
@@ -219,22 +230,15 @@ export default function BibleBrowser({
   return (
     <div className="h-full flex flex-col bg-surface overflow-hidden">
       <div className="shrink-0 px-2 pt-2">
-        <select
+        <Dropdown
           value={activeBible}
-          onChange={(e) => {
-            setActiveBible(e.target.value as BibleKey);
+          options={bibleOptions}
+          onChange={(b) => {
+            setActiveBible(b);
             setOpenBookIdx(null);
             setActiveChapter(null);
           }}
-          className="w-full px-2 py-1 text-xs border border-border-secondary rounded bg-surface text-text-primary"
-        >
-          {(Object.keys(BIBLE_LABELS) as BibleKey[]).map((b) => (
-            <option key={b} value={b} disabled={!bibles[b]}>
-              {BIBLE_LABELS[b]}
-              {!bibles[b] ? " (unavailable)" : ""}
-            </option>
-          ))}
-        </select>
+        />
       </div>
 
       <div className="shrink-0 px-2 pt-1">
@@ -248,13 +252,13 @@ export default function BibleBrowser({
             onKeyDown={(e) => {
               if (e.key === "Escape") clearSearch();
             }}
-            className="w-full px-2 py-1 pr-7 text-xs border border-border-secondary rounded focus:outline-none focus:ring-1 focus:ring-primary bg-surface text-text-primary placeholder-text-muted"
+            className="w-full px-2 py-1 pr-7 text-xs border border-border-secondary rounded hover:border-primary/60 transition-colors focus:outline-none focus:ring-1 focus:ring-primary bg-surface text-text-primary placeholder-text-muted"
           />
           {isSearching && (
             <button
               onClick={clearSearch}
               title="Clear search (Esc)"
-              className="absolute right-1 top-1/2 -translate-y-1/2 w-5 h-5 flex items-center justify-center rounded text-text-muted hover:text-text-primary hover:bg-surface-secondary transition-colors"
+              className="absolute right-1 top-1/2 -translate-y-1/2 w-5 h-5 flex items-center justify-center rounded text-text-muted hover:text-text-primary hover:bg-surface-hover transition-colors"
             >
               <Icon name="X" size={12} />
             </button>
@@ -312,8 +316,8 @@ export default function BibleBrowser({
                   <button
                     onClick={() => toggleBook(bIdx)}
                     style={bibleGroupTint(bIdx, isBookOpen)}
-                    className={`w-full flex items-center gap-2 px-2 py-0.5 rounded transition-colors text-left ${
-                      isBookOpen ? "text-primary" : "text-text-secondary"
+                    className={`w-full flex items-center gap-2 px-2 py-1 mb-0.5 rounded text-left border-l-4 border-l-(--tint-border) bg-(--tint) hover:bg-(--tint-hover) transition-colors ${
+                      isBookOpen ? "text-primary" : "text-text-primary"
                     }`}
                   >
                     <Icon
@@ -335,10 +339,10 @@ export default function BibleBrowser({
                           <button
                             key={cIdx}
                             onClick={() => handleChapterClick(bIdx, cIdx)}
-                            className={`min-w-7 px-2 py-0.5 rounded text-xs transition-colors text-center ${
+                            className={`min-w-7 px-2 py-0.5 rounded text-xs text-center transition-colors ${
                               isActive
-                                ? "bg-primary text-white"
-                                : "text-text-secondary hover:bg-surface-secondary/50"
+                                ? "bg-primary text-white hover:bg-primary-hover"
+                                : "text-text-secondary hover:bg-surface-hover hover:text-text-primary"
                             }`}
                           >
                             {cIdx + 1}

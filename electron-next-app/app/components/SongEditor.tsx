@@ -24,6 +24,7 @@ export interface EditorState {
 
 interface SongEditorProps {
   initial?: EditorState;
+  canEditCloud?: boolean;
   lockTargetBook?: boolean;
   isEditing?: boolean;
   onSave: (state: EditorState) => void | Promise<void>;
@@ -61,10 +62,11 @@ const ALL_TARGETS: TargetBook[] = [
   "children",
 ];
 
-const BOOK_OPTIONS = ALL_TARGETS.map((b) => ({
-  value: b,
-  label: BOOK_LABEL[b],
-}));
+const bookOptionsFor = (canEditCloud: boolean) =>
+  (canEditCloud ? ALL_TARGETS : (["custom"] as TargetBook[])).map((b) => ({
+    value: b,
+    label: BOOK_LABEL[b],
+  }));
 
 const KEY_OPTIONS = [
   { value: "", label: "—" },
@@ -92,6 +94,7 @@ const SECTION_STYLE: Record<SectionType, string> = {
 
 export default function SongEditor({
   initial,
+  canEditCloud = false,
   lockTargetBook,
   isEditing,
   onSave,
@@ -214,9 +217,9 @@ export default function SongEditor({
   const isMoving = !!isEditing && !!initialBook && targetBook !== initialBook;
 
   const inputClass =
-    "w-full px-2 py-1 text-xs border border-border-secondary rounded focus:outline-none focus:ring-1 focus:ring-primary bg-surface text-text-primary placeholder-text-muted";
+    "w-full px-2 py-1 text-xs border border-border-secondary rounded hover:border-primary/60 focus:outline-none focus:ring-1 focus:ring-primary bg-surface text-text-primary placeholder-text-muted transition-colors";
   const areaClass =
-    "w-full px-2 py-1.5 text-xs border border-border-secondary rounded bg-surface text-text-primary focus:outline-none focus:ring-1 focus:ring-primary placeholder-text-muted leading-snug";
+    "w-full px-2 py-1.5 text-xs border border-border-secondary rounded bg-surface text-text-primary hover:border-primary/60 focus:outline-none focus:ring-1 focus:ring-primary placeholder-text-muted leading-snug transition-colors";
   const labelClass =
     "block text-[10px] font-semibold text-text-secondary uppercase tracking-wide mb-0.5";
 
@@ -230,14 +233,14 @@ export default function SongEditor({
           <div className="flex gap-1.5 shrink-0">
             <button
               onClick={onCancel}
-              className="px-2.5 py-1 text-xs font-semibold text-text-secondary border border-border rounded hover:bg-surface-secondary transition-colors"
+              className="px-2.5 py-1 text-xs font-semibold text-text-secondary border border-border rounded hover:bg-surface-hover transition-colors"
             >
               Cancel
             </button>
             <button
               onClick={handleSave}
               disabled={!canSave}
-              className="px-3 py-1 text-xs font-semibold bg-primary text-white rounded hover:bg-primary-hover disabled:bg-disabled disabled:cursor-not-allowed transition-colors"
+              className="px-3 py-1 text-xs font-semibold bg-primary text-white rounded hover:bg-primary-hover disabled:bg-disabled transition-colors"
             >
               {isMoving ? "Update & Move" : isEditing ? "Update" : "Save"}
             </button>
@@ -250,7 +253,7 @@ export default function SongEditor({
               <label className={labelClass}>Songbook</label>
               <Dropdown
                 value={targetBook}
-                options={BOOK_OPTIONS}
+                options={bookOptionsFor(canEditCloud)}
                 onChange={(v) => setTargetBook(v)}
                 disabled={lockTargetBook}
               />
@@ -304,7 +307,6 @@ export default function SongEditor({
               </div>
             </div>
           </div>
-
         </div>
 
         {sections.map((section, idx) => (
@@ -342,7 +344,7 @@ export default function SongEditor({
                 className={`px-2 py-0.5 rounded text-[11px] font-semibold transition-colors ${
                   section.showAlt
                     ? "bg-primary text-white hover:bg-primary-hover"
-                    : "bg-surface border border-border text-text-secondary hover:bg-surface-secondary"
+                    : "bg-surface border border-border text-text-secondary hover:bg-surface-hover"
                 }`}
                 title={
                   section.showAlt
@@ -414,7 +416,7 @@ export default function SongEditor({
                   {section.slidesLocked && (
                     <button
                       onClick={() => regenerateSlides(section.id)}
-                      className="text-[10px] px-1.5 py-0.5 rounded border border-border text-text-secondary hover:bg-surface transition-colors"
+                      className="text-[10px] px-1.5 py-0.5 rounded border border-border text-text-secondary hover:bg-surface-hover hover:text-text-primary transition-colors"
                       title="Discard manual edits and split again"
                     >
                       Regenerate
@@ -422,7 +424,7 @@ export default function SongEditor({
                   )}
                   <button
                     onClick={() => addSlide(section.id)}
-                    className="w-5 h-5 flex items-center justify-center rounded text-text-muted hover:bg-surface transition-colors"
+                    className="w-5 h-5 flex items-center justify-center rounded text-text-muted hover:bg-surface-hover hover:text-text-primary transition-colors"
                     title="Add slide"
                   >
                     <Icon name="Plus" size={12} />
@@ -438,7 +440,7 @@ export default function SongEditor({
                 {section.slides.map((slide, si) => (
                   <div
                     key={slide.id}
-                    className="border border-border rounded bg-surface"
+                    className="border border-border rounded bg-surface hover:border-border-secondary transition-colors"
                   >
                     <div className="flex items-center gap-1.5 px-1.5 py-0.5 border-b border-border">
                       <span className="text-[10px] font-bold text-text-muted">
@@ -486,7 +488,7 @@ export default function SongEditor({
 
         <button
           onClick={addSection}
-          className="w-full py-2 border-2 border-dashed border-border-secondary rounded-md text-text-muted text-xs font-semibold hover:border-primary hover:text-primary hover:bg-surface-secondary/50 transition-colors flex items-center justify-center gap-1.5"
+          className="w-full py-2 border-2 border-dashed border-border-secondary rounded-md text-text-muted text-xs font-semibold hover:border-primary hover:text-primary hover:bg-surface-hover transition-colors flex items-center justify-center gap-1.5"
         >
           <Icon name="Plus" size={14} />
           Add Section

@@ -77,7 +77,7 @@ export default function SongChunks({
                       className={`w-full text-left rounded border px-2 py-1.5 transition-colors ${
                         isActive
                           ? "bg-primary border-primary text-white"
-                          : "bg-surface-secondary/50 border-border text-text-secondary hover:bg-border"
+                          : "bg-surface-secondary/50 border-border text-text-secondary hover:bg-surface-hover"
                       }`}
                     >
                       {slide.primary.map((line, i) => (

@@ -32,7 +32,7 @@ export default function SongListRow({
   return (
     <div
       onClick={onShow}
-      className={`flex justify-between items-${hasSnippet ? "start" : "center"} gap-2 px-2 ${hasSnippet ? "py-1" : "py-0"} bg-surface-secondary rounded border border-border hover:bg-border transition-colors cursor-pointer leading-tight`}
+      className={`flex justify-between items-${hasSnippet ? "start" : "center"} gap-2 px-2 ${hasSnippet ? "py-1" : "py-0"} bg-surface-secondary rounded border border-border hover:bg-surface-hover transition-colors cursor-pointer leading-tight`}
     >
       <div className="flex flex-col gap-0.5 flex-1 min-w-0">
         <div className="flex items-center gap-3 min-w-0">
@@ -76,7 +76,7 @@ export default function SongListRow({
           }}
           disabled={isSelected}
           title={isSelected ? "Already selected" : "Add to selection"}
-          className="w-5 h-5 flex items-center justify-center rounded text-primary hover:bg-primary hover:text-white transition-colors disabled:text-disabled disabled:hover:bg-transparent disabled:cursor-not-allowed"
+          className="w-5 h-5 flex items-center justify-center rounded text-primary hover:bg-primary hover:text-white transition-colors disabled:text-disabled disabled:hover:bg-transparent"
         >
           <Icon name={isSelected ? "Check" : "ListPlus"} size={12} />
         </button>

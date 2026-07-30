@@ -6,6 +6,7 @@ import Icon from "./Icon";
 export interface DropdownOption<T extends string | number> {
   value: T;
   label: string;
+  disabled?: boolean;
 }
 
 interface DropdownProps<T extends string | number> {
@@ -54,7 +55,7 @@ export default function Dropdown<T extends string | number>({
         type="button"
         disabled={disabled}
         onClick={() => setOpen((v) => !v)}
-        className={`w-full flex items-center justify-between gap-1 px-2 py-1 text-xs rounded border border-border-secondary bg-surface text-text-primary hover:bg-surface-secondary disabled:opacity-60 disabled:cursor-not-allowed transition-colors ${buttonClassName}`}
+        className={`w-full flex items-center justify-between gap-1 px-2 py-1 text-xs rounded border border-border-secondary bg-surface text-text-primary hover:bg-surface-hover disabled:opacity-60 transition-colors ${buttonClassName}`}
       >
         <span className="truncate">{selected?.label ?? placeholder}</span>
         <Icon
@@ -72,6 +73,7 @@ export default function Dropdown<T extends string | number>({
               <button
                 key={String(o.value)}
                 type="button"
+                disabled={o.disabled}
                 onClick={() => {
                   onChange(o.value);
                   setOpen(false);
@@ -79,8 +81,8 @@ export default function Dropdown<T extends string | number>({
                 className={`w-full flex items-center justify-between gap-2 px-2.5 py-1.5 text-xs text-left transition-colors ${
                   isSel
                     ? "bg-primary text-white"
-                    : "text-text-secondary hover:bg-surface-secondary"
-                }`}
+                    : "text-text-secondary hover:bg-surface-hover"
+                } disabled:opacity-40 disabled:hover:bg-transparent`}
               >
                 <span className="truncate">{o.label}</span>
                 {isSel && <Icon name="Check" size={12} className="shrink-0" />}

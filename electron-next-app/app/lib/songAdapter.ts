@@ -1,4 +1,5 @@
 import type { ApiItem, SectionListItem, SongEntry, SongSource } from "./types";
+import { footerFieldsFor, type FooterConfig } from "./footerConfig";
 import { buildSectionsAndSlides } from "./songSchema";
 import { splitLines } from "./slideSplit";
 import { buildSearchIndex } from "./textUtils";
@@ -58,7 +59,9 @@ export function toApiItem(
     slides,
     fullText,
     searchIndex: buildSearchIndex(
-      [song.title, String(song.number ?? ""), fullText, secondaryText].join(" "),
+      [song.title, String(song.number ?? ""), fullText, secondaryText].join(
+        " ",
+      ),
     ),
   };
 }
@@ -73,12 +76,39 @@ export function getSongSections(item: ApiItem): SectionListItem[] {
   }));
 }
 
-export function buildSongFooter(song: ApiItem): string {
-  const parts: string[] = [];
-  if (song.title && song.source !== "roboczy") parts.push(song.title);
+export function getSelectionTitle(song: ApiItem | null): {
+  main: string;
+  sub: string;
+} {
+  if (!song) return { main: "Sections", sub: "" };
+  if (song.isBible && song.bibleMeta) {
+    const { bookName, chapter, bibleName } = song.bibleMeta;
+    return { main: `${bookName} ${chapter}`, sub: bibleName };
+  }
+  if (song.isMessage && song.messageMeta) {
+    const { title, dateKey, location } = song.messageMeta;
+    return {
+      main: title,
+      sub: location ? `${dateKey} · ${location}` : dateKey,
+    };
+  }
   const key = formatKey(song.key);
-  if (key) parts.push(`(${key})`);
-  if (song.number) parts.push(String(song.number));
-  if (song.source !== "custom" && song.bookName) parts.push(`(${song.bookName})`);
+  const numbered =
+    song.number != null ? `${song.number}. ${song.title}` : song.title;
+  return {
+    main: key ? `${numbered} (${key})` : numbered,
+    sub: song.source === "custom" ? "" : song.bookName,
+  };
+}
+
+export function buildSongFooter(song: ApiItem, config?: FooterConfig): string {
+  const fields = footerFieldsFor(song.source, config);
+  const parts: string[] = [];
+  if (song.title && fields.title) parts.push(song.title);
+  const key = formatKey(song.key);
+  if (key && fields.key) parts.push(`(${key})`);
+  if (song.number && fields.number) parts.push(String(song.number));
+  if (song.source !== "custom" && song.bookName)
+    parts.push(`(${song.bookName})`);
   return parts.join("  ");
 }

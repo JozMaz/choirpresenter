@@ -5,6 +5,7 @@
   --foreground: #ededed;
   --surface: #1f2937;
   --surface-secondary: #374151;
+  --surface-hover: #45536a;
   --border: #374151;
   --border-secondary: #4b5563;
   --text-primary: #f3f4f6;
@@ -28,6 +29,7 @@
   --foreground: #171717;
   --surface: #ffffff;
   --surface-secondary: #f9fafb;
+  --surface-hover: #e8ebf1;
   --border: #e5e7eb;
   --border-secondary: #d1d5db;
   --text-primary: #111827;
@@ -42,6 +44,7 @@
   --color-foreground: var(--foreground);
   --color-surface: var(--surface);
   --color-surface-secondary: var(--surface-secondary);
+  --color-surface-hover: var(--surface-hover);
   --color-border: var(--border);
   --color-border-secondary: var(--border-secondary);
   --color-text-primary: var(--text-primary);
@@ -95,6 +98,26 @@ body {
 }
 
 @layer base {
+  button:not(:disabled),
+  summary,
+  a[href],
+  select:not(:disabled),
+  input[type="checkbox"]:not(:disabled),
+  input[type="radio"]:not(:disabled),
+  input[type="range"]:not(:disabled),
+  [role="button"]:not([aria-disabled="true"]),
+  [role="option"]:not([aria-disabled="true"]),
+  [role="tab"]:not([aria-disabled="true"]) {
+    cursor: pointer;
+  }
+
+  button:disabled,
+  select:disabled,
+  input:disabled,
+  [aria-disabled="true"] {
+    cursor: not-allowed;
+  }
+
   *,
   *::before,
   *::after {

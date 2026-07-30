@@ -8,6 +8,13 @@ compatibility_date = "2026-01-01"
 binding = "DATA_BUCKET"
 bucket_name = "choirpresenter-data"
 
+# Token registry (token hash -> organization + role). Create it once with:
+#   npx wrangler kv namespace create TOKENS
+# then paste the printed id below.
+[[kv_namespaces]]
+binding = "TOKENS"
+id = "e7e9a84427a44e02acf57e473d3e752d"
+
 # Write tokens (čárkami oddělené). Nastav přes:
 #   wrangler secret put WRITE_TOKENS
 # pak zadej hodnotu jako: tok-jane,tok-pastor,tok-admin

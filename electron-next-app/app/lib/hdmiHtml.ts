@@ -1,5 +1,6 @@
 import type { ApiItem, SlideText } from "./types";
 import { buildSongFooter } from "./songAdapter";
+import type { FooterConfig } from "./footerConfig";
 
 const ESCAPES: Record<string, string> = {
   "&": "&amp;",
@@ -9,7 +10,8 @@ const ESCAPES: Record<string, string> = {
   "'": "&#39;",
 };
 
-const escapeHtml = (s: string): string => s.replace(/[&<>"']/g, (c) => ESCAPES[c]);
+const escapeHtml = (s: string): string =>
+  s.replace(/[&<>"']/g, (c) => ESCAPES[c]);
 
 const linesToHtml = (lines: string[]): string =>
   lines.map(escapeHtml).join("<br>");
@@ -19,6 +21,7 @@ interface BuildHdmiHtmlArgs {
   output1: SlideText;
   sectionLabel: string;
   isTranslation?: boolean;
+  footerConfig?: FooterConfig;
 }
 
 function buildCenteredHtml(
@@ -81,6 +84,7 @@ export function buildHdmiHtml({
   output1,
   sectionLabel,
   isTranslation,
+  footerConfig,
 }: BuildHdmiHtmlArgs): string {
   if (!currentSong || isEmpty(output1)) return "";
 
@@ -93,11 +97,13 @@ export function buildHdmiHtml({
   }
 
   if (currentSong.isMessage && currentSong.messageMeta) {
-    return buildCenteredHtml(output1.primary, "", sectionLabel, { justify: true });
+    return buildCenteredHtml(output1.primary, "", sectionLabel, {
+      justify: true,
+    });
   }
 
   const header = `<div class="header"><span class="sequence">${escapeHtml(sectionLabel)}</span><span class="sequence">${escapeHtml(currentSong.sequence || "")}</span></div>`;
-  const footer = `<div class="title-row"><span class="sequence">${escapeHtml(buildSongFooter(currentSong))}</span></div>`;
+  const footer = `<div class="title-row"><span class="sequence">${escapeHtml(buildSongFooter(currentSong, footerConfig))}</span></div>`;
 
   return (
     header +

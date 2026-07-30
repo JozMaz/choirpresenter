@@ -174,13 +174,13 @@ export default function SongbooksTree({
             onKeyDown={(e) => {
               if (e.key === "Escape") clearSearch();
             }}
-            className="w-full px-2 py-1 pr-7 text-xs border border-border-secondary rounded focus:outline-none focus:ring-1 focus:ring-primary bg-surface text-text-primary placeholder-text-muted"
+            className="w-full px-2 py-1 pr-7 text-xs border border-border-secondary rounded hover:border-primary/60 transition-colors focus:outline-none focus:ring-1 focus:ring-primary bg-surface text-text-primary placeholder-text-muted"
           />
           {isSearching && (
             <button
               onClick={clearSearch}
               title="Clear search (Esc)"
-              className="absolute right-1 top-1/2 -translate-y-1/2 w-5 h-5 flex items-center justify-center rounded text-text-muted hover:text-text-primary hover:bg-surface-secondary transition-colors"
+              className="absolute right-1 top-1/2 -translate-y-1/2 w-5 h-5 flex items-center justify-center rounded text-text-muted hover:text-text-primary hover:bg-surface-hover transition-colors"
             >
               <Icon name="X" size={12} />
             </button>
@@ -229,8 +229,8 @@ export default function SongbooksTree({
                     onClick={() => toggleBook(book.key)}
                     className={`w-full flex items-center gap-2 px-2 py-1 rounded transition-colors text-left ${
                       isOpen
-                        ? "bg-surface-secondary text-primary"
-                        : "text-text-secondary hover:bg-surface-secondary/50"
+                        ? "bg-surface-secondary text-primary hover:bg-surface-hover"
+                        : "text-text-primary hover:bg-surface-hover"
                     }`}
                   >
                     <Icon

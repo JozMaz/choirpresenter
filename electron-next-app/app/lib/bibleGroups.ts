@@ -1,3 +1,5 @@
+import type { CSSProperties } from "react";
+
 export type BibleGroupKey =
   | "torah"
   | "history"
@@ -33,10 +35,14 @@ export function getBibleGroup(flatIndex: number): BibleGroup {
   );
 }
 
-export function bibleGroupTint(flatIndex: number, strong: boolean) {
+export function bibleGroupTint(
+  flatIndex: number,
+  strong: boolean,
+): CSSProperties {
   const { color } = getBibleGroup(flatIndex);
   return {
-    backgroundColor: `${color}${strong ? "40" : "1f"}`,
-    borderLeft: `3px solid ${color}${strong ? "ff" : "b0"}`,
-  };
+    "--tint": `${color}${strong ? "73" : "42"}`,
+    "--tint-hover": `${color}${strong ? "8c" : "63"}`,
+    "--tint-border": `${color}${strong ? "ff" : "d9"}`,
+  } as CSSProperties;
 }

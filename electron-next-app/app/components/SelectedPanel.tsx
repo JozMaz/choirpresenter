@@ -84,7 +84,7 @@ export default function SelectedPanel({
             <div
               key={`${item.source}-${item.id}`}
               onClick={() => onShow(item)}
-              className="flex justify-between items-center gap-2 px-2 py-0.5 bg-surface-secondary rounded border border-border hover:bg-border transition-colors cursor-pointer"
+              className="flex justify-between items-center gap-2 px-2 py-0.5 bg-surface-secondary rounded border border-border hover:bg-surface-hover transition-colors cursor-pointer"
             >
               <span className="text-xs font-semibold text-primary truncate flex-1 min-w-0">
                 {item.number !== null ? `${item.number}. ` : ""}

@@ -70,7 +70,7 @@ export default function MonitorPicker({
         title={
           hdmiActive ? "Stop the output to change monitor" : "Choose monitor"
         }
-        className="flex items-center gap-1.5 text-xs px-2 py-1 rounded border border-border-secondary bg-surface text-text-primary hover:bg-surface-secondary disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+        className="flex items-center gap-1.5 text-xs px-2 py-1 rounded border border-border-secondary bg-surface text-text-primary hover:bg-surface-hover disabled:opacity-50 transition-colors"
       >
         <Icon name="Monitor" size={13} />
         <span className="truncate max-w-32">
@@ -101,7 +101,7 @@ export default function MonitorPicker({
                   className={`w-full flex items-center gap-2 px-3 py-2 text-left transition-colors ${
                     isSel
                       ? "bg-primary text-white"
-                      : "text-text-secondary hover:bg-surface-secondary"
+                      : "text-text-secondary hover:bg-surface-hover"
                   }`}
                 >
                   <Icon name="Monitor" size={14} />
@@ -131,7 +131,7 @@ export default function MonitorPicker({
         className={`text-xs px-2 py-1 rounded font-semibold transition-colors ${
           hdmiActive
             ? "bg-danger hover:bg-danger-hover text-white"
-            : "bg-primary hover:bg-primary-hover text-white disabled:opacity-40 disabled:cursor-not-allowed"
+            : "bg-primary hover:bg-primary-hover text-white disabled:opacity-40"
         }`}
       >
         {hdmiActive ? "Stop" : "Start"}

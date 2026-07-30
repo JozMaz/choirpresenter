@@ -15,6 +15,12 @@ export interface ChunkRow {
   idx: string;
 }
 
+export function messageDateYear(date: string): string {
+  const yy = Number(date.slice(0, 2));
+  if (!Number.isFinite(yy)) return "";
+  return String(yy >= 30 ? 1900 + yy : 2000 + yy);
+}
+
 let cachedTitles: MessageTitlesEntry[] | null = null;
 let cachedChunks: ChunkRow[] | null = null;
 let scheduled = false;

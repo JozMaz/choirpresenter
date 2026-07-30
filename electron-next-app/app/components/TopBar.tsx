@@ -26,7 +26,7 @@ export default function TopBar({ onOpenSettings }: TopBarProps) {
       </div>
       <button
         onClick={onOpenSettings}
-        className="flex items-center gap-1.5 px-2.5 py-1.5 rounded text-text-secondary hover:bg-surface-secondary hover:text-text-primary transition-colors"
+        className="flex items-center gap-1.5 px-2.5 py-1.5 rounded text-text-secondary hover:bg-surface-hover hover:text-text-primary transition-colors"
         title="Settings"
       >
         <Icon name="Settings" size={16} />

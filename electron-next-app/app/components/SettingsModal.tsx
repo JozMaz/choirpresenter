@@ -8,8 +8,34 @@ import {
 } from "../lib/cloudData";
 import { getThemePref, setThemePref, type ThemePref } from "../lib/theme";
 import { LS_KEYS } from "../lib/constants";
+import {
+  FOOTER_SOURCE_ORDER,
+  footerFieldsFor,
+  type FooterConfig,
+  type FooterFields,
+} from "../lib/footerConfig";
+import { SONGBOOK_NAMES } from "../lib/songAdapter";
+import type { Identity } from "../lib/access";
+import type { SongSource } from "../lib/types";
+import AdminPanel from "./AdminPanel";
+import Checkbox from "./Checkbox";
 import Icon from "./Icon";
 import Toggle from "./Toggle";
+
+const FOOTER_FIELDS: { key: keyof FooterFields; label: string }[] = [
+  { key: "number", label: "Number" },
+  { key: "title", label: "Title" },
+  { key: "key", label: "Key" },
+];
+
+const FOOTER_SOURCE_LABELS: Record<SongSource, string> = {
+  custom: "My Songs",
+  newSong: SONGBOOK_NAMES.newSong,
+  newSongPlGb: SONGBOOK_NAMES.newSongPlGb,
+  pielgrzym: SONGBOOK_NAMES.pielgrzym,
+  roboczy: SONGBOOK_NAMES.roboczy,
+  children: SONGBOOK_NAMES.children,
+};
 
 export const OUT2_BG_OPTIONS = [
   { value: "#000000", label: "Black", hint: "vMix luma key" },
@@ -30,6 +56,10 @@ interface SettingsModalProps {
   onChangeOut2Bg: (bg: string) => void;
   out2SecondLang: boolean;
   onChangeOut2SecondLang: (enabled: boolean) => void;
+  songFooter: FooterConfig;
+  onChangeSongFooter: (config: FooterConfig) => void;
+  identity: Identity | null;
+  onOpenContentPicker: () => void;
 }
 
 export default function SettingsModal({
@@ -39,6 +69,10 @@ export default function SettingsModal({
   onChangeOut2Bg,
   out2SecondLang,
   onChangeOut2SecondLang,
+  songFooter,
+  onChangeSongFooter,
+  identity,
+  onOpenContentPicker,
 }: SettingsModalProps) {
   const [token, setToken] = useState("");
   const [savedToken, setSavedToken] = useState<string | null>(null);
@@ -46,6 +80,7 @@ export default function SettingsModal({
   const [savedMsg, setSavedMsg] = useState<string | null>(null);
   const [theme, setTheme] = useState<ThemePref>("dark");
   const [appVersion, setAppVersion] = useState<string | null>(null);
+  const [adminView, setAdminView] = useState(false);
 
   const [exporting, setExporting] = useState(false);
   const [exportMsg, setExportMsg] = useState<string | null>(null);
@@ -85,6 +120,7 @@ export default function SettingsModal({
     setSyncProgress(null);
     setExportMsg(null);
     setTheme(getThemePref());
+    setAdminView(false);
     (async () => {
       const v = await window.api?.getAppVersion?.();
       setAppVersion(v ?? null);
@@ -168,279 +204,382 @@ export default function SettingsModal({
         onClick={(e) => e.stopPropagation()}
         className="w-full max-w-3xl max-h-[85vh] flex flex-col bg-surface rounded-lg border border-border shadow-xl"
       >
-        <div className="shrink-0 flex items-center justify-between px-6 pt-5 pb-3">
-          <h2 className="text-lg font-semibold text-text-primary">Settings</h2>
+        <div className="shrink-0 flex items-center gap-2 px-6 pt-5 pb-3">
+          {adminView && (
+            <button
+              onClick={() => setAdminView(false)}
+              title="Back to settings"
+              className="w-7 h-7 flex items-center justify-center rounded border border-border-secondary text-text-secondary transition-colors hover:bg-surface-hover hover:text-text-primary"
+            >
+              <Icon name="ChevronLeft" size={13} />
+            </button>
+          )}
+          <h2 className="flex-1 text-lg font-semibold text-text-primary">
+            {adminView ? "Admin" : "Settings"}
+          </h2>
+          {identity?.role === "admin" && !adminView && (
+            <button
+              onClick={() => setAdminView(true)}
+              className="flex items-center gap-1.5 px-2.5 py-1 text-xs font-semibold rounded border border-border-secondary text-text-secondary transition-colors hover:bg-surface-hover hover:text-text-primary"
+            >
+              <Icon name="ShieldCheck" size={13} />
+              Admin
+            </button>
+          )}
           <button
             onClick={onClose}
-            className="w-8 h-8 flex items-center justify-center rounded text-text-secondary hover:bg-surface-secondary hover:text-text-primary transition-colors"
+            className="w-8 h-8 flex items-center justify-center rounded text-text-secondary hover:bg-surface-hover hover:text-text-primary transition-colors"
           >
             <Icon name="X" size={16} />
           </button>
         </div>
 
-        <div className="flex-1 overflow-y-auto px-6 pb-5">
+        {adminView && <AdminPanel />}
+
+        <div
+          className={`flex-1 overflow-y-auto px-6 pb-5 ${adminView ? "hidden" : ""}`}
+        >
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-start">
-          <div className="space-y-4">
-          <div className={card}>
-            <label className="block text-xs font-semibold text-text-primary mb-2">
-              Appearance
-            </label>
-            <div className="flex items-center gap-1.5">
-              {THEME_OPTIONS.map((opt) => (
+            <div className="space-y-4">
+              <div className={card}>
+                <label className="block text-xs font-semibold text-text-primary mb-1">
+                  Access
+                </label>
+                <p className="text-[11px] text-text-muted mb-2 leading-snug">
+                  {identity
+                    ? `Signed in as ${identity.name}${
+                        identity.role === "admin" ? " (admin)" : ""
+                      }. The token works on any number of devices.`
+                    : "Not signed in."}
+                </p>
                 <button
-                  key={opt.value}
-                  onClick={() => {
-                    setThemePref(opt.value);
-                    setTheme(opt.value);
-                  }}
-                  className={`px-3 py-1 text-xs font-semibold rounded border transition-colors ${
-                    theme === opt.value
-                      ? "bg-primary border-primary text-white"
-                      : "bg-surface-secondary border-border text-text-secondary hover:text-text-primary"
-                  }`}
+                  onClick={onOpenContentPicker}
+                  className="px-3 py-1 text-xs font-semibold rounded border border-border bg-surface-secondary text-text-secondary transition-colors hover:bg-surface-hover hover:text-text-primary"
                 >
-                  {opt.label}
+                  Change downloaded content
                 </button>
-              ))}
-            </div>
-          </div>
-
-          <div className={card}>
-            <label className="block text-xs font-semibold text-text-primary mb-2">
-              Stream output
-            </label>
-            <Toggle
-              checked={out2SecondLang}
-              onChange={onChangeOut2SecondLang}
-              label="Second language on stream"
-              description="Off: stream shows only the main text, without divider and translation. Local output always shows both languages."
-              className="mb-3 pb-3 border-b border-border"
-            />
-            <p className="text-[11px] text-text-muted mb-2 leading-snug">
-              Background of the stream output. Black works with vMix luma key,
-              green/blue with chroma key.
-            </p>
-            <div className="flex items-center gap-1.5">
-              {OUT2_BG_OPTIONS.map((opt) => (
-                <button
-                  key={opt.value}
-                  onClick={() => onChangeOut2Bg(opt.value)}
-                  title={opt.hint}
-                  className={`flex items-center gap-1.5 px-3 py-1 text-xs font-semibold rounded border transition-colors ${
-                    out2Bg === opt.value
-                      ? "bg-primary border-primary text-white"
-                      : "bg-surface-secondary border-border text-text-secondary hover:text-text-primary"
-                  }`}
-                >
-                  <span
-                    className="w-3 h-3 rounded-sm border border-border-secondary"
-                    style={{ backgroundColor: opt.value }}
-                  />
-                  {opt.label}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          <div className={card}>
-            <label className="block text-xs font-semibold text-text-primary mb-1">
-              Backup
-            </label>
-            <p className="text-[11px] text-text-muted mb-2 leading-snug">
-              Export a copy of the data to a folder of your choice (e.g.
-              Downloads or Desktop). Do this from time to time so nothing gets
-              lost.
-            </p>
-            <div className="flex items-center gap-1.5 flex-wrap">
-              <button
-                onClick={() => runExport(["songs", "bibles", "messages"])}
-                disabled={exporting}
-                className="px-3 py-1 text-xs font-semibold bg-primary text-white rounded hover:bg-primary-hover transition-colors disabled:opacity-50 flex items-center gap-1.5"
-              >
-                <Icon name="FolderDown" size={12} />
-                Export all
-              </button>
-              <button
-                onClick={() => runExport(["songs"])}
-                disabled={exporting}
-                className="px-3 py-1 text-xs font-semibold bg-surface-secondary border border-border text-text-primary rounded hover:bg-border transition-colors disabled:opacity-50"
-              >
-                Songs
-              </button>
-              <button
-                onClick={() => runExport(["bibles"])}
-                disabled={exporting}
-                className="px-3 py-1 text-xs font-semibold bg-surface-secondary border border-border text-text-primary rounded hover:bg-border transition-colors disabled:opacity-50"
-              >
-                Bibles
-              </button>
-              <button
-                onClick={() => runExport(["messages"])}
-                disabled={exporting}
-                className="px-3 py-1 text-xs font-semibold bg-surface-secondary border border-border text-text-primary rounded hover:bg-border transition-colors disabled:opacity-50"
-              >
-                Messages
-              </button>
-            </div>
-            {exporting && (
-              <div className="text-[11px] text-text-muted mt-2 flex items-center gap-1">
-                <Icon name="Loader" size={12} className="animate-spin" />
-                Exporting…
               </div>
-            )}
-            {exportMsg && (
-              <div
-                className={`text-[11px] mt-2 break-all ${
-                  exportMsg.startsWith("Exported")
-                    ? "text-success"
-                    : "text-danger"
-                }`}
-              >
-                {exportMsg}
-              </div>
-            )}
-          </div>
-          </div>
 
-          <div className="space-y-4">
-          <div className={card}>
-            <label className="block text-xs font-semibold text-text-primary mb-1">
-              Cloud data
-            </label>
-            <div className="text-[11px] text-text-muted leading-snug space-y-0.5 mb-2">
-              <div>
-                Local version:{" "}
-                <span className="font-mono text-text-primary">
-                  {localVersion ?? "—"}
-                </span>
+              <div className={card}>
+                <label className="block text-xs font-semibold text-text-primary mb-2">
+                  Appearance
+                </label>
+                <div className="flex items-center gap-1.5">
+                  {THEME_OPTIONS.map((opt) => (
+                    <button
+                      key={opt.value}
+                      onClick={() => {
+                        setThemePref(opt.value);
+                        setTheme(opt.value);
+                      }}
+                      className={`px-3 py-1 text-xs font-semibold rounded border transition-colors ${
+                        theme === opt.value
+                          ? "bg-primary border-primary text-white"
+                          : "bg-surface-secondary border-border text-text-secondary hover:text-text-primary"
+                      }`}
+                    >
+                      {opt.label}
+                    </button>
+                  ))}
+                </div>
               </div>
-              <div>
-                Cloud version:{" "}
-                <span className="font-mono text-text-primary">
-                  {remoteVersion ?? "—"}
-                </span>
-              </div>
-            </div>
 
-            {updateAvailable && !syncBusy && (
-              <div className="mb-2 px-2 py-1.5 bg-primary/10 border border-primary/30 rounded text-[11px] text-primary">
-                New data available on cloud. Click below to update.
-              </div>
-            )}
-
-            <div className="flex items-center gap-2 flex-wrap">
-              {updateAvailable && !syncBusy && (
-                <button
-                  onClick={() => handleSync(false)}
-                  className="px-3 py-1 text-xs font-semibold bg-primary text-white rounded hover:bg-primary-hover transition-colors flex items-center gap-1.5"
-                >
-                  <Icon name="Download" size={12} />
-                  Update now
-                </button>
-              )}
-              <button
-                onClick={() => handleSync(true)}
-                disabled={syncBusy}
-                title="Re-download everything from cloud, ignoring local hash"
-                className="px-3 py-1 text-xs font-semibold bg-surface-secondary border border-border text-text-primary rounded hover:bg-border transition-colors disabled:opacity-50 flex items-center gap-1.5"
-              >
-                {syncBusy ? (
-                  <>
-                    <Icon name="Loader" size={12} className="animate-spin" />
-                    Syncing…
-                  </>
-                ) : (
-                  <>
-                    <Icon name="RefreshCw" size={12} />
-                    Force re-sync (full)
-                  </>
-                )}
-              </button>
-            </div>
-
-            {syncProgress && (
-              <div className="mt-2">
-                {syncProgress.phase === "downloading" && (
-                  <>
-                    <div className="w-full h-1.5 rounded bg-surface-secondary overflow-hidden">
-                      <div
-                        className="h-full bg-primary transition-all duration-200"
-                        style={{
-                          width: `${Math.round(syncProgress.ratio * 100)}%`,
-                        }}
+              <div className={card}>
+                <label className="block text-xs font-semibold text-text-primary mb-2">
+                  Stream output
+                </label>
+                <Toggle
+                  checked={out2SecondLang}
+                  onChange={onChangeOut2SecondLang}
+                  label="Second language on stream"
+                  description="Off: stream shows only the main text, without divider and translation. Local output always shows both languages."
+                  className="mb-3 pb-3 border-b border-border"
+                />
+                <p className="text-[11px] text-text-muted mb-2 leading-snug">
+                  Background of the stream output. Black works with vMix luma
+                  key, green/blue with chroma key.
+                </p>
+                <div className="flex items-center gap-1.5">
+                  {OUT2_BG_OPTIONS.map((opt) => (
+                    <button
+                      key={opt.value}
+                      onClick={() => onChangeOut2Bg(opt.value)}
+                      title={opt.hint}
+                      className={`flex items-center gap-1.5 px-3 py-1 text-xs font-semibold rounded border transition-colors ${
+                        out2Bg === opt.value
+                          ? "bg-primary border-primary text-white"
+                          : "bg-surface-secondary border-border text-text-secondary hover:text-text-primary"
+                      }`}
+                    >
+                      <span
+                        className="w-3 h-3 rounded-sm border border-border-secondary"
+                        style={{ backgroundColor: opt.value }}
                       />
-                    </div>
-                    <div className="text-[10px] text-text-muted mt-1 truncate">
-                      {syncProgress.currentFile}
-                    </div>
-                  </>
-                )}
-                {syncProgress.phase === "done" && (
-                  <div className="text-[11px] text-success flex items-center gap-1">
-                    <Icon name="Check" size={12} />
-                    {syncProgress.message ?? "Up to date"}
+                      {opt.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div className={card}>
+                <label className="block text-xs font-semibold text-text-primary mb-1">
+                  Song footer on the local output
+                </label>
+                <p className="text-[11px] text-text-muted mb-2 leading-snug">
+                  Which parts of the caption are printed under the lyrics, per
+                  songbook. Bible chapters and messages have their own caption
+                  and are not affected.
+                </p>
+                <div className="space-y-1">
+                  <div className="flex items-center gap-2 pb-1 border-b border-border">
+                    <span className="flex-1" />
+                    {FOOTER_FIELDS.map((f) => (
+                      <span
+                        key={f.key}
+                        className="w-12 text-[10px] font-semibold text-text-muted uppercase text-center"
+                      >
+                        {f.label}
+                      </span>
+                    ))}
+                  </div>
+                  {FOOTER_SOURCE_ORDER.map((source) => {
+                    const fields = footerFieldsFor(source, songFooter);
+                    return (
+                      <div key={source} className="flex items-center gap-2">
+                        <span className="flex-1 min-w-0 text-[11px] text-text-secondary truncate">
+                          {FOOTER_SOURCE_LABELS[source]}
+                        </span>
+                        {FOOTER_FIELDS.map((f) => (
+                          <span
+                            key={f.key}
+                            className="w-12 flex justify-center"
+                          >
+                            <Checkbox
+                              checked={fields[f.key]}
+                              onChange={(checked) =>
+                                onChangeSongFooter({
+                                  ...songFooter,
+                                  [source]: { ...fields, [f.key]: checked },
+                                })
+                              }
+                              label=""
+                              hint={`${f.label} — ${FOOTER_SOURCE_LABELS[source]}`}
+                            />
+                          </span>
+                        ))}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+
+              <div className={card}>
+                <label className="block text-xs font-semibold text-text-primary mb-1">
+                  Backup
+                </label>
+                <p className="text-[11px] text-text-muted mb-2 leading-snug">
+                  Export a copy of the data to a folder of your choice (e.g.
+                  Downloads or Desktop). Do this from time to time so nothing
+                  gets lost.
+                </p>
+                <div className="flex items-center gap-1.5 flex-wrap">
+                  <button
+                    onClick={() => runExport(["songs", "bibles", "messages"])}
+                    disabled={exporting}
+                    className="px-3 py-1 text-xs font-semibold bg-primary text-white rounded hover:bg-primary-hover transition-colors disabled:opacity-50 flex items-center gap-1.5"
+                  >
+                    <Icon name="FolderDown" size={12} />
+                    Export all
+                  </button>
+                  <button
+                    onClick={() => runExport(["songs"])}
+                    disabled={exporting}
+                    className="px-3 py-1 text-xs font-semibold bg-surface-secondary border border-border text-text-primary rounded hover:bg-surface-hover transition-colors disabled:opacity-50"
+                  >
+                    Songs
+                  </button>
+                  <button
+                    onClick={() => runExport(["bibles"])}
+                    disabled={exporting}
+                    className="px-3 py-1 text-xs font-semibold bg-surface-secondary border border-border text-text-primary rounded hover:bg-surface-hover transition-colors disabled:opacity-50"
+                  >
+                    Bibles
+                  </button>
+                  <button
+                    onClick={() => runExport(["messages"])}
+                    disabled={exporting}
+                    className="px-3 py-1 text-xs font-semibold bg-surface-secondary border border-border text-text-primary rounded hover:bg-surface-hover transition-colors disabled:opacity-50"
+                  >
+                    Messages
+                  </button>
+                </div>
+                {exporting && (
+                  <div className="text-[11px] text-text-muted mt-2 flex items-center gap-1">
+                    <Icon name="Loader" size={12} className="animate-spin" />
+                    Exporting…
                   </div>
                 )}
-                {syncProgress.phase === "error" && (
-                  <div className="text-[11px] text-danger flex items-center gap-1">
-                    <Icon name="TriangleAlert" size={12} />
-                    {syncProgress.message ?? "Sync failed"}
+                {exportMsg && (
+                  <div
+                    className={`text-[11px] mt-2 break-all ${
+                      exportMsg.startsWith("Exported")
+                        ? "text-success"
+                        : "text-danger"
+                    }`}
+                  >
+                    {exportMsg}
                   </div>
                 )}
               </div>
-            )}
-          </div>
-
-          <div className={card}>
-            <label className="block text-xs font-semibold text-text-primary mb-1">
-              Write token
-            </label>
-            <p className="text-[11px] text-text-muted mb-2 leading-snug">
-              Token to authorize saving song edits to the shared cloud
-              database. Without a token, edits are saved only locally on this
-              device. Ask the admin for a token.
-            </p>
-            <input
-              type="password"
-              placeholder={savedToken ? "•••••••••• (saved)" : "Paste your token"}
-              value={token}
-              onChange={(e) => setToken(e.target.value)}
-              className="w-full px-2 py-1.5 text-xs border border-border-secondary rounded focus:outline-none focus:ring-1 focus:ring-primary bg-surface text-text-primary placeholder-text-muted font-mono"
-            />
-            <div className="flex items-center gap-2 mt-2">
-              <button
-                onClick={handleSave}
-                disabled={saving}
-                className="px-3 py-1 text-xs font-semibold bg-primary text-white rounded hover:bg-primary-hover transition-colors disabled:opacity-50"
-              >
-                {saving ? "Saving..." : "Save"}
-              </button>
-              {savedToken && (
-                <button
-                  onClick={handleClear}
-                  className="px-3 py-1 text-xs font-semibold text-danger hover:bg-danger/10 rounded transition-colors"
-                >
-                  Clear
-                </button>
-              )}
-              {savedMsg && (
-                <span className="text-[11px] text-text-muted">{savedMsg}</span>
-              )}
             </div>
-            <p className="text-[11px] text-text-muted mt-3">
-              Status:{" "}
-              {savedToken ? (
-                <span className="text-success">
-                  Write access enabled — edits sync to cloud
-                </span>
-              ) : (
-                <span className="text-text-secondary">
-                  Read-only — edits stay on this device
-                </span>
-              )}
-            </p>
-          </div>
-          </div>
+
+            <div className="space-y-4">
+              <div className={card}>
+                <label className="block text-xs font-semibold text-text-primary mb-1">
+                  Cloud data
+                </label>
+                <div className="text-[11px] text-text-muted leading-snug space-y-0.5 mb-2">
+                  <div>
+                    Local version:{" "}
+                    <span className="font-mono text-text-primary">
+                      {localVersion ?? "—"}
+                    </span>
+                  </div>
+                  <div>
+                    Cloud version:{" "}
+                    <span className="font-mono text-text-primary">
+                      {remoteVersion ?? "—"}
+                    </span>
+                  </div>
+                </div>
+
+                {updateAvailable && !syncBusy && (
+                  <div className="mb-2 px-2 py-1.5 bg-primary/10 border border-primary/30 rounded text-[11px] text-primary">
+                    New data available on cloud. Click below to update.
+                  </div>
+                )}
+
+                <div className="flex items-center gap-2 flex-wrap">
+                  {updateAvailable && !syncBusy && (
+                    <button
+                      onClick={() => handleSync(false)}
+                      className="px-3 py-1 text-xs font-semibold bg-primary text-white rounded hover:bg-primary-hover transition-colors flex items-center gap-1.5"
+                    >
+                      <Icon name="Download" size={12} />
+                      Update now
+                    </button>
+                  )}
+                  <button
+                    onClick={() => handleSync(true)}
+                    disabled={syncBusy}
+                    title="Re-download everything from cloud, ignoring local hash"
+                    className="px-3 py-1 text-xs font-semibold bg-surface-secondary border border-border text-text-primary rounded hover:bg-surface-hover transition-colors disabled:opacity-50 flex items-center gap-1.5"
+                  >
+                    {syncBusy ? (
+                      <>
+                        <Icon
+                          name="Loader"
+                          size={12}
+                          className="animate-spin"
+                        />
+                        Syncing…
+                      </>
+                    ) : (
+                      <>
+                        <Icon name="RefreshCw" size={12} />
+                        Force re-sync (full)
+                      </>
+                    )}
+                  </button>
+                </div>
+
+                {syncProgress && (
+                  <div className="mt-2">
+                    {syncProgress.phase === "downloading" && (
+                      <>
+                        <div className="w-full h-1.5 rounded bg-surface-secondary overflow-hidden">
+                          <div
+                            className="h-full bg-primary transition-all duration-200"
+                            style={{
+                              width: `${Math.round(syncProgress.ratio * 100)}%`,
+                            }}
+                          />
+                        </div>
+                        <div className="text-[10px] text-text-muted mt-1 truncate">
+                          {syncProgress.currentFile}
+                        </div>
+                      </>
+                    )}
+                    {syncProgress.phase === "done" && (
+                      <div className="text-[11px] text-success flex items-center gap-1">
+                        <Icon name="Check" size={12} />
+                        {syncProgress.message ?? "Up to date"}
+                      </div>
+                    )}
+                    {syncProgress.phase === "error" && (
+                      <div className="text-[11px] text-danger flex items-center gap-1">
+                        <Icon name="TriangleAlert" size={12} />
+                        {syncProgress.message ?? "Sync failed"}
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+
+              <div className={card}>
+                <label className="block text-xs font-semibold text-text-primary mb-1">
+                  Write token
+                </label>
+                <p className="text-[11px] text-text-muted mb-2 leading-snug">
+                  Token to authorize saving song edits to the shared cloud
+                  database. Without a token, edits are saved only locally on
+                  this device. Ask the admin for a token.
+                </p>
+                <input
+                  type="password"
+                  placeholder={
+                    savedToken ? "•••••••••• (saved)" : "Paste your token"
+                  }
+                  value={token}
+                  onChange={(e) => setToken(e.target.value)}
+                  className="w-full px-2 py-1.5 text-xs border border-border-secondary rounded hover:border-primary/60 transition-colors focus:outline-none focus:ring-1 focus:ring-primary bg-surface text-text-primary placeholder-text-muted font-mono"
+                />
+                <div className="flex items-center gap-2 mt-2">
+                  <button
+                    onClick={handleSave}
+                    disabled={saving}
+                    className="px-3 py-1 text-xs font-semibold bg-primary text-white rounded hover:bg-primary-hover transition-colors disabled:opacity-50"
+                  >
+                    {saving ? "Saving..." : "Save"}
+                  </button>
+                  {savedToken && (
+                    <button
+                      onClick={handleClear}
+                      className="px-3 py-1 text-xs font-semibold text-danger hover:bg-danger/10 rounded transition-colors"
+                    >
+                      Clear
+                    </button>
+                  )}
+                  {savedMsg && (
+                    <span className="text-[11px] text-text-muted">
+                      {savedMsg}
+                    </span>
+                  )}
+                </div>
+                <p className="text-[11px] text-text-muted mt-3">
+                  Status:{" "}
+                  {savedToken ? (
+                    <span className="text-success">
+                      Write access enabled — edits sync to cloud
+                    </span>
+                  ) : (
+                    <span className="text-text-secondary">
+                      Read-only — edits stay on this device
+                    </span>
+                  )}
+                </p>
+              </div>
+            </div>
           </div>
 
           <div className="mt-4 pt-3 border-t border-border text-[11px] text-text-muted leading-relaxed">

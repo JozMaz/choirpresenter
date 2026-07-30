@@ -1,4 +1,12 @@
-import { app, BrowserWindow, dialog, screen, shell, ipcMain } from "electron";
+import {
+  app,
+  BrowserWindow,
+  dialog,
+  safeStorage,
+  screen,
+  shell,
+  ipcMain,
+} from "electron";
 import fs from "fs";
 import path from "path";
 import vm from "vm";
@@ -520,32 +528,64 @@ ipcMain.handle("write-songbook", async (_, book, data) => {
 
 const CONFIG_PATH = () => path.join(app.getPath("userData"), "config.json");
 
-async function readWriteTokenFromDisk() {
+async function readConfig() {
   try {
-    if (!fs.existsSync(CONFIG_PATH())) return null;
-    const raw = await fs.promises.readFile(CONFIG_PATH(), "utf8");
-    const cfg = JSON.parse(raw);
-    return typeof cfg.writeToken === "string" ? cfg.writeToken : null;
+    if (!fs.existsSync(CONFIG_PATH())) return {};
+    return JSON.parse(await fs.promises.readFile(CONFIG_PATH(), "utf8"));
   } catch {
-    return null;
+    return {};
   }
 }
 
-async function writeWriteTokenToDisk(token) {
-  let cfg = {};
-  try {
-    if (fs.existsSync(CONFIG_PATH())) {
-      cfg = JSON.parse(await fs.promises.readFile(CONFIG_PATH(), "utf8"));
-    }
-  } catch {
-    cfg = {};
-  }
-  cfg.writeToken = token || null;
+async function writeConfig(cfg) {
   await fs.promises.writeFile(
     CONFIG_PATH(),
     JSON.stringify(cfg, null, 2),
     "utf8",
   );
+}
+
+function canEncrypt() {
+  try {
+    return safeStorage.isEncryptionAvailable();
+  } catch {
+    return false;
+  }
+}
+
+async function readWriteTokenFromDisk() {
+  const cfg = await readConfig();
+
+  if (typeof cfg.tokenEnc === "string" && cfg.tokenEnc && canEncrypt()) {
+    try {
+      return safeStorage.decryptString(Buffer.from(cfg.tokenEnc, "base64"));
+    } catch (err) {
+      console.error("Token decryption failed:", err);
+      return null;
+    }
+  }
+
+  if (typeof cfg.writeToken === "string" && cfg.writeToken) {
+    await writeWriteTokenToDisk(cfg.writeToken);
+    return cfg.writeToken;
+  }
+
+  return null;
+}
+
+async function writeWriteTokenToDisk(token) {
+  const cfg = await readConfig();
+  delete cfg.writeToken;
+  delete cfg.tokenEnc;
+
+  if (token) {
+    if (canEncrypt()) {
+      cfg.tokenEnc = safeStorage.encryptString(token).toString("base64");
+    } else {
+      cfg.writeToken = token;
+    }
+  }
+  await writeConfig(cfg);
 }
 
 ipcMain.handle("get-write-token", async () => {
@@ -559,6 +599,94 @@ ipcMain.handle("set-write-token", async (_, token) => {
   } catch (err) {
     console.error("set-write-token failed:", err);
     return false;
+  }
+});
+
+ipcMain.handle("auth-whoami", async (_, candidate) => {
+  const token = candidate || (await readWriteTokenFromDisk());
+  if (!token) return { ok: false, status: 401 };
+  try {
+    const res = await fetch(`${CLOUD_DATA_URL}/auth/whoami`, {
+      headers: { Authorization: `Bearer ${token}` },
+      cache: "no-store",
+      signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
+    });
+    if (!res.ok) return { ok: false, status: res.status };
+    return { ok: true, identity: await res.json() };
+  } catch (err) {
+    console.error("whoami failed:", err);
+    return { ok: false, status: 0, offline: true };
+  }
+});
+
+async function adminRequest(pathname, method = "GET", body = null) {
+  const token = await readWriteTokenFromDisk();
+  if (!token) return { ok: false, status: 401, error: "No token stored" };
+  try {
+    const res = await fetch(`${CLOUD_DATA_URL}${pathname}`, {
+      method,
+      headers: {
+        Authorization: `Bearer ${token}`,
+        ...(body ? { "Content-Type": "application/json" } : {}),
+      },
+      body: body ? JSON.stringify(body) : undefined,
+      cache: "no-store",
+      signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
+    });
+    const text = await res.text();
+    if (!res.ok) return { ok: false, status: res.status, error: text };
+    return { ok: true, data: text ? JSON.parse(text) : null };
+  } catch (err) {
+    console.error(`admin ${method} ${pathname} failed:`, err);
+    return { ok: false, status: 0, error: String(err?.message || err) };
+  }
+}
+
+ipcMain.handle("admin-list-orgs", () => adminRequest("/admin/orgs"));
+
+ipcMain.handle("admin-create-org", (_, name, role) =>
+  adminRequest("/admin/orgs", "POST", { name, role: role || "org" }),
+);
+
+ipcMain.handle("admin-patch-org", (_, orgId, patch) =>
+  adminRequest(`/admin/orgs/${encodeURIComponent(orgId)}`, "PATCH", patch || {}),
+);
+
+ipcMain.handle("admin-patch-catalog", (_, catalog) =>
+  adminRequest("/admin/catalog", "PATCH", catalog),
+);
+
+ipcMain.handle("pick-json-file", async () => {
+  const result = await dialog.showOpenDialog(mainWindow, {
+    title: "Pick a songbook JSON",
+    properties: ["openFile"],
+    filters: [{ name: "JSON", extensions: ["json"] }],
+  });
+  if (result.canceled || result.filePaths.length === 0) return null;
+  try {
+    const file = result.filePaths[0];
+    return {
+      name: path.basename(file),
+      contents: await fs.promises.readFile(file, "utf8"),
+    };
+  } catch (err) {
+    console.error("pick-json-file failed:", err);
+    return null;
+  }
+});
+
+ipcMain.handle("data-fetch-catalog", async () => {
+  try {
+    const res = await fetch(`${CLOUD_DATA_URL}/catalog.json?_t=${Date.now()}`, {
+      cache: "no-store",
+      headers: { "Cache-Control": "no-cache", Pragma: "no-cache" },
+      signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
+    });
+    if (!res.ok) return null;
+    return await res.text();
+  } catch (err) {
+    console.error("catalog fetch failed:", err);
+    return null;
   }
 });
 

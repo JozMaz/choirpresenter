@@ -20,6 +20,28 @@ export interface MessageTextEntry {
   chunks: { pnum: number; text: string }[];
 }
 
+export interface OrgRecord {
+  orgId: string;
+  name: string;
+  role: "admin" | "org";
+  createdAt: string;
+  revokedAt: string | null;
+}
+
+export interface AdminResult<T> {
+  ok: boolean;
+  status?: number;
+  error?: string;
+  data?: T;
+}
+
+export interface WhoamiResult {
+  ok: boolean;
+  status?: number;
+  offline?: boolean;
+  identity?: { role: "admin" | "org"; orgId: string; name: string };
+}
+
 export interface CloudManifestEntry {
   hash: string;
   size: number;
@@ -63,6 +85,19 @@ declare global {
       dataWriteLocal: (relPath: string, contents: string) => Promise<boolean>;
       dataFetchCloud: (relPath: string) => Promise<string | null>;
       dataFetchManifest: () => Promise<string | null>;
+      dataFetchCatalog: () => Promise<string | null>;
+      authWhoami: (token?: string) => Promise<WhoamiResult>;
+      adminListOrgs: () => Promise<AdminResult<{ orgs: OrgRecord[] }>>;
+      adminCreateOrg: (
+        name: string,
+        role?: "admin" | "org",
+      ) => Promise<AdminResult<{ org: OrgRecord; token: string }>>;
+      adminPatchOrg: (
+        orgId: string,
+        patch: { name?: string; revoked?: boolean },
+      ) => Promise<AdminResult<{ org: OrgRecord }>>;
+      adminPatchCatalog: (catalog: unknown) => Promise<AdminResult<unknown>>;
+      pickJsonFile: () => Promise<{ name: string; contents: string } | null>;
       dataClearLocal: () => Promise<boolean>;
       exportData: (
         categories: string[],

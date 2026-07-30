@@ -32,6 +32,16 @@ contextBridge.exposeInMainWorld("api", {
     ipcRenderer.invoke("data-write-local", relPath, contents),
   dataFetchCloud: (relPath) => ipcRenderer.invoke("data-fetch-cloud", relPath),
   dataFetchManifest: () => ipcRenderer.invoke("data-fetch-manifest"),
+  dataFetchCatalog: () => ipcRenderer.invoke("data-fetch-catalog"),
+  authWhoami: (token) => ipcRenderer.invoke("auth-whoami", token),
+  adminListOrgs: () => ipcRenderer.invoke("admin-list-orgs"),
+  adminCreateOrg: (name, role) =>
+    ipcRenderer.invoke("admin-create-org", name, role),
+  adminPatchOrg: (orgId, patch) =>
+    ipcRenderer.invoke("admin-patch-org", orgId, patch),
+  adminPatchCatalog: (catalog) =>
+    ipcRenderer.invoke("admin-patch-catalog", catalog),
+  pickJsonFile: () => ipcRenderer.invoke("pick-json-file"),
   dataClearLocal: () => ipcRenderer.invoke("data-clear-local"),
   exportData: (categories, customSongsJson) =>
     ipcRenderer.invoke("export-data", categories, customSongsJson),

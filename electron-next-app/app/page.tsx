@@ -14,6 +14,17 @@ import type {
   SongSource,
 } from "./lib/types";
 import { LS_KEYS, TRANSLATION_LABEL_DEFAULT } from "./lib/constants";
+import { DEFAULT_FOOTER_CONFIG, type FooterConfig } from "./lib/footerConfig";
+import {
+  ALL_SONGBOOK_KEYS,
+  EMPTY_SELECTION,
+  newlyOffered,
+  normalizeSelection,
+  parseCatalog,
+  type Catalog,
+  type ContentSelection,
+  type Identity,
+} from "./lib/access";
 import {
   isMessageChunkIndexReady,
   prebuildMessageChunkIndex,
@@ -38,6 +49,10 @@ import { useSongbooks } from "./hooks/useSongbooks";
 import { useBibles } from "./hooks/useBibles";
 
 import ActionBar from "./components/ActionBar";
+import ContentPicker from "./components/ContentPicker";
+import Icon from "./components/Icon";
+import SelectionHeader from "./components/SelectionHeader";
+import TokenGate from "./components/TokenGate";
 import Library from "./components/Library";
 import TopBar from "./components/TopBar";
 import LoadingScreen from "./components/LoadingScreen";
@@ -82,7 +97,17 @@ interface EditorContext {
   lockTargetBook?: boolean;
 }
 
-function HomeContent() {
+interface HomeContentProps {
+  identity: Identity | null;
+  selection: ContentSelection;
+  onChangeSelection: (selection: ContentSelection) => void;
+}
+
+function HomeContent({
+  identity,
+  selection,
+  onChangeSelection,
+}: HomeContentProps) {
   const [selectedItems, setSelectedItems] = usePersistedState<ApiItem[]>(
     LS_KEYS.selectedItems,
     [],
@@ -126,6 +151,36 @@ function HomeContent() {
   const [hdmi2Active, setHdmi2Active] = useState(false);
   const [blackoutActive, setBlackoutActive] = useState(true);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [contentPickerOpen, setContentPickerOpen] = useState(false);
+  const [catalog, setCatalog] = useState<Catalog | null>(null);
+
+  const [freshOffers, setFreshOffers] = useState<string[]>([]);
+
+  useEffect(() => {
+    if (!contentPickerOpen || catalog) return;
+    (async () => {
+      setCatalog(parseCatalog((await window.api?.dataFetchCatalog()) ?? null));
+    })();
+  }, [contentPickerOpen, catalog]);
+
+  useEffect(() => {
+    (async () => {
+      const parsed = parseCatalog(
+        (await window.api?.dataFetchCatalog()) ?? null,
+      );
+      if (!parsed) return;
+      setCatalog(parsed);
+      if (localStorage.getItem(LS_KEYS.seenCatalog) === parsed.version) return;
+      const fresh = newlyOffered(parsed, selection);
+      if (fresh.length > 0) setFreshOffers(fresh);
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const dismissOffers = () => {
+    if (catalog) localStorage.setItem(LS_KEYS.seenCatalog, catalog.version);
+    setFreshOffers([]);
+  };
   const [out2Bg, setOut2Bg] = usePersistedState<string>(
     LS_KEYS.out2Bg,
     "#000000",
@@ -134,6 +189,10 @@ function HomeContent() {
   const [out2SecondLang, setOut2SecondLang] = usePersistedState<boolean>(
     LS_KEYS.out2SecondLang,
     false,
+  );
+  const [songFooter, setSongFooter] = usePersistedState<FooterConfig>(
+    LS_KEYS.songFooter,
+    DEFAULT_FOOTER_CONFIG,
   );
 
   const [mainSizes] = useState(() => readPaneSizes(LS_KEYS.layoutMain, 3));
@@ -148,6 +207,8 @@ function HomeContent() {
     "idle" | "saving" | "saved" | "local" | "error"
   >("idle");
   const [saveDetail, setSaveDetail] = useState<string | null>(null);
+
+  const canEditCloud = identity?.role === "admin";
 
   const toggleBlackout = () => setBlackoutActive((b) => !b);
 
@@ -311,14 +372,19 @@ function HomeContent() {
     if (player.currentSong?.id === song.id) {
       player.sendFirstPart(item);
     }
-    setSelectedItems((prev) =>
-      prev.map((i) => (i.id === song.id ? item : i)),
-    );
+    setSelectedItems((prev) => prev.map((i) => (i.id === song.id ? item : i)));
   };
 
   const handleSave = async (state: EditorState) => {
     const editing = editorContext?.editing;
     const target = state.targetBook;
+    if (target !== "custom" && !canEditCloud) {
+      showSaveStatus(
+        "error",
+        "Published songbooks can only be changed by the administrator.",
+      );
+      return;
+    }
     const sourceBook = editing?.source;
     const isMove = !!editing && sourceBook !== target;
 
@@ -453,7 +519,9 @@ function HomeContent() {
     if (!editing) return;
 
     if (editing.source === "custom") {
-      setCustomSongEntries(customSongEntries.filter((s) => s.id !== editing.id));
+      setCustomSongEntries(
+        customSongEntries.filter((s) => s.id !== editing.id),
+      );
     } else {
       await deleteSongById(editing.source, editing.id);
     }
@@ -500,6 +568,7 @@ function HomeContent() {
     output1: player.output1,
     sectionLabel,
     isTranslation: player.output1.isTranslation === true,
+    footerConfig: songFooter,
   });
   const hdmi2Html = buildHdmi2Html(
     player.liveSong,
@@ -574,10 +643,12 @@ function HomeContent() {
         player.navigatePart("prev");
       } else if (e.key === "ArrowRight") {
         e.preventDefault();
-        player.navigateSection("next");
+        if (player.currentSong.isMessage) player.navigateParagraph("next");
+        else player.navigateSection("next");
       } else if (e.key === "ArrowLeft") {
         e.preventDefault();
-        player.navigateSection("prev");
+        if (player.currentSong.isMessage) player.navigateParagraph("prev");
+        else player.navigateSection("prev");
       }
     };
     window.addEventListener("keydown", handleKeyDown);
@@ -589,209 +660,366 @@ function HomeContent() {
       {splashVisible && <LoadingScreen progress={loadingProgress} />}
       <TopBar onOpenSettings={() => setSettingsOpen(true)} />
       <div className="flex-1 min-h-0">
-      <Allotment
-        defaultSizes={mainSizes}
-        onDragEnd={savePaneSizes(LS_KEYS.layoutMain)}
-      >
-        <Allotment.Pane preferredSize={mainSizes ? undefined : "30%"}>
-          <Allotment
-            vertical
-            defaultSizes={leftSizes}
-            onDragEnd={savePaneSizes(LS_KEYS.layoutLeft)}
-          >
-            <Allotment.Pane preferredSize={leftSizes ? undefined : "40%"}>
-              <SelectedPanel
-                customSongs={customSongs}
-                selectedItems={selectedItems}
-                onShow={player.sendFirstPart}
-                onSelect={selectItem}
-                onRemove={(id, source) =>
-                  setSelectedItems(
-                    selectedItems.filter(
-                      (item) => !(item.id === id && item.source === source),
-                    ),
-                  )
-                }
-                onClearAll={() => setSelectedItems([])}
-              />
-            </Allotment.Pane>
+        <Allotment
+          defaultSizes={mainSizes}
+          onDragEnd={savePaneSizes(LS_KEYS.layoutMain)}
+        >
+          <Allotment.Pane preferredSize={mainSizes ? undefined : "30%"}>
+            <Allotment
+              vertical
+              defaultSizes={leftSizes}
+              onDragEnd={savePaneSizes(LS_KEYS.layoutLeft)}
+            >
+              <Allotment.Pane preferredSize={leftSizes ? undefined : "40%"}>
+                <SelectedPanel
+                  customSongs={customSongs}
+                  selectedItems={selectedItems}
+                  onShow={player.sendFirstPart}
+                  onSelect={selectItem}
+                  onRemove={(id, source) =>
+                    setSelectedItems(
+                      selectedItems.filter(
+                        (item) => !(item.id === id && item.source === source),
+                      ),
+                    )
+                  }
+                  onClearAll={() => setSelectedItems([])}
+                />
+              </Allotment.Pane>
 
-            <Allotment.Pane>
-              <Library
-                bibles={bibles}
-                biblesLoaded={biblesLoaded}
-                onShowBibleChapter={showBibleChapter}
-                onShowMessage={showMessage}
-                songbooksContent={
-                  <SongbooksTree
-                    dataByBook={dataByBook}
-                    bookNames={bookNames}
-                    selectedItems={selectedItems}
-                    onShow={player.sendFirstPart}
-                    onSelect={selectItem}
+              <Allotment.Pane>
+                <Library
+                  bibles={bibles}
+                  biblesLoaded={biblesLoaded}
+                  onShowBibleChapter={showBibleChapter}
+                  onShowMessage={showMessage}
+                  available={{
+                    songbooks: selection.songbooks.length > 0,
+                    bibles: selection.bibles.length > 0,
+                    messages: selection.messages,
+                  }}
+                  songbooksContent={
+                    <SongbooksTree
+                      dataByBook={dataByBook}
+                      bookNames={bookNames}
+                      selectedItems={selectedItems}
+                      onShow={player.sendFirstPart}
+                      onSelect={selectItem}
+                    />
+                  }
+                />
+              </Allotment.Pane>
+            </Allotment>
+          </Allotment.Pane>
+
+          <Allotment.Pane preferredSize={mainSizes ? undefined : "32%"}>
+            <div className="h-full flex flex-col bg-surface overflow-hidden">
+              {editorMode && editorContext ? (
+                <SongEditor
+                  initial={editorContext.initial}
+                  lockTargetBook={editorContext.lockTargetBook}
+                  isEditing={!!editorContext.editing}
+                  canEditCloud={canEditCloud}
+                  onSave={handleSave}
+                  onDelete={editorContext.editing ? handleDelete : undefined}
+                  onCancel={closeEditor}
+                />
+              ) : (
+                <>
+                  <SelectionHeader
+                    currentSong={player.currentSong}
+                    onUnselect={player.clearSelection}
+                    onRestoreSelection={player.restoreSelection}
+                    canRestoreSelection={player.canRestore}
                   />
-                }
-              />
-            </Allotment.Pane>
-          </Allotment>
-        </Allotment.Pane>
-
-        <Allotment.Pane preferredSize={mainSizes ? undefined : "32%"}>
-          <div className="h-full flex flex-col bg-surface overflow-hidden">
-            {editorMode && editorContext ? (
-              <SongEditor
-                initial={editorContext.initial}
-                lockTargetBook={editorContext.lockTargetBook}
-                isEditing={!!editorContext.editing}
-                onSave={handleSave}
-                onDelete={editorContext.editing ? handleDelete : undefined}
-                onCancel={closeEditor}
-              />
-            ) : player.currentSong &&
-              !player.currentSong.isBible &&
-              !player.currentSong.isMessage ? (
-              <SongChunks
-                currentSong={player.currentSong}
-                activeSlideIndex={player.slideIndex}
-                onGoToSlide={(idx) => {
-                  player.goToSlide(idx);
-                  setBlackoutActive(false);
-                }}
-              />
-            ) : (
-              <SectionsList
-                currentSong={player.currentSong}
-                activeSectionIndex={activeSectionIndex}
-                onGoToSection={(idx) => {
-                  player.goToSection(idx);
-                  setBlackoutActive(false);
-                }}
-              />
-            )}
-            <div className="shrink-0 border-t border-border">
-              <ActionBar
-                hasSong={!!player.currentSong}
-                blackoutActive={blackoutActive}
-                onToggleBlackout={toggleBlackout}
-                onNavigatePrev={() => player.navigatePart("prev")}
-                onNavigateNext={() => player.navigatePart("next")}
-                saveStatus={saveStatus}
-                saveDetail={saveDetail}
-                onToggleSelected={
-                  !editorMode &&
-                  player.currentSong &&
+                  {player.currentSong &&
                   !player.currentSong.isBible &&
-                  !player.currentSong.isMessage
-                    ? () => {
-                        const song = player.currentSong!;
-                        const isIn = selectedItems.some(
-                          (i) => i.id === song.id && i.source === song.source,
-                        );
-                        if (isIn) {
-                          setSelectedItems(
-                            selectedItems.filter(
-                              (i) =>
-                                !(i.id === song.id && i.source === song.source),
-                            ),
+                  !player.currentSong.isMessage ? (
+                    <SongChunks
+                      currentSong={player.currentSong}
+                      activeSlideIndex={player.slideIndex}
+                      onGoToSlide={(idx) => {
+                        player.goToSlide(idx);
+                        setBlackoutActive(false);
+                      }}
+                    />
+                  ) : (
+                    <SectionsList
+                      currentSong={player.currentSong}
+                      activeSectionIndex={activeSectionIndex}
+                      onGoToSection={(idx) => {
+                        player.goToSection(idx);
+                        setBlackoutActive(false);
+                      }}
+                    />
+                  )}
+                </>
+              )}
+              <div className="shrink-0 border-t border-border">
+                <ActionBar
+                  hasSong={!!player.currentSong}
+                  blackoutActive={blackoutActive}
+                  onToggleBlackout={toggleBlackout}
+                  onNavigatePrev={() => player.navigatePart("prev")}
+                  onNavigateNext={() => player.navigatePart("next")}
+                  saveStatus={saveStatus}
+                  saveDetail={saveDetail}
+                  onToggleSelected={
+                    !editorMode &&
+                    player.currentSong &&
+                    !player.currentSong.isBible &&
+                    !player.currentSong.isMessage
+                      ? () => {
+                          const song = player.currentSong!;
+                          const isIn = selectedItems.some(
+                            (i) => i.id === song.id && i.source === song.source,
                           );
-                        } else {
-                          selectItem(song);
+                          if (isIn) {
+                            setSelectedItems(
+                              selectedItems.filter(
+                                (i) =>
+                                  !(
+                                    i.id === song.id && i.source === song.source
+                                  ),
+                              ),
+                            );
+                          } else {
+                            selectItem(song);
+                          }
                         }
-                      }
-                    : undefined
-                }
-                isInSelected={
-                  !!player.currentSong &&
-                  selectedItems.some(
-                    (i) =>
-                      i.id === player.currentSong!.id &&
-                      i.source === player.currentSong!.source,
-                  )
-                }
-                onStartNewSong={
-                  editorMode ||
-                  player.currentSong?.isBible ||
-                  player.currentSong?.isMessage
-                    ? undefined
-                    : openEditorForNew
-                }
-                onEditCurrentSong={
-                  !editorMode &&
-                  player.currentSong &&
-                  !player.currentSong.isBible &&
-                  !player.currentSong.isMessage
-                    ? () => openEditorForExisting(player.currentSong!)
-                    : undefined
-                }
-              />
+                      : undefined
+                  }
+                  isInSelected={
+                    !!player.currentSong &&
+                    selectedItems.some(
+                      (i) =>
+                        i.id === player.currentSong!.id &&
+                        i.source === player.currentSong!.source,
+                    )
+                  }
+                  onStartNewSong={
+                    editorMode ||
+                    player.currentSong?.isBible ||
+                    player.currentSong?.isMessage
+                      ? undefined
+                      : openEditorForNew
+                  }
+                  onEditCurrentSong={
+                    !editorMode &&
+                    player.currentSong &&
+                    !player.currentSong.isBible &&
+                    !player.currentSong.isMessage &&
+                    (canEditCloud || player.currentSong.source === "custom")
+                      ? () => openEditorForExisting(player.currentSong!)
+                      : undefined
+                  }
+                />
+              </div>
             </div>
-          </div>
-        </Allotment.Pane>
+          </Allotment.Pane>
 
-        <Allotment.Pane>
-          <div className="h-full flex flex-col bg-surface overflow-hidden">
-            <div className="flex-1 min-h-0 overflow-y-auto px-2 py-2 flex">
-              <div className="m-auto w-full flex flex-col items-center gap-2">
-                <div className="w-full" style={{ maxWidth: "calc(36vh * 16 / 9)" }}>
-                  <StreamPreview
-                    html={hdmi2Html}
-                    positionText={positionText}
-                    blackoutActive={blackoutActive}
-                    bg={out2Bg}
-                    displays={displays}
-                    selectedDisplayId={selectedDisplayId2}
-                    setSelectedDisplayId={setSelectedDisplayId2}
-                    hdmiActive={hdmi2Active}
-                    onToggleHdmi={toggleHdmi2}
-                    onRefreshDisplays={refreshDisplays}
-                  />
-                </div>
-                <div className="w-full" style={{ maxWidth: "calc(36vh * 16 / 9)" }}>
-                  <LocalPreview
-                    html={hdmiHtml}
-                    blackoutActive={blackoutActive}
-                    displays={displays}
-                    selectedDisplayId={selectedDisplayId}
-                    setSelectedDisplayId={setSelectedDisplayId}
-                    hdmiActive={hdmiActive}
-                    onToggleHdmi={toggleHdmi}
-                    onRefreshDisplays={refreshDisplays}
-                  />
+          <Allotment.Pane>
+            <div className="h-full flex flex-col bg-surface overflow-hidden">
+              <div className="flex-1 min-h-0 overflow-y-auto px-2 py-2 flex">
+                <div className="m-auto w-full flex flex-col items-center gap-2">
+                  <div
+                    className="w-full"
+                    style={{ maxWidth: "calc(36vh * 16 / 9)" }}
+                  >
+                    <StreamPreview
+                      html={hdmi2Html}
+                      positionText={positionText}
+                      blackoutActive={blackoutActive}
+                      bg={out2Bg}
+                      displays={displays}
+                      selectedDisplayId={selectedDisplayId2}
+                      setSelectedDisplayId={setSelectedDisplayId2}
+                      hdmiActive={hdmi2Active}
+                      onToggleHdmi={toggleHdmi2}
+                      onRefreshDisplays={refreshDisplays}
+                    />
+                  </div>
+                  <div
+                    className="w-full"
+                    style={{ maxWidth: "calc(36vh * 16 / 9)" }}
+                  >
+                    <LocalPreview
+                      html={hdmiHtml}
+                      blackoutActive={blackoutActive}
+                      displays={displays}
+                      selectedDisplayId={selectedDisplayId}
+                      setSelectedDisplayId={setSelectedDisplayId}
+                      hdmiActive={hdmiActive}
+                      onToggleHdmi={toggleHdmi}
+                      onRefreshDisplays={refreshDisplays}
+                    />
+                  </div>
                 </div>
               </div>
             </div>
-          </div>
-        </Allotment.Pane>
-      </Allotment>
+          </Allotment.Pane>
+        </Allotment>
       </div>
       <SettingsModal
         open={settingsOpen}
         onClose={() => setSettingsOpen(false)}
+        identity={identity}
+        onOpenContentPicker={() => {
+          setSettingsOpen(false);
+          setContentPickerOpen(true);
+        }}
         out2Bg={out2Bg}
         onChangeOut2Bg={setOut2Bg}
         out2SecondLang={out2SecondLang}
+        songFooter={songFooter}
+        onChangeSongFooter={setSongFooter}
         onChangeOut2SecondLang={setOut2SecondLang}
       />
+      {freshOffers.length > 0 && !contentPickerOpen && (
+        <div className="fixed bottom-4 left-1/2 -translate-x-1/2 z-30 flex items-center gap-3 px-4 py-2.5 rounded-lg bg-surface border border-primary/40 shadow-xl">
+          <Icon name="Sparkles" size={15} className="shrink-0 text-primary" />
+          <span className="text-xs text-text-secondary">
+            New content available:{" "}
+            <span className="font-semibold text-text-primary">
+              {freshOffers.join(", ")}
+            </span>
+          </span>
+          <button
+            onClick={() => {
+              dismissOffers();
+              setContentPickerOpen(true);
+            }}
+            className="px-2.5 py-1 text-xs font-semibold rounded bg-primary text-white transition-colors hover:bg-primary-hover"
+          >
+            Download
+          </button>
+          <button
+            onClick={dismissOffers}
+            title="Not now"
+            className="w-6 h-6 flex items-center justify-center rounded text-text-muted hover:bg-surface-hover hover:text-text-primary transition-colors"
+          >
+            <Icon name="X" size={12} />
+          </button>
+        </div>
+      )}
+
+      {contentPickerOpen && (
+        <ContentPicker
+          asModal
+          catalog={catalog}
+          initial={selection}
+          onConfirm={(next) => {
+            setContentPickerOpen(false);
+            onChangeSelection(next);
+          }}
+          onSkip={() => setContentPickerOpen(false)}
+          onCancel={() => setContentPickerOpen(false)}
+        />
+      )}
     </main>
   );
 }
 
 import { bootstrap, type BootstrapProgress } from "./lib/cloudData";
 
+type Stage = "auth" | "picker" | "booting" | "ready";
+
+const LOCAL_DEV_IDENTITY: Identity = {
+  role: "admin",
+  orgId: "local",
+  name: "Local data mode",
+};
+
+const FULL_SELECTION: ContentSelection = {
+  songbooks: ALL_SONGBOOK_KEYS,
+  bibles: ["gdanska", "warszawska"],
+  messages: true,
+};
+
 export default function Home() {
-  const [bootDone, setBootDone] = useState(false);
+  const [stage, setStage] = useState<Stage>("auth");
+  const [identity, setIdentity] = useState<Identity | null>(null);
+  const [authMessage, setAuthMessage] = useState<string | null>(null);
+  const [catalog, setCatalog] = useState<Catalog | null>(null);
+  const [selection, setSelection] = useState<ContentSelection>(EMPTY_SELECTION);
   const [bootProgress, setBootProgress] = useState<BootstrapProgress>({
     phase: "init",
     ratio: 0,
   });
   const [bootError, setBootError] = useState<string | null>(null);
 
-  useEffect(() => {
-    bootstrap((p) => setBootProgress(p))
-      .then(() => setBootDone(true))
+  const startBoot = (sel: ContentSelection) => {
+    setSelection(sel);
+    localStorage.setItem(LS_KEYS.contentSelection, JSON.stringify(sel));
+    setStage("booting");
+    bootstrap((p) => setBootProgress(p), sel)
+      .then(() => setStage("ready"))
       .catch((err: Error) =>
         setBootError(err?.message || "Failed to bootstrap data."),
       );
+  };
+
+  const afterAuth = async (who: Identity) => {
+    setIdentity(who);
+    localStorage.setItem(LS_KEYS.identity, JSON.stringify(who));
+
+    const stored = localStorage.getItem(LS_KEYS.contentSelection);
+    if (stored) {
+      startBoot(normalizeSelection(JSON.parse(stored)));
+      return;
+    }
+    setCatalog(parseCatalog((await window.api?.dataFetchCatalog()) ?? null));
+    setStage("picker");
+  };
+
+  useEffect(() => {
+    (async () => {
+      const api = window.api;
+      if (!api) {
+        setStage("ready");
+        return;
+      }
+
+      if (await api.dataLocalMode?.()) {
+        setIdentity(LOCAL_DEV_IDENTITY);
+        startBoot(FULL_SELECTION);
+        return;
+      }
+
+      const result = await api.authWhoami();
+      if (result.ok && result.identity) {
+        await afterAuth(result.identity);
+        return;
+      }
+
+      const cachedRaw = localStorage.getItem(LS_KEYS.identity);
+      const serverTooOld = result.status === 404;
+      if (
+        (result.offline || serverTooOld) &&
+        cachedRaw &&
+        (await api.dataHasLocal())
+      ) {
+        const cached = JSON.parse(cachedRaw) as Identity;
+        setIdentity(cached);
+        startBoot(
+          normalizeSelection(
+            JSON.parse(
+              localStorage.getItem(LS_KEYS.contentSelection) ?? "null",
+            ),
+          ),
+        );
+        return;
+      }
+
+      if (result.status === 401 && cachedRaw) {
+        setAuthMessage(
+          "The token is no longer valid. Ask the administrator for a new one.",
+        );
+        localStorage.removeItem(LS_KEYS.identity);
+      }
+      setStage("auth");
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   if (bootError) {
@@ -810,7 +1038,27 @@ export default function Home() {
     );
   }
 
-  if (!bootDone) {
+  if (stage === "auth") {
+    return (
+      <TokenGate
+        initialMessage={authMessage}
+        onAuthorized={(who) => void afterAuth(who)}
+      />
+    );
+  }
+
+  if (stage === "picker") {
+    return (
+      <ContentPicker
+        catalog={catalog}
+        initial={selection}
+        onConfirm={startBoot}
+        onSkip={() => startBoot(EMPTY_SELECTION)}
+      />
+    );
+  }
+
+  if (stage === "booting") {
     const label =
       bootProgress.phase === "downloading"
         ? `Downloading data — ${bootProgress.currentFile ?? ""}`
@@ -824,5 +1072,11 @@ export default function Home() {
     );
   }
 
-  return <HomeContent />;
+  return (
+    <HomeContent
+      identity={identity}
+      selection={selection}
+      onChangeSelection={startBoot}
+    />
+  );
 }

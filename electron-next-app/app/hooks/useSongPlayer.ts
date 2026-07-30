@@ -12,12 +12,18 @@ interface SongPlayerState {
   currentSong: ApiItem | null;
   slideIndex: number;
   live: LivePosition | null;
+  restorePoint: {
+    currentSong: ApiItem | null;
+    slideIndex: number;
+    live: LivePosition | null;
+  } | null;
 }
 
 const emptyState: SongPlayerState = {
   currentSong: null,
   slideIndex: -1,
   live: null,
+  restorePoint: null,
 };
 
 const EMPTY_TEXT: SlideText = { primary: [] };
@@ -26,7 +32,12 @@ export function useSongPlayer() {
   const [state, setState] = useState<SongPlayerState>(emptyState);
 
   const loadSong = (item: ApiItem) => {
-    setState((prev) => ({ ...prev, currentSong: item, slideIndex: -1 }));
+    setState((prev) => ({
+      ...prev,
+      currentSong: item,
+      slideIndex: -1,
+      restorePoint: null,
+    }));
   };
 
   const navigatePart = (direction: "next" | "prev") => {
@@ -35,7 +46,12 @@ export function useSongPlayer() {
       if (!song || song.slides.length === 0) return prev;
 
       if (prev.slideIndex < 0) {
-        return { ...prev, slideIndex: 0, live: { song, slideIndex: 0 } };
+        return {
+          ...prev,
+          restorePoint: null,
+          slideIndex: 0,
+          live: { song, slideIndex: 0 },
+        };
       }
 
       const last = song.slides.length - 1;
@@ -51,7 +67,12 @@ export function useSongPlayer() {
           ? song.sections[song.slides[candidate].sectionIndex].slideStart
           : candidate;
       }
-      return { ...prev, slideIndex: next, live: { song, slideIndex: next } };
+      return {
+        ...prev,
+        restorePoint: null,
+        slideIndex: next,
+        live: { song, slideIndex: next },
+      };
     });
   };
 
@@ -61,7 +82,12 @@ export function useSongPlayer() {
       if (!song) return prev;
       if (sectionIndex < 0 || sectionIndex >= song.sections.length) return prev;
       const slideIndex = song.sections[sectionIndex].slideStart;
-      return { ...prev, slideIndex, live: { song, slideIndex } };
+      return {
+        ...prev,
+        restorePoint: null,
+        slideIndex,
+        live: { song, slideIndex },
+      };
     });
   };
 
@@ -85,7 +111,88 @@ export function useSongPlayer() {
               : current - 1;
       }
       const slideIndex = song.sections[sectionIndex].slideStart;
-      return { ...prev, slideIndex, live: { song, slideIndex } };
+      return {
+        ...prev,
+        restorePoint: null,
+        slideIndex,
+        live: { song, slideIndex },
+      };
+    });
+  };
+
+  const navigateParagraph = (direction: "next" | "prev") => {
+    setState((prev) => {
+      const song = prev.currentSong;
+      if (!song || song.slides.length === 0) return prev;
+      const pnums = song.messageMeta?.pnums;
+      if (!pnums || pnums.length === 0) return prev;
+      if (prev.slideIndex < 0) {
+        return {
+          ...prev,
+          restorePoint: null,
+          slideIndex: 0,
+          live: { song, slideIndex: 0 },
+        };
+      }
+
+      const current = song.slides[prev.slideIndex].sectionIndex;
+      const paragraphStart = (chunkIdx: number) => {
+        const pnum = pnums[chunkIdx];
+        let start = chunkIdx;
+        while (start > 0 && pnums[start - 1] === pnum) start--;
+        return start;
+      };
+
+      let target: number;
+      if (direction === "next") {
+        const pnum = pnums[current];
+        let j = current;
+        while (j < pnums.length && pnums[j] === pnum) j++;
+        target = j >= pnums.length ? 0 : j;
+      } else {
+        const start = paragraphStart(current);
+        target =
+          start < current
+            ? start
+            : paragraphStart(start > 0 ? start - 1 : pnums.length - 1);
+      }
+
+      const slideIndex = song.sections[target]?.slideStart ?? 0;
+      return {
+        ...prev,
+        restorePoint: null,
+        slideIndex,
+        live: { song, slideIndex },
+      };
+    });
+  };
+
+  const clearSelection = () => {
+    setState((prev) => {
+      if (!prev.currentSong && !prev.live) return prev;
+      return {
+        currentSong: null,
+        slideIndex: -1,
+        live: null,
+        restorePoint: {
+          currentSong: prev.currentSong,
+          slideIndex: prev.slideIndex,
+          live: prev.live,
+        },
+      };
+    });
+  };
+
+  const restoreSelection = () => {
+    setState((prev) => {
+      const point = prev.restorePoint;
+      if (!point) return prev;
+      return {
+        currentSong: point.currentSong,
+        slideIndex: point.slideIndex,
+        live: point.live,
+        restorePoint: null,
+      };
     });
   };
 
@@ -94,7 +201,12 @@ export function useSongPlayer() {
       const song = prev.currentSong;
       if (!song) return prev;
       if (slideIndex < 0 || slideIndex >= song.slides.length) return prev;
-      return { ...prev, slideIndex, live: { song, slideIndex } };
+      return {
+        ...prev,
+        restorePoint: null,
+        slideIndex,
+        live: { song, slideIndex },
+      };
     });
   };
 
@@ -122,8 +234,12 @@ export function useSongPlayer() {
     sendFirstPart: loadSong,
     navigatePart,
     navigateSection,
+    navigateParagraph,
     goToSection,
     goToSlide,
+    clearSelection,
+    restoreSelection,
+    canRestore: state.restorePoint !== null,
   };
 }
 
