@@ -17,18 +17,20 @@ import { SONGBOOK_KEYS } from "../hooks/useSongbooks";
 import Icon from "./Icon";
 import SongListRow from "./SongListRow";
 
-const MAX_RESULTS_PER_BOOK = 50;
+const MAX_SEARCH_RESULTS = 100;
 
 const SongSearchRow = memo(function SongSearchRow({
   item,
   tokens,
   isSelected,
+  bookLabel,
   onShow,
   onSelect,
 }: {
   item: ApiItem;
   tokens: string[];
   isSelected: boolean;
+  bookLabel: string;
   onShow: (item: ApiItem) => void;
   onSelect: (item: ApiItem) => void;
 }) {
@@ -48,6 +50,7 @@ const SongSearchRow = memo(function SongSearchRow({
       onSelect={() => onSelect(item)}
       titleHl={titleHl}
       bodyHl={bodyHl}
+      bookLabel={bookLabel}
     />
   );
 });
@@ -102,23 +105,20 @@ export default function SongbooksTree({
 
   const isSearching = normalizeSearch(deferredTerm).length > 0;
 
-  const [searchByBook, setSearchByBook] = useState<
-    { key: SongBookKey; label: string; items: ApiItem[]; truncated: boolean }[]
+  const [searchResults, setSearchResults] = useState<
+    { item: ApiItem; bookLabel: string }[]
   >([]);
+  const [searchTotal, setSearchTotal] = useState(0);
 
   useEffect(() => {
     if (tokens.length === 0) {
-      setSearchByBook([]);
+      setSearchResults([]);
+      setSearchTotal(0);
       return;
     }
     let cancelled = false;
     (async () => {
-      const out: {
-        key: SongBookKey;
-        label: string;
-        items: ApiItem[];
-        truncated: boolean;
-      }[] = [];
+      const all: { item: ApiItem; bookLabel: string; score: number }[] = [];
       for (const key of SONGBOOK_KEYS) {
         const scored = await scoreItemsAsync(
           dataByBook[key] || [],
@@ -127,17 +127,19 @@ export default function SongbooksTree({
           () => cancelled,
         );
         if (!scored) return;
-        out.push({
-          key,
-          label: bookNames[key],
-          items: scored
-            .slice(0, MAX_RESULTS_PER_BOOK)
-            .map(({ item }) => item),
-          truncated: scored.length > MAX_RESULTS_PER_BOOK,
-        });
+        for (const { item, score } of scored) {
+          all.push({ item, bookLabel: bookNames[key], score });
+        }
       }
+      all.sort((a, b) => b.score - a.score);
       startTransition(() => {
-        if (!cancelled) setSearchByBook(out);
+        if (cancelled) return;
+        setSearchTotal(all.length);
+        setSearchResults(
+          all
+            .slice(0, MAX_SEARCH_RESULTS)
+            .map(({ item, bookLabel }) => ({ item, bookLabel })),
+        );
       });
     })();
     return () => {
@@ -145,17 +147,15 @@ export default function SongbooksTree({
     };
   }, [tokens, dataByBook, bookNames]);
 
-  const filteredByBook = useMemo(() => {
-    if (tokens.length > 0) return searchByBook;
-    return SONGBOOK_KEYS.map((key) => ({
-      key,
-      label: bookNames[key],
-      items: dataByBook[key] || [],
-      truncated: false,
-    }));
-  }, [tokens, searchByBook, dataByBook, bookNames]);
-
-  const totalResults = filteredByBook.reduce((s, b) => s + b.items.length, 0);
+  const browseBooks = useMemo(
+    () =>
+      SONGBOOK_KEYS.map((key) => ({
+        key,
+        label: bookNames[key],
+        items: dataByBook[key] || [],
+      })),
+    [dataByBook, bookNames],
+  );
 
   const toggleBook = (key: SongBookKey) => {
     setOpenBook((prev) => (prev === key ? null : key));
@@ -190,48 +190,61 @@ export default function SongbooksTree({
 
       {isSearching && (
         <div className="shrink-0 px-2 pt-1 text-[10px] text-text-muted">
-          Results: {totalResults}
+          Results: {searchTotal}
         </div>
       )}
 
       <div className="flex-1 overflow-y-auto px-2 pt-2 pb-2 mt-1">
-        <div>
-          {filteredByBook.map((book) => {
-            const isOpen = isSearching ? book.items.length > 0 : openBook === book.key;
-            if (isSearching && book.items.length === 0) return null;
+        {isSearching ? (
+          <div className="space-y-0.5">
+            {searchResults.length === 0 && (
+              <p className="text-text-muted text-xs text-center py-2">
+                No results
+              </p>
+            )}
+            {searchResults.map(({ item, bookLabel }, idx) => (
+              <SongSearchRow
+                key={`${item.source}-${item.id}-${idx}`}
+                item={item}
+                tokens={tokens}
+                isSelected={isSelected(item)}
+                bookLabel={bookLabel}
+                onShow={onShow}
+                onSelect={onSelect}
+              />
+            ))}
+            {searchTotal > MAX_SEARCH_RESULTS && (
+              <p className="text-text-muted text-[10px] text-center py-1">
+                (showing first {MAX_SEARCH_RESULTS} results)
+              </p>
+            )}
+          </div>
+        ) : (
+          <div>
+            {browseBooks.map((book) => {
+              const isOpen = openBook === book.key;
+              return (
+                <div key={book.key} className="mb-1">
+                  <button
+                    onClick={() => toggleBook(book.key)}
+                    className={`w-full flex items-center gap-2 px-2 py-1 rounded transition-colors text-left ${
+                      isOpen
+                        ? "bg-surface-secondary text-primary"
+                        : "text-text-secondary hover:bg-surface-secondary/50"
+                    }`}
+                  >
+                    <Icon
+                      name={isOpen ? "ChevronDown" : "ChevronRight"}
+                      size={12}
+                    />
+                    <span className="text-xs font-semibold">
+                      {book.label} ({book.items.length})
+                    </span>
+                  </button>
 
-            return (
-              <div key={book.key} className="mb-1">
-                <button
-                  onClick={() => toggleBook(book.key)}
-                  className={`w-full flex items-center gap-2 px-2 py-1 rounded transition-colors text-left ${
-                    isOpen
-                      ? "bg-surface-secondary text-primary"
-                      : "text-text-secondary hover:bg-surface-secondary/50"
-                  }`}
-                >
-                  <Icon
-                    name={isOpen ? "ChevronDown" : "ChevronRight"}
-                    size={12}
-                  />
-                  <span className="text-xs font-semibold">
-                    {book.label} ({book.items.length}{book.truncated ? "+" : ""})
-                  </span>
-                </button>
-
-                {isOpen && (
-                  <div className="ml-3 mt-0.5 mb-1 border-l border-border pl-2 space-y-0.5">
-                    {book.items.map((item, idx) =>
-                      isSearching ? (
-                        <SongSearchRow
-                          key={`${item.source}-${item.id}-${idx}`}
-                          item={item}
-                          tokens={tokens}
-                          isSelected={isSelected(item)}
-                          onShow={onShow}
-                          onSelect={onSelect}
-                        />
-                      ) : (
+                  {isOpen && (
+                    <div className="ml-3 mt-0.5 mb-1 border-l border-border pl-2 space-y-0.5">
+                      {book.items.map((item, idx) => (
                         <SongListRow
                           key={`${item.source}-${item.id}-${idx}`}
                           item={item}
@@ -239,24 +252,14 @@ export default function SongbooksTree({
                           onShow={() => onShow(item)}
                           onSelect={() => onSelect(item)}
                         />
-                      ),
-                    )}
-                    {book.truncated && (
-                      <p className="text-text-muted text-[10px] text-center py-1">
-                        (showing first {MAX_RESULTS_PER_BOOK} results)
-                      </p>
-                    )}
-                    {book.items.length === 0 && (
-                      <p className="text-text-muted text-xs text-center py-1">
-                        No results
-                      </p>
-                    )}
-                  </div>
-                )}
-              </div>
-            );
-          })}
-        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        )}
       </div>
     </div>
   );

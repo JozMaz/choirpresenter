@@ -34,9 +34,8 @@ export function scoreMatch(idx: string, tokens: string[]): number {
     }
     if (found) present++;
   }
-  if (total === 0 || present === 0) return 0;
-  const run = total > 1 && present > 1 ? longestRun(idx, tokens) : 0;
-  if (present < total && run < 2) return 0;
+  if (total === 0 || present < total) return 0;
+  const run = total > 1 ? longestRun(idx, tokens) : 0;
   let s = occ + present * COVERAGE_BONUS;
   if (total > 1 && run === total) s += PHRASE_BONUS;
   else s += run * RUN_BONUS;

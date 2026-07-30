@@ -14,6 +14,7 @@ interface SongListRowProps {
   showId?: boolean;
   titleHl?: HighlightResult;
   bodyHl?: HighlightResult;
+  bookLabel?: string;
 }
 
 export default function SongListRow({
@@ -25,6 +26,7 @@ export default function SongListRow({
   showId = true,
   titleHl,
   bodyHl,
+  bookLabel,
 }: SongListRowProps) {
   const hasSnippet = bodyHl && bodyHl.segments.some((s) => s.hit);
   return (
@@ -42,6 +44,11 @@ export default function SongListRow({
           <span className="text-xs text-text-secondary truncate">
             {titleHl ? <HighlightedText result={titleHl} fallback={item.title} /> : item.title}
           </span>
+          {bookLabel && (
+            <span className="text-[9px] text-text-muted shrink-0 ml-auto">
+              {bookLabel}
+            </span>
+          )}
         </div>
         {hasSnippet && (
           <span className="text-[11px] text-text-muted line-clamp-2 leading-snug pl-2">
