@@ -2,8 +2,7 @@
 
 import { useLayoutEffect, useRef } from "react";
 
-interface AutoTextareaProps
-  extends React.TextareaHTMLAttributes<HTMLTextAreaElement> {
+interface AutoTextareaProps extends React.TextareaHTMLAttributes<HTMLTextAreaElement> {
   minRows?: number;
 }
 

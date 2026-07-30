@@ -22,12 +22,17 @@ export default function SongChunks({
   onGoToSlide,
 }: SongChunksProps) {
   const activeRef = useRef<HTMLButtonElement>(null);
+  const listRef = useRef<HTMLDivElement>(null);
   const lastSongIdRef = useRef<string | null>(null);
 
   useEffect(() => {
-    if (activeSlideIndex < 0) return;
     const songChanged = lastSongIdRef.current !== currentSong.id;
     lastSongIdRef.current = currentSong.id;
+
+    if (activeSlideIndex < 0) {
+      if (songChanged) listRef.current?.scrollTo({ top: 0 });
+      return;
+    }
     activeRef.current?.scrollIntoView({
       block: songChanged ? "center" : "nearest",
       behavior: songChanged ? "auto" : "smooth",
@@ -35,7 +40,7 @@ export default function SongChunks({
   }, [activeSlideIndex, currentSong.id]);
 
   return (
-    <div className="flex-1 min-h-0 overflow-y-auto px-2 py-2">
+    <div ref={listRef} className="flex-1 min-h-0 overflow-y-auto px-2 py-2">
       <div className="space-y-2">
         {currentSong.sections.map((section, sIdx) => {
           const slideIndexes = Array.from(

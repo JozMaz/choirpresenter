@@ -5,7 +5,10 @@ interface LoadingScreenProps {
   message?: string;
 }
 
-export default function LoadingScreen({ progress, message }: LoadingScreenProps) {
+export default function LoadingScreen({
+  progress,
+  message,
+}: LoadingScreenProps) {
   const barWidth = Math.max(0, Math.min(100, progress * 100));
   const pct = Math.round(barWidth);
   return (

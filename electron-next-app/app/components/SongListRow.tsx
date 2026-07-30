@@ -8,7 +8,9 @@ import Icon from "./Icon";
 interface SongListRowProps {
   item: ApiItem;
   isSelected: boolean;
+  isActive?: boolean;
   onShow: () => void;
+  onPlay?: () => void;
   onSelect: () => void;
   onEdit?: () => void;
   showId?: boolean;
@@ -20,7 +22,9 @@ interface SongListRowProps {
 export default function SongListRow({
   item,
   isSelected,
+  isActive = false,
   onShow,
+  onPlay,
   onSelect,
   onEdit,
   showId = true,
@@ -32,7 +36,13 @@ export default function SongListRow({
   return (
     <div
       onClick={onShow}
-      className={`flex justify-between items-${hasSnippet ? "start" : "center"} gap-2 px-2 ${hasSnippet ? "py-1" : "py-0"} bg-surface-secondary rounded border border-border hover:bg-surface-hover transition-colors cursor-pointer leading-tight`}
+      onDoubleClick={onPlay}
+      title={onPlay ? "Click to open, double-click to show it live" : undefined}
+      className={`flex justify-between items-${hasSnippet ? "start" : "center"} gap-2 px-2 ${hasSnippet ? "py-1" : "py-0"} rounded border transition-colors cursor-pointer leading-tight ${
+        isActive
+          ? "bg-primary/20 border-primary"
+          : "bg-surface-secondary border-border hover:bg-surface-hover"
+      }`}
     >
       <div className="flex flex-col gap-0.5 flex-1 min-w-0">
         <div className="flex items-center gap-3 min-w-0">
@@ -42,7 +52,11 @@ export default function SongListRow({
             </span>
           )}
           <span className="text-xs text-text-secondary truncate">
-            {titleHl ? <HighlightedText result={titleHl} fallback={item.title} /> : item.title}
+            {titleHl ? (
+              <HighlightedText result={titleHl} fallback={item.title} />
+            ) : (
+              item.title
+            )}
           </span>
           {bookLabel && (
             <span className="text-[9px] text-text-muted shrink-0 ml-auto">

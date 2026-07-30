@@ -43,6 +43,7 @@ interface ChunkResult {
 type SearchResult = TitleResult | ChunkResult;
 
 interface MessagesBrowserProps {
+  activeDateKey?: string | null;
   onShowMessage?: (date: string, title: string, chunkIdx?: number) => void;
 }
 
@@ -62,11 +63,13 @@ const MessageTitleRow = memo(function MessageTitleRow({
   row,
   tokens,
   label,
+  isActive,
   onClick,
 }: {
   row: TitleResult;
   tokens: string[];
   label?: string;
+  isActive: boolean;
   onClick: (r: TitleResult) => void;
 }) {
   const titleHl = useMemo(
@@ -91,9 +94,11 @@ const MessageTitleRow = memo(function MessageTitleRow({
             : undefined
       }
       className={`flex items-center gap-2 px-2 py-0.5 rounded border transition-colors ${
-        row.hasText
-          ? "bg-surface-secondary border-border hover:bg-surface-hover cursor-pointer"
-          : "bg-surface-secondary/40 border-border/40 cursor-not-allowed opacity-50"
+        !row.hasText
+          ? "bg-surface-secondary/40 border-border/40 cursor-not-allowed opacity-50"
+          : isActive
+            ? "bg-primary/20 border-primary cursor-pointer"
+            : "bg-surface-secondary border-border hover:bg-surface-hover cursor-pointer"
       }`}
     >
       <span className="text-xs font-semibold text-primary shrink-0">
@@ -151,7 +156,10 @@ const ChunkResultRow = memo(function ChunkResultRow({
   );
 });
 
-export default function MessagesBrowser({ onShowMessage }: MessagesBrowserProps) {
+export default function MessagesBrowser({
+  activeDateKey,
+  onShowMessage,
+}: MessagesBrowserProps) {
   const [titleTerm, setTitleTerm] = useState("");
   const [searchTerm, setSearchTerm] = useState("");
   const debouncedTitleTerm = useDebounced(titleTerm, 150);
@@ -315,7 +323,12 @@ export default function MessagesBrowser({ onShowMessage }: MessagesBrowserProps)
       const key = result.date;
       let g = map.get(key);
       if (!g) {
-        g = { date: result.date, title: result.title, results: [], maxScore: 0 };
+        g = {
+          date: result.date,
+          title: result.title,
+          results: [],
+          maxScore: 0,
+        };
         map.set(key, g);
       }
       g.results.push(result);
@@ -411,6 +424,7 @@ export default function MessagesBrowser({ onShowMessage }: MessagesBrowserProps)
                 key={m.date}
                 row={m}
                 tokens={titleTokens}
+                isActive={m.date === activeDateKey}
                 onClick={handleTitleClick}
               />
             ))}
@@ -438,6 +452,7 @@ export default function MessagesBrowser({ onShowMessage }: MessagesBrowserProps)
                           row={r}
                           tokens={tokens}
                           label="title"
+                          isActive={r.date === activeDateKey}
                           onClick={handleTitleClick}
                         />
                       );

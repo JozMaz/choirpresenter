@@ -18,6 +18,8 @@ interface LibraryProps {
     autoSelectVerseIdx?: number,
   ) => void;
   onShowMessage?: (date: string, title: string, chunkIdx?: number) => void;
+  activeDateKey?: string | null;
+  activeBibleRef?: { bookName: string; chapter: number } | null;
 }
 
 type Tab = "songbooks" | "bibles" | "messages";
@@ -29,6 +31,8 @@ export default function Library({
   biblesLoaded,
   onShowBibleChapter,
   onShowMessage,
+  activeDateKey,
+  activeBibleRef,
 }: LibraryProps) {
   const tabs: { key: Tab; label: string }[] = [
     { key: "songbooks", label: "Songbooks" },
@@ -65,11 +69,15 @@ export default function Library({
           <BibleBrowser
             bibles={bibles}
             loaded={biblesLoaded}
+            activeRef={activeBibleRef}
             onShowChapter={onShowBibleChapter}
           />
         )}
         {activeTab === "messages" && (
-          <MessagesBrowser onShowMessage={onShowMessage} />
+          <MessagesBrowser
+            activeDateKey={activeDateKey}
+            onShowMessage={onShowMessage}
+          />
         )}
       </div>
     </div>

@@ -9,7 +9,9 @@ import ConfirmDialog from "./ConfirmDialog";
 interface SelectedPanelProps {
   customSongs: ApiItem[];
   selectedItems: ApiItem[];
+  activeItem: ApiItem | null;
   onShow: (item: ApiItem) => void;
+  onPlay: (item: ApiItem) => void;
   onSelect: (item: ApiItem) => void;
   onRemove: (id: string, source: SongSource) => void;
   onClearAll: () => void;
@@ -18,7 +20,9 @@ interface SelectedPanelProps {
 export default function SelectedPanel({
   customSongs,
   selectedItems,
+  activeItem,
   onShow,
+  onPlay,
   onSelect,
   onRemove,
   onClearAll,
@@ -26,6 +30,8 @@ export default function SelectedPanel({
   const [confirmClear, setConfirmClear] = useState(false);
   const isSelected = (item: ApiItem) =>
     selectedItems.some((i) => i.id === item.id && i.source === item.source);
+  const isActive = (item: ApiItem) =>
+    activeItem?.id === item.id && activeItem?.source === item.source;
 
   return (
     <div className="h-full flex flex-col bg-surface overflow-hidden">
@@ -52,7 +58,9 @@ export default function SelectedPanel({
                 key={`custom-${item.id}`}
                 item={item}
                 isSelected={isSelected(item)}
+                isActive={isActive(item)}
                 onShow={() => onShow(item)}
+                onPlay={() => onPlay(item)}
                 onSelect={() => onSelect(item)}
                 showId={false}
               />
@@ -84,7 +92,13 @@ export default function SelectedPanel({
             <div
               key={`${item.source}-${item.id}`}
               onClick={() => onShow(item)}
-              className="flex justify-between items-center gap-2 px-2 py-0.5 bg-surface-secondary rounded border border-border hover:bg-surface-hover transition-colors cursor-pointer"
+              onDoubleClick={() => onPlay(item)}
+              title="Click to open, double-click to show it live"
+              className={`flex justify-between items-center gap-2 px-2 py-0.5 rounded border transition-colors cursor-pointer ${
+                isActive(item)
+                  ? "bg-primary/20 border-primary"
+                  : "bg-surface-secondary border-border hover:bg-surface-hover"
+              }`}
             >
               <span className="text-xs font-semibold text-primary truncate flex-1 min-w-0">
                 {item.number !== null ? `${item.number}. ` : ""}

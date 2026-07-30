@@ -219,6 +219,12 @@ function HomeContent({
 
   const toggleBlackout = () => setBlackoutActive((b) => !b);
 
+  const playItem = (item: ApiItem) => {
+    player.sendFirstPart(item);
+    player.goToSection(0);
+    setBlackoutActive(false);
+  };
+
   const showBibleChapter = (
     rawVerses: { Text?: string; ID?: number }[],
     bookName: string,
@@ -716,7 +722,9 @@ function HomeContent({
                 <SelectedPanel
                   customSongs={customSongs}
                   selectedItems={selectedItems}
+                  activeItem={player.currentSong}
                   onShow={player.sendFirstPart}
+                  onPlay={playItem}
                   onSelect={selectItem}
                   onRemove={(id, source) =>
                     setSelectedItems(
@@ -735,6 +743,17 @@ function HomeContent({
                   biblesLoaded={biblesLoaded}
                   onShowBibleChapter={showBibleChapter}
                   onShowMessage={showMessage}
+                  activeDateKey={
+                    player.currentSong?.messageMeta?.dateKey ?? null
+                  }
+                  activeBibleRef={
+                    player.currentSong?.bibleMeta
+                      ? {
+                          bookName: player.currentSong.bibleMeta.bookName,
+                          chapter: player.currentSong.bibleMeta.chapter,
+                        }
+                      : null
+                  }
                   available={{
                     songbooks: selection.songbooks.length > 0,
                     bibles: selection.bibles.length > 0,
@@ -745,7 +764,9 @@ function HomeContent({
                       dataByBook={dataByBook}
                       bookNames={bookNames}
                       selectedItems={selectedItems}
+                      activeItem={player.currentSong}
                       onShow={player.sendFirstPart}
+                      onPlay={playItem}
                       onSelect={selectItem}
                     />
                   }

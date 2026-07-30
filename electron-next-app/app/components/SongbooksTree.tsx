@@ -1,7 +1,6 @@
 "use client";
 
 import {
-  memo,
   startTransition,
   useDeferredValue,
   useEffect,
@@ -11,7 +10,6 @@ import {
 } from "react";
 import type { ApiItem, SongBookKey } from "../lib/types";
 import { normalizeSearch } from "../lib/textUtils";
-import { highlightSnippet } from "../lib/searchHighlight";
 import { scoreItemsAsync } from "../lib/asyncSearch";
 import { SONGBOOK_KEYS } from "../hooks/useSongbooks";
 import Icon from "./Icon";
@@ -19,48 +17,13 @@ import SongListRow from "./SongListRow";
 
 const MAX_SEARCH_RESULTS = 100;
 
-const SongSearchRow = memo(function SongSearchRow({
-  item,
-  tokens,
-  isSelected,
-  bookLabel,
-  onShow,
-  onSelect,
-}: {
-  item: ApiItem;
-  tokens: string[];
-  isSelected: boolean;
-  bookLabel: string;
-  onShow: (item: ApiItem) => void;
-  onSelect: (item: ApiItem) => void;
-}) {
-  const titleHl = useMemo(
-    () => highlightSnippet(item.title, tokens, { snippetLen: 0 }),
-    [item.title, tokens],
-  );
-  const bodyHl = useMemo(
-    () =>
-      highlightSnippet(item.fullText, tokens, { snippetLen: 200, before: 50 }),
-    [item.fullText, tokens],
-  );
-  return (
-    <SongListRow
-      item={item}
-      isSelected={isSelected}
-      onShow={() => onShow(item)}
-      onSelect={() => onSelect(item)}
-      titleHl={titleHl}
-      bodyHl={bodyHl}
-      bookLabel={bookLabel}
-    />
-  );
-});
-
 interface SongbooksTreeProps {
   dataByBook: Record<SongBookKey, ApiItem[]>;
   bookNames: Record<SongBookKey, string>;
   selectedItems: ApiItem[];
+  activeItem: ApiItem | null;
   onShow: (item: ApiItem) => void;
+  onPlay: (item: ApiItem) => void;
   onSelect: (item: ApiItem) => void;
 }
 
@@ -68,7 +31,9 @@ export default function SongbooksTree({
   dataByBook,
   bookNames,
   selectedItems,
+  activeItem,
   onShow,
+  onPlay,
   onSelect,
 }: SongbooksTreeProps) {
   const [searchTerm, setSearchTerm] = useState("");
@@ -101,6 +66,8 @@ export default function SongbooksTree({
   );
   const isSelected = (item: ApiItem) =>
     selectedKeys.has(`${item.source}:${item.id}`);
+  const isActive = (item: ApiItem) =>
+    activeItem?.id === item.id && activeItem?.source === item.source;
 
   const tokens = useMemo(() => {
     const norm = normalizeSearch(deferredTerm);
@@ -110,7 +77,7 @@ export default function SongbooksTree({
   const isSearching = normalizeSearch(deferredTerm).length > 0;
 
   const [searchResults, setSearchResults] = useState<
-    { item: ApiItem; bookLabel: string }[]
+    { item: ApiItem; bookKey: SongBookKey; score: number }[]
   >([]);
   const [searchTotal, setSearchTotal] = useState(0);
 
@@ -122,7 +89,7 @@ export default function SongbooksTree({
     }
     let cancelled = false;
     (async () => {
-      const all: { item: ApiItem; bookLabel: string; score: number }[] = [];
+      const all: { item: ApiItem; bookKey: SongBookKey; score: number }[] = [];
       for (const key of SONGBOOK_KEYS) {
         if ((dataByBook[key] || []).length === 0) continue;
         const scored = await scoreItemsAsync(
@@ -133,24 +100,37 @@ export default function SongbooksTree({
         );
         if (!scored) return;
         for (const { item, score } of scored) {
-          all.push({ item, bookLabel: bookNames[key], score });
+          all.push({ item, bookKey: key, score });
         }
       }
       all.sort((a, b) => b.score - a.score);
       startTransition(() => {
         if (cancelled) return;
         setSearchTotal(all.length);
-        setSearchResults(
-          all
-            .slice(0, MAX_SEARCH_RESULTS)
-            .map(({ item, bookLabel }) => ({ item, bookLabel })),
-        );
+        setSearchResults(all.slice(0, MAX_SEARCH_RESULTS));
       });
     })();
     return () => {
       cancelled = true;
     };
-  }, [tokens, dataByBook, bookNames]);
+  }, [tokens, dataByBook]);
+
+  const groupedResults = useMemo(() => {
+    const groups = new Map<
+      SongBookKey,
+      { key: SongBookKey; label: string; items: ApiItem[]; best: number }
+    >();
+    for (const { item, bookKey, score } of searchResults) {
+      let group = groups.get(bookKey);
+      if (!group) {
+        group = { key: bookKey, label: bookNames[bookKey], items: [], best: 0 };
+        groups.set(bookKey, group);
+      }
+      group.items.push(item);
+      if (score > group.best) group.best = score;
+    }
+    return Array.from(groups.values()).sort((a, b) => b.best - a.best);
+  }, [searchResults, bookNames]);
 
   const browseBooks = useMemo(
     () =>
@@ -162,7 +142,32 @@ export default function SongbooksTree({
     [dataByBook, bookNames],
   );
 
+  const visibleBooks = isSearching ? groupedResults : browseBooks;
+
+  const [collapsedInSearch, setCollapsedInSearch] = useState<Set<SongBookKey>>(
+    new Set(),
+  );
+
+  const tokenKey = tokens.join(" ");
+  const [lastTokenKey, setLastTokenKey] = useState(tokenKey);
+  if (tokenKey !== lastTokenKey) {
+    setLastTokenKey(tokenKey);
+    if (collapsedInSearch.size > 0) setCollapsedInSearch(new Set());
+  }
+
+  const isBookOpen = (key: SongBookKey) =>
+    isSearching ? !collapsedInSearch.has(key) : openBook === key;
+
   const toggleBook = (key: SongBookKey) => {
+    if (isSearching) {
+      setCollapsedInSearch((prev) => {
+        const next = new Set(prev);
+        if (next.has(key)) next.delete(key);
+        else next.add(key);
+        return next;
+      });
+      return;
+    }
     setOpenBook((prev) => (prev === key ? null : key));
   };
 
@@ -200,76 +205,59 @@ export default function SongbooksTree({
       )}
 
       <div className="flex-1 overflow-y-auto px-2 pt-2 pb-2 mt-1">
-        {isSearching ? (
-          <div className="space-y-0.5">
-            {searchResults.length === 0 && (
-              <p className="text-text-muted text-xs text-center py-2">
-                No results
-              </p>
-            )}
-            {searchResults.map(({ item, bookLabel }, idx) => (
-              <SongSearchRow
-                key={`${item.source}-${item.id}-${idx}`}
-                item={item}
-                tokens={tokens}
-                isSelected={isSelected(item)}
-                bookLabel={bookLabel}
-                onShow={onShow}
-                onSelect={onSelect}
-              />
-            ))}
-            {searchTotal > MAX_SEARCH_RESULTS && (
-              <p className="text-text-muted text-[10px] text-center py-1">
-                (showing first {MAX_SEARCH_RESULTS} results)
-              </p>
-            )}
-          </div>
-        ) : (
-          <div>
-            {browseBooks.length === 0 && (
-              <p className="text-text-muted text-xs text-center py-2">
-                No songbooks downloaded — pick some in Settings.
-              </p>
-            )}
-            {browseBooks.map((book) => {
-              const isOpen = openBook === book.key;
-              return (
-                <div key={book.key} className="mb-1">
-                  <button
-                    onClick={() => toggleBook(book.key)}
-                    className={`w-full flex items-center gap-2 px-2 py-1 rounded transition-colors text-left ${
-                      isOpen
-                        ? "bg-surface-secondary text-primary hover:bg-surface-hover"
-                        : "text-text-primary hover:bg-surface-hover"
-                    }`}
-                  >
-                    <Icon
-                      name={isOpen ? "ChevronDown" : "ChevronRight"}
-                      size={12}
-                    />
-                    <span className="text-xs font-semibold">
-                      {book.label} ({book.items.length})
-                    </span>
-                  </button>
+        <div>
+          {visibleBooks.length === 0 && (
+            <p className="text-text-muted text-xs text-center py-2">
+              {isSearching
+                ? "No results"
+                : "No songbooks downloaded — pick some in Settings."}
+            </p>
+          )}
+          {visibleBooks.map((book) => {
+            const isOpen = isBookOpen(book.key);
+            return (
+              <div key={book.key} className="mb-1">
+                <button
+                  onClick={() => toggleBook(book.key)}
+                  className={`w-full flex items-center gap-2 px-2 py-1 rounded transition-colors text-left ${
+                    isOpen
+                      ? "text-primary hover:bg-surface-hover"
+                      : "text-text-primary hover:bg-surface-hover"
+                  }`}
+                >
+                  <Icon
+                    name={isOpen ? "ChevronDown" : "ChevronRight"}
+                    size={12}
+                  />
+                  <span className="text-xs font-semibold">
+                    {book.label} ({book.items.length})
+                  </span>
+                </button>
 
-                  {isOpen && (
-                    <div className="ml-3 mt-0.5 mb-1 border-l border-border pl-2 space-y-0.5">
-                      {book.items.map((item, idx) => (
-                        <SongListRow
-                          key={`${item.source}-${item.id}-${idx}`}
-                          item={item}
-                          isSelected={isSelected(item)}
-                          onShow={() => onShow(item)}
-                          onSelect={() => onSelect(item)}
-                        />
-                      ))}
-                    </div>
-                  )}
-                </div>
-              );
-            })}
-          </div>
-        )}
+                {isOpen && (
+                  <div className="ml-3 mt-0.5 mb-1 border-l border-border pl-2 space-y-0.5">
+                    {book.items.map((item, idx) => (
+                      <SongListRow
+                        key={`${item.source}-${item.id}-${idx}`}
+                        item={item}
+                        isSelected={isSelected(item)}
+                        isActive={isActive(item)}
+                        onShow={() => onShow(item)}
+                        onPlay={() => onPlay(item)}
+                        onSelect={() => onSelect(item)}
+                      />
+                    ))}
+                  </div>
+                )}
+              </div>
+            );
+          })}
+          {isSearching && searchTotal > MAX_SEARCH_RESULTS && (
+            <p className="text-text-muted text-[10px] text-center py-1">
+              (showing first {MAX_SEARCH_RESULTS} results)
+            </p>
+          )}
+        </div>
       </div>
     </div>
   );

@@ -58,6 +58,7 @@ const VerseResultRow = memo(function VerseResultRow({
 interface BibleBrowserProps {
   bibles: Record<BibleKey, Bible | null>;
   loaded: boolean;
+  activeRef?: { bookName: string; chapter: number } | null;
   onShowChapter: (
     verses: BibleVerse[],
     bookName: string,
@@ -70,6 +71,7 @@ interface BibleBrowserProps {
 export default function BibleBrowser({
   bibles,
   loaded,
+  activeRef,
   onShowChapter,
 }: BibleBrowserProps) {
   const [activeBible, setActiveBible] = useState<BibleKey>("gdanska");
@@ -83,9 +85,12 @@ export default function BibleBrowser({
   const inputRef = useRef<HTMLInputElement>(null);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  useEffect(() => () => {
-    if (timerRef.current) clearTimeout(timerRef.current);
-  }, []);
+  useEffect(
+    () => () => {
+      if (timerRef.current) clearTimeout(timerRef.current);
+    },
+    [],
+  );
 
   const scheduleSearch = (value: string) => {
     if (timerRef.current) clearTimeout(timerRef.current);
@@ -333,8 +338,12 @@ export default function BibleBrowser({
                     <div className="ml-3 mt-0.5 mb-1 flex flex-wrap gap-1 border-l border-border pl-2">
                       {chapters.map((_, cIdx) => {
                         const isActive =
-                          activeChapter?.bookIdx === bIdx &&
-                          activeChapter?.chapterIdx === cIdx;
+                          (activeChapter?.bookIdx === bIdx &&
+                            activeChapter?.chapterIdx === cIdx) ||
+                          (activeRef != null &&
+                            activeRef.chapter === cIdx + 1 &&
+                            activeRef.bookName ===
+                              stripBookAlias(getBookName(bIdx)));
                         return (
                           <button
                             key={cIdx}

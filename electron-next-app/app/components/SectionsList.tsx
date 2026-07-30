@@ -114,9 +114,13 @@ export default function SectionsList({
   }, [currentHit, totalHits, tokenKey]);
 
   useEffect(() => {
-    if (activeSectionIndex < 0) return;
     const songChanged = lastSongIdRef.current !== (currentSong?.id ?? null);
     lastSongIdRef.current = currentSong?.id ?? null;
+
+    if (activeSectionIndex < 0) {
+      if (songChanged) listRef.current?.scrollTo({ top: 0 });
+      return;
+    }
     activeRef.current?.scrollIntoView({
       block: songChanged ? "center" : "nearest",
       behavior: songChanged ? "auto" : "smooth",
@@ -262,7 +266,7 @@ export default function SectionsList({
                       </span>
                     )}
                     <div className="flex-1 min-w-0 flex flex-col">
-                      {currentSong.isMessage ? (
+                      {currentSong.isMessage || currentSong.isBible ? (
                         <div
                           className={`text-xs whitespace-pre-wrap ${
                             isActive ? "text-white" : "text-text-secondary"
