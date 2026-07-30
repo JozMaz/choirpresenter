@@ -15,5 +15,5 @@ export const buildSearchIndex = (text: string): string => {
   const spaced = normalizeSearch(text);
   if (!spaced) return "";
   const nospace = spaced.replace(/\s+/g, "");
-  return `${spaced} ${nospace}`;
+  return `${spaced}\n${nospace}`;
 };

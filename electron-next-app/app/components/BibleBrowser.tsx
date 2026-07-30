@@ -1,6 +1,15 @@
 "use client";
 
-import { useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
+import {
+  memo,
+  startTransition,
+  useCallback,
+  useDeferredValue,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import type { Bible, BibleKey, BibleVerse } from "../lib/bibleData";
 import {
   BIBLE_LABELS,
@@ -11,11 +20,39 @@ import {
 } from "../lib/bibleData";
 import { normalizeSearch } from "../lib/textUtils";
 import { highlightSnippet } from "../lib/searchHighlight";
-import { scoreTokens } from "../lib/searchScore";
+import { scoreItemsAsync } from "../lib/asyncSearch";
 import { getBibleVerseIndex, type FlatVerse } from "../lib/bibleIndex";
 import HighlightedText from "./HighlightedText";
 import { bibleGroupTint } from "../lib/bibleGroups";
 import Icon from "./Icon";
+
+const VerseResultRow = memo(function VerseResultRow({
+  v,
+  tokens,
+  onClick,
+}: {
+  v: FlatVerse;
+  tokens: string[];
+  onClick: (v: FlatVerse) => void;
+}) {
+  const hl = useMemo(
+    () => highlightSnippet(v.text, tokens, { snippetLen: 240, before: 40 }),
+    [v.text, tokens],
+  );
+  return (
+    <div
+      onClick={() => onClick(v)}
+      className="flex items-start gap-2 px-2 py-0.5 bg-surface-secondary rounded border border-border hover:bg-border transition-colors cursor-pointer"
+    >
+      <span className="text-xs font-semibold text-primary shrink-0 pt-0.5">
+        {v.chapterIdx + 1}:{v.verseId}
+      </span>
+      <span className="text-xs text-text-secondary flex-1 min-w-0 line-clamp-3 leading-snug">
+        <HighlightedText result={hl} />
+      </span>
+    </div>
+  );
+});
 
 interface BibleBrowserProps {
   bibles: Record<BibleKey, Bible | null>;
@@ -78,16 +115,35 @@ export default function BibleBrowser({
     return norm ? norm.split(" ").filter(Boolean) : [];
   }, [deferredTerm]);
 
-  const searchResults = useMemo<{ v: FlatVerse; score: number }[]>(() => {
-    if (tokens.length === 0) return [];
-    const out: { v: FlatVerse; score: number }[] = [];
-    for (const v of allVerses) {
-      if (tokens.every((t) => v.searchIndex.includes(t))) {
-        out.push({ v, score: scoreTokens(v.searchIndex, tokens) });
-        if (out.length >= 200) break;
-      }
+  const [searchResults, setSearchResults] = useState<
+    { v: FlatVerse; score: number }[]
+  >([]);
+
+  useEffect(() => {
+    if (tokens.length === 0) {
+      setSearchResults([]);
+      return;
     }
-    return out;
+    let cancelled = false;
+    (async () => {
+      const scored = await scoreItemsAsync(
+        allVerses,
+        (v) => v.searchIndex,
+        tokens,
+        () => cancelled,
+      );
+      if (!scored) return;
+      const top = scored.slice(0, 200).map(({ item, score }) => ({
+        v: item,
+        score,
+      }));
+      startTransition(() => {
+        if (!cancelled) setSearchResults(top);
+      });
+    })();
+    return () => {
+      cancelled = true;
+    };
   }, [tokens, allVerses]);
 
   const groupedResults = useMemo(() => {
@@ -130,16 +186,19 @@ export default function BibleBrowser({
     );
   };
 
-  const handleSearchResultClick = (v: FlatVerse) => {
-    setActiveChapter({ bookIdx: v.bookFlatIdx, chapterIdx: v.chapterIdx });
-    onShowChapter(
-      v.chapterVerses,
-      v.bookReferenceName,
-      v.chapterIdx + 1,
-      BIBLE_LABELS[activeBible],
-      v.verseIdx,
-    );
-  };
+  const handleSearchResultClick = useCallback(
+    (v: FlatVerse) => {
+      setActiveChapter({ bookIdx: v.bookFlatIdx, chapterIdx: v.chapterIdx });
+      onShowChapter(
+        v.chapterVerses,
+        v.bookReferenceName,
+        v.chapterIdx + 1,
+        BIBLE_LABELS[activeBible],
+        v.verseIdx,
+      );
+    },
+    [onShowChapter, activeBible],
+  );
 
   if (!loaded) {
     return (
@@ -224,26 +283,14 @@ export default function BibleBrowser({
                   {group.bookName} ({group.verses.length})
                 </h2>
                 <div className="space-y-0.5">
-                  {group.verses.map((v) => {
-                    const hl = highlightSnippet(v.text, tokens, {
-                      snippetLen: 240,
-                      before: 40,
-                    });
-                    return (
-                      <div
-                        key={`${v.bookFlatIdx}-${v.chapterIdx}-${v.verseIdx}`}
-                        onClick={() => handleSearchResultClick(v)}
-                        className="flex items-start gap-2 px-2 py-0.5 bg-surface-secondary rounded border border-border hover:bg-border transition-colors cursor-pointer"
-                      >
-                        <span className="text-xs font-semibold text-primary shrink-0 pt-0.5">
-                          {v.chapterIdx + 1}:{v.verseId}
-                        </span>
-                        <span className="text-xs text-text-secondary flex-1 min-w-0 line-clamp-3 leading-snug">
-                          <HighlightedText result={hl} />
-                        </span>
-                      </div>
-                    );
-                  })}
+                  {group.verses.map((v) => (
+                    <VerseResultRow
+                      key={`${v.bookFlatIdx}-${v.chapterIdx}-${v.verseIdx}`}
+                      v={v}
+                      tokens={tokens}
+                      onClick={handleSearchResultClick}
+                    />
+                  ))}
                 </div>
               </div>
             ))}

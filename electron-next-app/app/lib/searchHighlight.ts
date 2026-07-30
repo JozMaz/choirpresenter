@@ -57,7 +57,35 @@ export function highlightSnippet(
   }
   const nospace = nospaceParts.join("");
 
+  let runRange: [number, number] | null = null;
+  if (tokens.length > 1) {
+    outer: for (let len = tokens.length; len >= 2; len--) {
+      for (let start = 0; start + len <= tokens.length; start++) {
+        const run = tokens.slice(start, start + len);
+        const sp = run.join(" ");
+        let p = normalized.indexOf(sp);
+        if (p !== -1) {
+          runRange = [
+            origIdx[p] ?? 0,
+            (origIdx[p + sp.length - 1] ?? text.length - 1) + 1,
+          ];
+          break outer;
+        }
+        const ns = run.join("");
+        p = nospace.indexOf(ns);
+        if (p !== -1) {
+          runRange = [
+            nospaceOrigIdx[p] ?? 0,
+            (nospaceOrigIdx[p + ns.length - 1] ?? text.length - 1) + 1,
+          ];
+          break outer;
+        }
+      }
+    }
+  }
+
   const ranges: [number, number][] = [];
+  if (runRange) ranges.push([runRange[0], runRange[1]]);
   for (const t of tokens) {
     let pos = 0;
     let foundAny = false;
@@ -104,7 +132,8 @@ export function highlightSnippet(
   let prefix = "";
   let suffix = "";
   if (SNIPPET_LEN > 0 && merged.length > 0) {
-    snipStart = Math.max(0, merged[0][0] - BEFORE);
+    const anchor = runRange ? runRange[0] : merged[0][0];
+    snipStart = Math.max(0, anchor - BEFORE);
     snipEnd = Math.min(text.length, snipStart + SNIPPET_LEN);
     while (snipStart > 0 && /\S/.test(text[snipStart - 1])) snipStart--;
     while (snipEnd < text.length && /\S/.test(text[snipEnd])) snipEnd++;
