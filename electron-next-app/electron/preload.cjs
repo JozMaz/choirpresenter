@@ -33,6 +33,7 @@ contextBridge.exposeInMainWorld("api", {
   dataFetchCloud: (relPath) => ipcRenderer.invoke("data-fetch-cloud", relPath),
   dataFetchManifest: () => ipcRenderer.invoke("data-fetch-manifest"),
   dataFetchCatalog: () => ipcRenderer.invoke("data-fetch-catalog"),
+  dataHasFiles: (relPaths) => ipcRenderer.invoke("data-has-files", relPaths),
   authWhoami: (token) => ipcRenderer.invoke("auth-whoami", token),
   adminListOrgs: () => ipcRenderer.invoke("admin-list-orgs"),
   adminCreateOrg: (name, role) =>

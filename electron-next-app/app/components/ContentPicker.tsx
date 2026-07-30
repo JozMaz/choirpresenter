@@ -90,22 +90,26 @@ export default function ContentPicker({
 
       <div className={sectionClass}>
         <span className={headingClass}>Messages</span>
-        <Checkbox
-          checked={selection.messages}
-          onChange={(checked) =>
-            setSelection((prev) => ({ ...prev, messages: checked }))
-          }
-          label={
-            catalog?.messages?.count
-              ? `All sermons (${catalog.messages.count})`
-              : "All sermons"
-          }
-          hint={
-            catalog?.messages?.sizeMb
-              ? `About ${catalog.messages.sizeMb} MB — downloaded as one set, not one by one.`
-              : undefined
-          }
-        />
+        {catalog && (catalog.messages?.count ?? 0) === 0 ? (
+          <p className="text-[11px] text-text-muted">Nothing published yet.</p>
+        ) : (
+          <Checkbox
+            checked={selection.messages}
+            onChange={(checked) =>
+              setSelection((prev) => ({ ...prev, messages: checked }))
+            }
+            label={
+              catalog?.messages?.count
+                ? `All sermons (${catalog.messages.count})`
+                : "All sermons"
+            }
+            hint={
+              catalog?.messages?.sizeMb
+                ? `About ${catalog.messages.sizeMb} MB — downloaded as one set, not one by one.`
+                : undefined
+            }
+          />
+        )}
       </div>
     </>
   );

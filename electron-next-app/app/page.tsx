@@ -32,8 +32,9 @@ import {
 import { prebuildBibleVerseIndexes } from "./lib/bibleIndex";
 import { buildHdmiHtml, buildHdmi2Html } from "./lib/hdmiHtml";
 import { buildSongFromEditor, songToEditorSections } from "./lib/songSerialize";
-import { toApiItem } from "./lib/songAdapter";
+import { toApiItem, SONGBOOK_NAMES } from "./lib/songAdapter";
 import { splitVerseIntoParts } from "./lib/bibleSlides";
+import { BIBLE_LABELS, type BibleKey } from "./lib/bibleData";
 import { buildSectionsAndSlides } from "./lib/songSchema";
 
 import { usePersistedState } from "./hooks/usePersistedState";
@@ -176,6 +177,12 @@ function HomeContent({
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  const selectionSummary = [
+    ...selection.songbooks.map((key) => SONGBOOK_NAMES[key]),
+    ...selection.bibles.map((key) => BIBLE_LABELS[key as BibleKey] ?? key),
+    ...(selection.messages ? ["sermons"] : []),
+  ].join(", ");
 
   const dismissOffers = () => {
     if (catalog) localStorage.setItem(LS_KEYS.seenCatalog, catalog.version);
@@ -864,6 +871,7 @@ function HomeContent({
         open={settingsOpen}
         onClose={() => setSettingsOpen(false)}
         identity={identity}
+        selectionSummary={selectionSummary}
         onOpenContentPicker={() => {
           setSettingsOpen(false);
           setContentPickerOpen(true);
@@ -922,7 +930,7 @@ function HomeContent({
 
 import { bootstrap, type BootstrapProgress } from "./lib/cloudData";
 
-type Stage = "auth" | "picker" | "booting" | "ready";
+type Stage = "checking" | "auth" | "picker" | "booting" | "ready";
 
 const LOCAL_DEV_IDENTITY: Identity = {
   role: "admin",
@@ -932,12 +940,12 @@ const LOCAL_DEV_IDENTITY: Identity = {
 
 const FULL_SELECTION: ContentSelection = {
   songbooks: ALL_SONGBOOK_KEYS,
-  bibles: ["gdanska", "warszawska"],
+  bibles: Object.keys(BIBLE_LABELS),
   messages: true,
 };
 
 export default function Home() {
-  const [stage, setStage] = useState<Stage>("auth");
+  const [stage, setStage] = useState<Stage>("checking");
   const [identity, setIdentity] = useState<Identity | null>(null);
   const [authMessage, setAuthMessage] = useState<string | null>(null);
   const [catalog, setCatalog] = useState<Catalog | null>(null);
@@ -966,6 +974,10 @@ export default function Home() {
     const stored = localStorage.getItem(LS_KEYS.contentSelection);
     if (stored) {
       startBoot(normalizeSelection(JSON.parse(stored)));
+      return;
+    }
+    if (who.role === "admin") {
+      startBoot(FULL_SELECTION);
       return;
     }
     setCatalog(parseCatalog((await window.api?.dataFetchCatalog()) ?? null));
@@ -1055,6 +1067,14 @@ export default function Home() {
         onConfirm={startBoot}
         onSkip={() => startBoot(EMPTY_SELECTION)}
       />
+    );
+  }
+
+  if (stage === "checking") {
+    return (
+      <main className="h-screen w-screen bg-background">
+        <LoadingScreen progress={0} message="Connecting..." />
+      </main>
     );
   }
 

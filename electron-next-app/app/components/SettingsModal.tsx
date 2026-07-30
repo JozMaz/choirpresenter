@@ -19,6 +19,7 @@ import type { Identity } from "../lib/access";
 import type { SongSource } from "../lib/types";
 import AdminPanel from "./AdminPanel";
 import Checkbox from "./Checkbox";
+import ConfirmDialog from "./ConfirmDialog";
 import Icon from "./Icon";
 import Toggle from "./Toggle";
 
@@ -60,6 +61,7 @@ interface SettingsModalProps {
   onChangeSongFooter: (config: FooterConfig) => void;
   identity: Identity | null;
   onOpenContentPicker: () => void;
+  selectionSummary: string;
 }
 
 export default function SettingsModal({
@@ -73,6 +75,7 @@ export default function SettingsModal({
   onChangeSongFooter,
   identity,
   onOpenContentPicker,
+  selectionSummary,
 }: SettingsModalProps) {
   const [token, setToken] = useState("");
   const [savedToken, setSavedToken] = useState<string | null>(null);
@@ -81,6 +84,23 @@ export default function SettingsModal({
   const [theme, setTheme] = useState<ThemePref>("dark");
   const [appVersion, setAppVersion] = useState<string | null>(null);
   const [adminView, setAdminView] = useState(false);
+  const [confirmWipe, setConfirmWipe] = useState(false);
+  const [confirmSignOut, setConfirmSignOut] = useState(false);
+
+  const wipeLocalData = async () => {
+    await window.api?.dataClearLocal();
+    localStorage.removeItem(LS_KEYS.contentSelection);
+    localStorage.removeItem(LS_KEYS.seenCatalog);
+    window.location.reload();
+  };
+
+  const signOut = async () => {
+    await window.api?.setWriteToken("");
+    localStorage.removeItem(LS_KEYS.identity);
+    localStorage.removeItem(LS_KEYS.contentSelection);
+    localStorage.removeItem(LS_KEYS.seenCatalog);
+    window.location.reload();
+  };
 
   const [exporting, setExporting] = useState(false);
   const [exportMsg, setExportMsg] = useState<string | null>(null);
@@ -200,6 +220,24 @@ export default function SettingsModal({
       className="fixed inset-0 z-40 bg-black/60 flex items-center justify-center p-6"
       onClick={onClose}
     >
+      <ConfirmDialog
+        open={confirmWipe}
+        title="Delete downloaded data?"
+        message="Songbooks, Bibles and sermons are removed from this device and the app restarts. Your own songs and the token stay. Anything you pick again gets downloaded from the cloud."
+        confirmLabel="Delete"
+        icon="Trash2"
+        onConfirm={() => void wipeLocalData()}
+        onCancel={() => setConfirmWipe(false)}
+      />
+      <ConfirmDialog
+        open={confirmSignOut}
+        title="Forget the token?"
+        message="The app restarts and asks for a token again. Downloaded data and your own songs stay on the disk."
+        confirmLabel="Forget"
+        icon="LogOut"
+        onConfirm={() => void signOut()}
+        onCancel={() => setConfirmSignOut(false)}
+      />
       <div
         onClick={(e) => e.stopPropagation()}
         className="w-full max-w-3xl max-h-[85vh] flex flex-col bg-surface rounded-lg border border-border shadow-xl"
@@ -243,6 +281,33 @@ export default function SettingsModal({
             <div className="space-y-4">
               <div className={card}>
                 <label className="block text-xs font-semibold text-text-primary mb-1">
+                  Downloaded content
+                </label>
+                <p className="text-[11px] text-text-muted mb-2 leading-snug">
+                  {selectionSummary
+                    ? `Now downloaded: ${selectionSummary}. Only these are kept up to date.`
+                    : "Nothing is downloaded yet, so the library on the left is empty."}
+                </p>
+                <div className="flex flex-wrap items-center gap-1.5">
+                  <button
+                    onClick={onOpenContentPicker}
+                    className="flex items-center gap-1.5 px-3 py-1 text-xs font-semibold rounded border border-primary/50 bg-primary/10 text-primary transition-colors hover:bg-primary hover:text-white"
+                  >
+                    <Icon name="Download" size={13} />
+                    Choose what to download
+                  </button>
+                  <button
+                    onClick={() => setConfirmWipe(true)}
+                    className="flex items-center gap-1.5 px-3 py-1 text-xs font-semibold rounded border border-border text-text-secondary transition-colors hover:bg-danger hover:text-white hover:border-danger"
+                  >
+                    <Icon name="Trash2" size={13} />
+                    Delete downloaded data
+                  </button>
+                </div>
+              </div>
+
+              <div className={card}>
+                <label className="block text-xs font-semibold text-text-primary mb-1">
                   Access
                 </label>
                 <p className="text-[11px] text-text-muted mb-2 leading-snug">
@@ -253,10 +318,11 @@ export default function SettingsModal({
                     : "Not signed in."}
                 </p>
                 <button
-                  onClick={onOpenContentPicker}
-                  className="px-3 py-1 text-xs font-semibold rounded border border-border bg-surface-secondary text-text-secondary transition-colors hover:bg-surface-hover hover:text-text-primary"
+                  onClick={() => setConfirmSignOut(true)}
+                  className="flex items-center gap-1.5 px-3 py-1 text-xs font-semibold rounded border border-border text-text-secondary transition-colors hover:bg-surface-hover hover:text-text-primary"
                 >
-                  Change downloaded content
+                  <Icon name="LogOut" size={13} />
+                  Forget token on this device
                 </button>
               </div>
 

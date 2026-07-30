@@ -39,7 +39,8 @@ const SongSearchRow = memo(function SongSearchRow({
     [item.title, tokens],
   );
   const bodyHl = useMemo(
-    () => highlightSnippet(item.fullText, tokens, { snippetLen: 200, before: 50 }),
+    () =>
+      highlightSnippet(item.fullText, tokens, { snippetLen: 200, before: 50 }),
     [item.fullText, tokens],
   );
   return (
@@ -76,9 +77,12 @@ export default function SongbooksTree({
   const inputRef = useRef<HTMLInputElement>(null);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  useEffect(() => () => {
-    if (timerRef.current) clearTimeout(timerRef.current);
-  }, []);
+  useEffect(
+    () => () => {
+      if (timerRef.current) clearTimeout(timerRef.current);
+    },
+    [],
+  );
 
   const scheduleSearch = (value: string) => {
     if (timerRef.current) clearTimeout(timerRef.current);
@@ -120,6 +124,7 @@ export default function SongbooksTree({
     (async () => {
       const all: { item: ApiItem; bookLabel: string; score: number }[] = [];
       for (const key of SONGBOOK_KEYS) {
+        if ((dataByBook[key] || []).length === 0) continue;
         const scored = await scoreItemsAsync(
           dataByBook[key] || [],
           (i) => i.searchIndex,
@@ -153,7 +158,7 @@ export default function SongbooksTree({
         key,
         label: bookNames[key],
         items: dataByBook[key] || [],
-      })),
+      })).filter((book) => book.items.length > 0),
     [dataByBook, bookNames],
   );
 
@@ -221,6 +226,11 @@ export default function SongbooksTree({
           </div>
         ) : (
           <div>
+            {browseBooks.length === 0 && (
+              <p className="text-text-muted text-xs text-center py-2">
+                No songbooks downloaded — pick some in Settings.
+              </p>
+            )}
             {browseBooks.map((book) => {
               const isOpen = openBook === book.key;
               return (

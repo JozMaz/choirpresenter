@@ -86,6 +86,7 @@ declare global {
       dataFetchCloud: (relPath: string) => Promise<string | null>;
       dataFetchManifest: () => Promise<string | null>;
       dataFetchCatalog: () => Promise<string | null>;
+      dataHasFiles: (relPaths: string[]) => Promise<boolean[]>;
       authWhoami: (token?: string) => Promise<WhoamiResult>;
       adminListOrgs: () => Promise<AdminResult<{ orgs: OrgRecord[] }>>;
       adminCreateOrg: (

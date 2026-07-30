@@ -755,6 +755,17 @@ ipcMain.handle("data-write-local", async (_, relPath, contents) => {
   }
 });
 
+ipcMain.handle("data-has-files", async (_, relPaths) => {
+  const list = Array.isArray(relPaths) ? relPaths : [];
+  return list.map((relPath) => {
+    try {
+      return fs.existsSync(dataCachePath(relPath));
+    } catch {
+      return false;
+    }
+  });
+});
+
 ipcMain.handle("data-fetch-cloud", async (_, relPath) => {
   const safe = relPath
     .replace(/^[/\\]+/, "")

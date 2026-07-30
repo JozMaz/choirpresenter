@@ -38,6 +38,11 @@ export const EMPTY_SELECTION: ContentSelection = {
   messages: false,
 };
 
+export const BIBLE_CACHE_KEYS: Record<string, string> = {
+  warszawska: "data/bibles/Biblia Warszawska.json",
+  gdanska: "data/bibles/Uwspółcześniona Biblia Gdańska.json",
+};
+
 export const SONGBOOK_CACHE_KEYS: Record<SongBookKey, string> = {
   newSong: "data/songs/new-song.json",
   newSongPlGb: "data/songs/new-song-pl-gb.json",
@@ -58,13 +63,18 @@ export function isSelectionEmpty(selection: ContentSelection): boolean {
   );
 }
 
+const sameKey = (a: string, b: string | undefined): boolean =>
+  b !== undefined && a.normalize("NFC") === b.normalize("NFC");
+
 export function wantsFile(key: string, selection: ContentSelection): boolean {
   if (key.startsWith("data/messages/")) return selection.messages;
   if (key.startsWith("data/bibles/")) {
-    return selection.bibles.some((b) => key === `data/bibles/${b}.json`);
+    return selection.bibles.some((b) => sameKey(key, BIBLE_CACHE_KEYS[b]));
   }
   if (key.startsWith("data/songs/")) {
-    return selection.songbooks.some((s) => key === SONGBOOK_CACHE_KEYS[s]);
+    return selection.songbooks.some((s) =>
+      sameKey(key, SONGBOOK_CACHE_KEYS[s]),
+    );
   }
   return true;
 }
