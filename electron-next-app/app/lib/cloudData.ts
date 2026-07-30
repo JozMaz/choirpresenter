@@ -16,27 +16,8 @@ export type BootstrapListener = (p: BootstrapProgress) => void;
 
 let inflight: Promise<void> | null = null;
 let lastManifest: CloudManifest | null = null;
-let manifestUpdateAvailable = false;
-let updateListeners: Array<(available: boolean) => void> = [];
-
 export function getLastManifest(): CloudManifest | null {
   return lastManifest;
-}
-export function isUpdateAvailable(): boolean {
-  return manifestUpdateAvailable;
-}
-export function onUpdateAvailability(
-  cb: (available: boolean) => void,
-): () => void {
-  updateListeners.push(cb);
-  return () => {
-    updateListeners = updateListeners.filter((l) => l !== cb);
-  };
-}
-function setUpdateAvailable(v: boolean) {
-  if (manifestUpdateAvailable === v) return;
-  manifestUpdateAvailable = v;
-  for (const l of updateListeners) l(v);
 }
 
 async function loadLocalManifest(): Promise<CloudManifest | null> {
@@ -160,7 +141,6 @@ async function runSync(
   };
   await api.dataWriteLocal(MANIFEST_KEY, JSON.stringify(nextManifest, null, 2));
   lastManifest = nextManifest;
-  setUpdateAvailable(false);
 
   onProgress({ phase: "done", ratio: 1 });
 }

@@ -245,6 +245,14 @@ export default function AdminPanel() {
                   )}
                 </span>
                 <button
+                  onClick={() => void rotateToken(org)}
+                  disabled={busy}
+                  title="Issue a new token — the old one stops working"
+                  className={smallButton}
+                >
+                  New token
+                </button>
+                <button
                   onClick={() => void setRevoked(org, !org.revokedAt)}
                   disabled={busy}
                   className={smallButton}

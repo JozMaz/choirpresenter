@@ -43,7 +43,10 @@ export function useSongbooks() {
         try {
           const book = await api.readSongBook(key);
           if (book?.songs) {
-            next[key] = { name: book.name || SONGBOOK_NAMES[key], songs: book.songs };
+            next[key] = {
+              name: book.name || SONGBOOK_NAMES[key],
+              songs: book.songs,
+            };
           }
         } catch (err) {
           console.error(`Failed to read songbook ${key}`, err);
@@ -82,12 +85,25 @@ export function useSongbooks() {
     book: SongBookKey,
     songs: SongEntry[],
   ): Promise<WriteResult> => {
-    const next: Songbook = { name: raw[book].name, songs };
+    const previous = raw[book];
+    const next: Songbook = { name: previous.name, songs };
     setRaw((prev) => ({ ...prev, [book]: next }));
-    if (window.api?.writeSongBook) {
-      return await window.api.writeSongBook(book, next);
+
+    if (!window.api?.writeSongBook) {
+      setRaw((prev) => ({ ...prev, [book]: previous }));
+      return NOT_WRITTEN;
     }
-    return NOT_WRITTEN;
+
+    try {
+      const result = await window.api.writeSongBook(book, next);
+      if (!result.localOk) {
+        setRaw((prev) => ({ ...prev, [book]: previous }));
+      }
+      return result;
+    } catch (err) {
+      setRaw((prev) => ({ ...prev, [book]: previous }));
+      throw err;
+    }
   };
 
   const upsertSong = async (
@@ -119,7 +135,6 @@ export function useSongbooks() {
     loaded,
     dataByBook,
     bookNames,
-    raw,
     findSongById,
     upsertSong,
     deleteSongById,

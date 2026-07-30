@@ -7,6 +7,7 @@ import {
   shell,
   ipcMain,
 } from "electron";
+import crypto from "crypto";
 import fs from "fs";
 import path from "path";
 import vm from "vm";
@@ -440,6 +441,26 @@ ipcMain.handle("list-message-keys", async () => {
   return result.sort();
 });
 
+async function noteUploadedFile(cacheKey, body) {
+  try {
+    const manifestPath = dataCachePath("manifest.json");
+    if (!fs.existsSync(manifestPath)) return;
+    const manifest = JSON.parse(await fs.promises.readFile(manifestPath, "utf8"));
+    if (!manifest?.files) return;
+    manifest.files[cacheKey] = {
+      hash: crypto.createHash("md5").update(body).digest("hex"),
+      size: Buffer.byteLength(body),
+    };
+    await fs.promises.writeFile(
+      manifestPath,
+      JSON.stringify(manifest, null, 2),
+      "utf8",
+    );
+  } catch (err) {
+    console.error("Could not record the uploaded file in the manifest:", err);
+  }
+}
+
 ipcMain.handle("write-songbook", async (_, book, data) => {
   const cacheKey = SONGBOOK_CACHE_KEYS[book];
   if (!cacheKey) return { localOk: false, cloudOk: null };
@@ -485,7 +506,10 @@ ipcMain.handle("write-songbook", async (_, book, data) => {
           console.error(
             `[write-songbook] REFUSED: existing has ${existingCount} songs, new has only ${newCount}. Likely a bug — keeping existing file untouched. Backup created.`,
           );
-          const backupPath = `${localPath}.attempted-${Date.now()}.json`;
+          const backupPath = path.join(
+            app.getPath("userData"),
+            `refused-${book}-${Date.now()}.json`,
+          );
           await fs.promises.writeFile(backupPath, body, "utf8");
           return { localOk: false, cloudOk: null, refused: true };
         }
@@ -516,6 +540,8 @@ ipcMain.handle("write-songbook", async (_, book, data) => {
       cloudOk = res.ok;
       if (!res.ok) {
         console.error(`Cloud PUT failed: ${res.status} ${await res.text()}`);
+      } else {
+        await noteUploadedFile(cacheKey, body);
       }
     } catch (err) {
       console.error("Cloud PUT threw:", err);

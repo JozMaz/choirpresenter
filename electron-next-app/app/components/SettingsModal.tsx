@@ -15,7 +15,7 @@ import {
   type FooterFields,
 } from "../lib/footerConfig";
 import { SONGBOOK_NAMES } from "../lib/songAdapter";
-import type { Identity } from "../lib/access";
+import type { ContentSelection, Identity } from "../lib/access";
 import type { SongSource } from "../lib/types";
 import AdminPanel from "./AdminPanel";
 import Checkbox from "./Checkbox";
@@ -61,6 +61,7 @@ interface SettingsModalProps {
   onChangeSongFooter: (config: FooterConfig) => void;
   identity: Identity | null;
   onOpenContentPicker: () => void;
+  selection: ContentSelection;
   selectionSummary: string;
 }
 
@@ -75,6 +76,7 @@ export default function SettingsModal({
   onChangeSongFooter,
   identity,
   onOpenContentPicker,
+  selection,
   selectionSummary,
 }: SettingsModalProps) {
   const [token, setToken] = useState("");
@@ -188,7 +190,7 @@ export default function SettingsModal({
     setSyncBusy(true);
     setSyncProgress({ phase: "init", ratio: 0 });
     try {
-      await applyUpdate((p) => setSyncProgress(p), { forceAll });
+      await applyUpdate((p) => setSyncProgress(p), { forceAll, selection });
       const local = getLastManifest();
       setLocalVersion(local?.version ?? null);
       setSyncProgress({ phase: "done", ratio: 1, message: "Data updated." });
@@ -538,7 +540,7 @@ export default function SettingsModal({
                   <button
                     onClick={() => handleSync(true)}
                     disabled={syncBusy}
-                    title="Re-download everything from cloud, ignoring local hash"
+                    title="Re-download the content you have selected, ignoring local hashes"
                     className="px-3 py-1 text-xs font-semibold bg-surface-secondary border border-border text-text-primary rounded hover:bg-surface-hover transition-colors disabled:opacity-50 flex items-center gap-1.5"
                   >
                     {syncBusy ? (
@@ -553,7 +555,7 @@ export default function SettingsModal({
                     ) : (
                       <>
                         <Icon name="RefreshCw" size={12} />
-                        Force re-sync (full)
+                        Force re-sync
                       </>
                     )}
                   </button>

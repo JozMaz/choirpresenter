@@ -394,6 +394,13 @@ function HomeContent({
     }
     const sourceBook = editing?.source;
     const isMove = !!editing && sourceBook !== target;
+    if (isMove && sourceBook !== "custom" && !canEditCloud) {
+      showSaveStatus(
+        "error",
+        "Songs cannot be moved out of a published songbook — only the administrator can change it.",
+      );
+      return;
+    }
 
     const song = buildSongFromEditor({
       songName: state.songName,
@@ -529,9 +536,37 @@ function HomeContent({
       setCustomSongEntries(
         customSongEntries.filter((s) => s.id !== editing.id),
       );
-    } else {
-      await deleteSongById(editing.source, editing.id);
+      closeEditor();
+      return;
     }
+
+    if (!canEditCloud) {
+      showSaveStatus(
+        "error",
+        "Published songbooks can only be changed by the administrator.",
+      );
+      return;
+    }
+
+    showSaveStatus("saving");
+    let result: Awaited<ReturnType<typeof deleteSongById>>;
+    try {
+      result = await deleteSongById(editing.source, editing.id);
+    } catch (err) {
+      console.error("Delete failed:", err);
+      showSaveStatus("error", "Delete failed — the song was kept.");
+      return;
+    }
+
+    if (!result.localOk) {
+      showSaveStatus("error", "Delete failed — the song was kept.");
+      return;
+    }
+    if (result.cloudOk === true) showSaveStatus("saved", "Song deleted");
+    else if (result.cloudOk === false)
+      showSaveStatus("error", "Deleted locally, but cloud sync failed.");
+    else showSaveStatus("local", "Deleted on this device only");
+
     closeEditor();
   };
 
@@ -871,6 +906,7 @@ function HomeContent({
         open={settingsOpen}
         onClose={() => setSettingsOpen(false)}
         identity={identity}
+        selection={selection}
         selectionSummary={selectionSummary}
         onOpenContentPicker={() => {
           setSettingsOpen(false);
