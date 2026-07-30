@@ -914,6 +914,7 @@ function HomeContent({
       {contentPickerOpen && (
         <ContentPicker
           asModal
+          showEverything={identity?.role === "admin"}
           catalog={catalog}
           initial={selection}
           onConfirm={(next) => {
@@ -1063,6 +1064,7 @@ export default function Home() {
     return (
       <ContentPicker
         catalog={catalog}
+        showEverything={identity?.role === "admin"}
         initial={selection}
         onConfirm={startBoot}
         onSkip={() => startBoot(EMPTY_SELECTION)}

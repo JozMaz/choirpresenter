@@ -7,6 +7,9 @@ import {
   type Catalog,
   type ContentSelection,
 } from "../lib/access";
+import { SONGBOOK_NAMES } from "../lib/songAdapter";
+import { BIBLE_LABELS } from "../lib/bibleData";
+import { ALL_SONGBOOK_KEYS } from "../lib/access";
 import Checkbox from "./Checkbox";
 
 interface ContentPickerProps {
@@ -16,6 +19,7 @@ interface ContentPickerProps {
   onSkip: () => void;
   asModal?: boolean;
   onCancel?: () => void;
+  showEverything?: boolean;
 }
 
 export default function ContentPicker({
@@ -25,8 +29,17 @@ export default function ContentPicker({
   onSkip,
   asModal = false,
   onCancel,
+  showEverything = false,
 }: ContentPickerProps) {
   const [selection, setSelection] = useState<ContentSelection>(initial);
+
+  const songbookOptions = showEverything
+    ? ALL_SONGBOOK_KEYS.map((key) => ({ key, name: SONGBOOK_NAMES[key] }))
+    : (catalog?.songbooks ?? []);
+  const bibleOptions = showEverything
+    ? Object.entries(BIBLE_LABELS).map(([key, name]) => ({ key, name }))
+    : (catalog?.bibles ?? []);
+  const offersMessages = showEverything || (catalog?.messages?.count ?? 0) > 0;
 
   const toggleSongbook = (key: SongBookKey, checked: boolean) =>
     setSelection((prev) => ({
@@ -54,14 +67,18 @@ export default function ContentPicker({
     <>
       <div className={sectionClass}>
         <span className={headingClass}>Songbooks</span>
-        {catalog && catalog.songbooks.length > 0 ? (
+        {songbookOptions.length > 0 ? (
           <div className="space-y-1.5">
-            {catalog.songbooks.map((book) => (
+            {songbookOptions.map((book) => (
               <Checkbox
                 key={book.key}
                 checked={selection.songbooks.includes(book.key)}
                 onChange={(checked) => toggleSongbook(book.key, checked)}
-                label={book.songs ? `${book.name} (${book.songs})` : book.name}
+                label={
+                  "songs" in book && book.songs
+                    ? `${book.name} (${book.songs})`
+                    : book.name
+                }
               />
             ))}
           </div>
@@ -72,9 +89,9 @@ export default function ContentPicker({
 
       <div className={sectionClass}>
         <span className={headingClass}>Bibles</span>
-        {catalog && catalog.bibles.length > 0 ? (
+        {bibleOptions.length > 0 ? (
           <div className="space-y-1.5">
-            {catalog.bibles.map((bible) => (
+            {bibleOptions.map((bible) => (
               <Checkbox
                 key={bible.key}
                 checked={selection.bibles.includes(bible.key)}
@@ -90,7 +107,7 @@ export default function ContentPicker({
 
       <div className={sectionClass}>
         <span className={headingClass}>Messages</span>
-        {catalog && (catalog.messages?.count ?? 0) === 0 ? (
+        {!offersMessages ? (
           <p className="text-[11px] text-text-muted">Nothing published yet.</p>
         ) : (
           <Checkbox
