@@ -55,30 +55,35 @@
       html.overlay body {
         background: transparent;
       }
-      html.overlay body {
-        padding: 0 0 4vh;
-        justify-content: flex-end;
-      }
       html.overlay #content {
-        flex: 0 0 auto;
-        width: var(--box-width, 100%);
-        height: var(--box-height, 100%);
-        transform: scale(var(--box-scale, 0.4));
+        transform: translate(
+            calc(var(--box-offset-x, 0vw) + var(--box-align-x, 0vw)),
+            calc(var(--box-offset-y, 0vh) + var(--box-align-y, 0vh))
+          )
+          scale(var(--box-scale, 0.4));
         transform-origin: bottom center;
-      }
-      html.overlay .layer {
-        inset: 4vh 4vw;
       }
       html.overlay #content::before {
         content: "";
         position: absolute;
-        inset: 0;
+        top: calc(var(--box-top, 0%) - var(--box-pad-y, 6%));
+        bottom: calc(var(--box-bottom, 0%) - var(--box-pad-y, 6%));
+        left: calc(var(--box-left, 0%) - var(--box-pad-x, 4%));
+        right: calc(var(--box-right, 0%) - var(--box-pad-x, 4%));
         pointer-events: none;
         opacity: 1;
         transition: opacity 320ms ease-in-out;
-        background: rgba(0, 0, 0, 0.5);
+        background: rgba(0, 0, 0, var(--box-alpha, 0.5));
         border-radius: var(--box-radius, 3vw);
         filter: blur(calc(var(--edge-fade, 0) * 0.025vw));
+      }
+      html.overlay.box-fixed-x #content::before {
+        left: calc((100% - var(--box-width, 106%)) / 2);
+        right: calc((100% - var(--box-width, 106%)) / 2);
+      }
+      html.overlay.box-fixed-y #content::before {
+        top: calc((100% - var(--box-height, 110%)) / 2);
+        bottom: calc((100% - var(--box-height, 110%)) / 2);
       }
       html.overlay.empty #content::before {
         opacity: 0;
@@ -124,13 +129,13 @@
         gap: 2.5vh;
         opacity: 0;
         will-change: opacity;
-        transition: opacity 320ms ease-in-out;
+        transition: opacity var(--fade-ms, 320ms) ease-in-out;
       }
       .layer.active {
         opacity: 1;
       }
       .divider {
-        border-top: 2px solid #ffffff;
+        border-top: var(--divider-width, 3px) solid #ffffff;
         width: 55%;
         margin: 2vh auto;
       }
@@ -146,13 +151,13 @@
       .divider.labeled::after {
         content: "";
         flex: 1 1 0;
-        border-top: 2px solid #ffffff;
+        border-top: var(--divider-width, 3px) solid #ffffff;
       }
       .divider-label {
         flex: 0 0 auto;
-        border: 2px solid #ffffff;
+        border: var(--divider-width, 3px) solid #ffffff;
         border-radius: 0.45em;
-        padding: 0.375em 0.55em 0.2em;
+        padding: 0.29em 0.55em 0.29em;
         font-size: 2.1vw;
         line-height: 1;
         font-weight: 600;
@@ -447,6 +452,72 @@
         capDividerLabel(scope);
       }
 
+      const INK_SELECTOR = ".text-fit, .sequence, .divider";
+
+      let boxAlignX = "center";
+      let boxAlignY = "center";
+
+      const alignShift = (mode, inkStart, inkEnd, boxStart, boxEnd) => {
+        if (mode === "start") return boxStart - inkStart;
+        if (mode === "end") return boxEnd - inkEnd;
+        return (boxStart + boxEnd) / 2 - (inkStart + inkEnd) / 2;
+      };
+
+      function updateBoxBounds(layer) {
+        if (!document.documentElement.classList.contains("overlay")) return;
+        const content = document.getElementById("content");
+        if (!layer || !content) return;
+        const base = content.getBoundingClientRect();
+        if (!base.width || !base.height) return;
+
+        let top = Infinity;
+        let left = Infinity;
+        let bottom = -Infinity;
+        let right = -Infinity;
+        layer.querySelectorAll(INK_SELECTOR).forEach((el) => {
+          const r = el.getBoundingClientRect();
+          if (!r.width && !r.height) return;
+          top = Math.min(top, r.top);
+          left = Math.min(left, r.left);
+          bottom = Math.max(bottom, r.bottom);
+          right = Math.max(right, r.right);
+        });
+        if (!Number.isFinite(top)) return;
+
+        const style = document.documentElement.style;
+        const set = (name, value, size) =>
+          style.setProperty(name, (value / size) * 100 + "%");
+        set("--box-top", top - base.top, base.height);
+        set("--box-bottom", base.bottom - bottom, base.height);
+        set("--box-left", left - base.left, base.width);
+        set("--box-right", base.right - right, base.width);
+
+        const shiftX = alignShift(
+          boxAlignX,
+          left,
+          right,
+          base.left,
+          base.right,
+        );
+        const shiftY = alignShift(
+          boxAlignY,
+          top,
+          bottom,
+          base.top,
+          base.bottom,
+        );
+        style.setProperty(
+          "--box-align-x",
+          (shiftX / window.innerWidth) * 100 + "vw",
+        );
+        style.setProperty(
+          "--box-align-y",
+          (shiftY / window.innerHeight) * 100 + "vh",
+        );
+      }
+
+      const activeLayer = () => document.querySelector(".layer.active");
+
       const layers = Array.from(document.querySelectorAll(".layer"));
       let frontIndex = 0;
       let shownHtml = null;
@@ -461,6 +532,7 @@
 
         back.innerHTML = html;
         fitContent(back);
+        updateBoxBounds(back);
 
         requestAnimationFrame(() => {
           back.classList.add("active");
@@ -486,17 +558,53 @@
         if (typeof config.edgeFade === "number") {
           setVar("--edge-fade", String(config.edgeFade));
         }
+        if (typeof config.boxPadX === "number") {
+          setVar("--box-pad-x", config.boxPadX + "%");
+        }
+        if (typeof config.boxPadY === "number") {
+          setVar("--box-pad-y", config.boxPadY + "%");
+        }
         if (typeof config.boxWidth === "number") {
           setVar("--box-width", config.boxWidth + "%");
         }
         if (typeof config.boxHeight === "number") {
           setVar("--box-height", config.boxHeight + "%");
         }
+        if (typeof config.boxModeX === "string") {
+          document.documentElement.classList.toggle(
+            "box-fixed-x",
+            config.boxModeX === "size",
+          );
+        }
+        if (typeof config.boxModeY === "string") {
+          document.documentElement.classList.toggle(
+            "box-fixed-y",
+            config.boxModeY === "size",
+          );
+        }
+        if (typeof config.boxAlignX === "string") boxAlignX = config.boxAlignX;
+        if (typeof config.boxAlignY === "string") boxAlignY = config.boxAlignY;
+        updateBoxBounds(activeLayer());
         if (typeof config.boxScale === "number") {
           setVar("--box-scale", String(config.boxScale / 100));
         }
         if (typeof config.boxRadius === "number") {
           setVar("--box-radius", config.boxRadius / 10 + "vw");
+        }
+        if (typeof config.boxAlpha === "number") {
+          setVar("--box-alpha", String(config.boxAlpha / 100));
+        }
+        if (typeof config.dividerWidth === "number") {
+          setVar("--divider-width", config.dividerWidth + "px");
+        }
+        if (typeof config.fadeMs === "number") {
+          setVar("--fade-ms", config.fadeMs + "ms");
+        }
+        if (typeof config.boxOffsetX === "number") {
+          setVar("--box-offset-x", config.boxOffsetX + "vw");
+        }
+        if (typeof config.boxOffsetY === "number") {
+          setVar("--box-offset-y", config.boxOffsetY + "vh");
         }
       }
 
@@ -525,6 +633,7 @@
 
       window.addEventListener("resize", () => {
         layers.forEach((l) => fitContent(l));
+        updateBoxBounds(layers[frontIndex]);
       });
     </script>
   </body>

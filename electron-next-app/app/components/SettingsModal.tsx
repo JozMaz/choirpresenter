@@ -223,6 +223,8 @@ interface SettingsModalProps {
   onChangeSongFooter: (config: FooterConfig) => void;
   translationLabels: TranslationLabelConfig;
   onChangeTranslationLabels: (config: TranslationLabelConfig) => void;
+  dividerWidth: number;
+  onChangeDividerWidth: (value: number) => void;
   identity: Identity | null;
   onOpenContentPicker: () => void;
   selection: ContentSelection;
@@ -240,6 +242,8 @@ export default function SettingsModal({
   onChangeSongFooter,
   translationLabels,
   onChangeTranslationLabels,
+  dividerWidth,
+  onChangeDividerWidth,
   identity,
   onOpenContentPicker,
   selection,
@@ -668,6 +672,32 @@ export default function SettingsModal({
                       </div>
                     );
                   })}
+                </div>
+              </div>
+
+              <div className={card}>
+                <label className="block text-xs font-semibold text-text-primary mb-1">
+                  Divider between languages
+                </label>
+                <p className="text-[11px] text-text-muted mb-2 leading-snug">
+                  Thickness of the line between the two languages and of the box
+                  around the translation label. Applies to all three outputs.
+                </p>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="range"
+                    min={1}
+                    max={8}
+                    step={1}
+                    value={dividerWidth}
+                    onChange={(e) =>
+                      onChangeDividerWidth(Number(e.target.value))
+                    }
+                    className="flex-1 min-w-0 h-3 appearance-none bg-transparent cursor-pointer outline-none [&::-webkit-slider-runnable-track]:h-0.75 [&::-webkit-slider-runnable-track]:rounded-full [&::-webkit-slider-runnable-track]:bg-border-secondary [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-3 [&::-webkit-slider-thumb]:h-3 [&::-webkit-slider-thumb]:-mt-[4.5px] [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-primary"
+                  />
+                  <span className="w-8 shrink-0 text-right text-[11px] font-mono tabular-nums text-text-secondary">
+                    {dividerWidth}px
+                  </span>
                 </div>
               </div>
 

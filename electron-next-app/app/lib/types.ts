@@ -42,12 +42,30 @@ export interface WhoamiResult {
   identity?: { role: "admin" | "org"; orgId: string; name: string };
 }
 
+export type BoxMode = "padding" | "size";
+
+export type BoxAlign = "start" | "center" | "end";
+
 export interface OverlayConfig {
   edgeFade: number;
+  boxModeX: BoxMode;
+  boxModeY: BoxMode;
+  boxAlignX: BoxAlign;
+  boxAlignY: BoxAlign;
+  boxPadX: number;
+  boxPadY: number;
   boxWidth: number;
   boxHeight: number;
   boxScale: number;
   boxRadius: number;
+  boxAlpha: number;
+  boxOffsetX: number;
+  boxOffsetY: number;
+  fadeMs: number;
+}
+
+export interface OutputStyle {
+  dividerWidth: number;
 }
 
 export interface NetAddress {
@@ -92,6 +110,8 @@ declare global {
       netUpdate: (html: string) => void;
       netBlackout: (active: boolean) => void;
       netConfig: (config: Partial<OverlayConfig>) => void;
+      setOutputStyle: (style: Partial<OutputStyle>) => void;
+      setHdmiConfig: (variant: 1 | 2, config: { fadeMs?: number }) => void;
       getAppVersion: () => Promise<string>;
       readSongBook: (book: SongBookKey) => Promise<Songbook | null>;
       writeSongBook: (

@@ -1,6 +1,7 @@
 "use client";
 
 import type { DisplayInfo } from "../lib/types";
+import FadeSetting from "./FadeSetting";
 import MonitorPicker from "./MonitorPicker";
 import OutputFrame from "./OutputFrame";
 
@@ -15,6 +16,9 @@ interface StreamPreviewProps {
   hdmiActive: boolean;
   onToggleHdmi: () => void;
   onRefreshDisplays: () => void;
+  dividerWidth?: number;
+  fadeMs: number;
+  onChangeFadeMs: (value: number) => void;
 }
 
 export default function StreamPreview({
@@ -28,6 +32,9 @@ export default function StreamPreview({
   hdmiActive,
   onToggleHdmi,
   onRefreshDisplays,
+  dividerWidth,
+  fadeMs,
+  onChangeFadeMs,
 }: StreamPreviewProps) {
   return (
     <div className="flex-1">
@@ -41,9 +48,16 @@ export default function StreamPreview({
           hdmiActive={hdmiActive}
           onToggleHdmi={onToggleHdmi}
         />
+        <FadeSetting value={fadeMs} onChange={onChangeFadeMs} />
       </div>
       <div className="border border-border rounded overflow-hidden">
-        <OutputFrame html={html} blackout={blackoutActive} bg={bg} />
+        <OutputFrame
+          html={html}
+          blackout={blackoutActive}
+          bg={bg}
+          dividerWidth={dividerWidth}
+          fadeMs={fadeMs}
+        />
       </div>
       <div className="mt-2 h-7 flex justify-end items-center">
         <span className="text-xs text-text-muted">{positionText}</span>

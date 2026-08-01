@@ -220,6 +220,28 @@ function HomeContent({
       style: { order: index === -1 ? VISIBLE_PREVIEW_ORDER.length : index },
     };
   };
+  const [dividerWidth, setDividerWidth] = usePersistedState<number>(
+    LS_KEYS.dividerWidth,
+    3,
+    (raw) => {
+      const parsed = raw?.trim() ? Number(raw) : NaN;
+      return Number.isFinite(parsed) ? parsed : 3;
+    },
+  );
+  const readMs = (fallback: number) => (raw: string | null) => {
+    const parsed = raw?.trim() ? Number(raw) : NaN;
+    return Number.isFinite(parsed) ? parsed : fallback;
+  };
+  const [localFadeMs, setLocalFadeMs] = usePersistedState<number>(
+    LS_KEYS.localFadeMs,
+    320,
+    readMs(320),
+  );
+  const [streamFadeMs, setStreamFadeMs] = usePersistedState<number>(
+    LS_KEYS.streamFadeMs,
+    320,
+    readMs(320),
+  );
   const [netStatus, setNetStatus] = useState<NetStatus | null>(null);
   const [netBusy, setNetBusy] = useState(false);
 
@@ -286,6 +308,18 @@ function HomeContent({
   useEffect(() => {
     window.api?.setHdmi2Config?.({ bg: out2Bg });
   }, [out2Bg]);
+
+  useEffect(() => {
+    window.api?.setOutputStyle?.({ dividerWidth });
+  }, [dividerWidth]);
+
+  useEffect(() => {
+    window.api?.setHdmiConfig?.(1, { fadeMs: localFadeMs });
+  }, [localFadeMs]);
+
+  useEffect(() => {
+    window.api?.setHdmiConfig?.(2, { fadeMs: streamFadeMs });
+  }, [streamFadeMs]);
   const [saveStatus, setSaveStatus] = useState<
     "idle" | "saving" | "saved" | "local" | "error"
   >("idle");
@@ -1040,6 +1074,9 @@ function HomeContent({
                       hdmiActive={hdmi2Active}
                       onToggleHdmi={toggleHdmi2}
                       onRefreshDisplays={refreshDisplays}
+                      dividerWidth={dividerWidth}
+                      fadeMs={streamFadeMs}
+                      onChangeFadeMs={setStreamFadeMs}
                     />
                   </div>
                   <div {...previewSlot("network")}>
@@ -1051,6 +1088,7 @@ function HomeContent({
                       onToggle={toggleNet}
                       mirror={netMirror}
                       onChangeMirror={setNetMirror}
+                      dividerWidth={dividerWidth}
                     />
                   </div>
                   <div {...previewSlot("local")}>
@@ -1063,6 +1101,9 @@ function HomeContent({
                       hdmiActive={hdmiActive}
                       onToggleHdmi={toggleHdmi}
                       onRefreshDisplays={refreshDisplays}
+                      dividerWidth={dividerWidth}
+                      fadeMs={localFadeMs}
+                      onChangeFadeMs={setLocalFadeMs}
                     />
                   </div>
                 </div>
@@ -1089,6 +1130,8 @@ function HomeContent({
         onChangeSongFooter={setSongFooter}
         translationLabels={translationLabels}
         onChangeTranslationLabels={setTranslationLabels}
+        dividerWidth={dividerWidth}
+        onChangeDividerWidth={setDividerWidth}
       />
       {freshOffers.length > 0 && !contentPickerOpen && (
         <div className="fixed bottom-4 left-1/2 -translate-x-1/2 z-30 flex items-center gap-3 px-4 py-2.5 rounded-lg bg-surface border border-primary/40 shadow-xl">

@@ -19,6 +19,9 @@ contextBridge.exposeInMainWorld("api", {
   netUpdate: (html) => ipcRenderer.send("net-update", html),
   netBlackout: (active) => ipcRenderer.send("net-blackout", active),
   netConfig: (config) => ipcRenderer.send("net-config", config),
+  setOutputStyle: (style) => ipcRenderer.send("output-style", style),
+  setHdmiConfig: (variant, config) =>
+    ipcRenderer.send("hdmi-set-config", variant, config),
 
   getAppVersion: () => ipcRenderer.invoke("get-app-version"),
 

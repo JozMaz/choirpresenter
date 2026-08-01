@@ -12,6 +12,8 @@ interface OutputFrameProps {
   bg?: string;
   overlay?: boolean;
   overlayConfig?: OverlayConfig;
+  dividerWidth?: number;
+  fadeMs?: number;
 }
 
 const CHECKER =
@@ -23,6 +25,8 @@ export default function OutputFrame({
   bg,
   overlay,
   overlayConfig,
+  dividerWidth,
+  fadeMs,
 }: OutputFrameProps) {
   const boxRef = useRef<HTMLDivElement>(null);
   const frameRef = useRef<HTMLIFrameElement>(null);
@@ -58,10 +62,13 @@ export default function OutputFrame({
   useEffect(() => {
     if (!ready) return;
     frameRef.current?.contentWindow?.postMessage(
-      { type: "view-config", config: { bg, ...overlayConfig } },
+      {
+        type: "view-config",
+        config: { bg, dividerWidth, fadeMs, ...overlayConfig },
+      },
       "*",
     );
-  }, [bg, overlayConfig, ready]);
+  }, [bg, dividerWidth, fadeMs, overlayConfig, ready]);
 
   return (
     <div

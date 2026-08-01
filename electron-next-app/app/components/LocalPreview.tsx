@@ -1,6 +1,7 @@
 "use client";
 
 import type { DisplayInfo } from "../lib/types";
+import FadeSetting from "./FadeSetting";
 import MonitorPicker from "./MonitorPicker";
 import OutputFrame from "./OutputFrame";
 
@@ -13,6 +14,9 @@ interface LocalPreviewProps {
   hdmiActive: boolean;
   onToggleHdmi: () => void;
   onRefreshDisplays: () => void;
+  dividerWidth?: number;
+  fadeMs: number;
+  onChangeFadeMs: (value: number) => void;
 }
 
 export default function LocalPreview({
@@ -24,6 +28,9 @@ export default function LocalPreview({
   hdmiActive,
   onToggleHdmi,
   onRefreshDisplays,
+  dividerWidth,
+  fadeMs,
+  onChangeFadeMs,
 }: LocalPreviewProps) {
   return (
     <div className="flex-1">
@@ -37,9 +44,15 @@ export default function LocalPreview({
           hdmiActive={hdmiActive}
           onToggleHdmi={onToggleHdmi}
         />
+        <FadeSetting value={fadeMs} onChange={onChangeFadeMs} />
       </div>
       <div className="border border-border rounded overflow-hidden">
-        <OutputFrame html={html} blackout={blackoutActive} />
+        <OutputFrame
+          html={html}
+          blackout={blackoutActive}
+          dividerWidth={dividerWidth}
+          fadeMs={fadeMs}
+        />
       </div>
     </div>
   );

@@ -66,9 +66,11 @@ let hdmiWindow = null;
 let hdmiWindow2 = null;
 
 const hdmiState = {
-  1: { html: null, blackout: true },
-  2: { html: null, blackout: true, bg: null },
+  1: { html: null, blackout: true, config: {} },
+  2: { html: null, blackout: true, bg: null, config: {} },
 };
+
+const outputStyle = {};
 
 app.setName("ChoirPresenter");
 
@@ -191,6 +193,12 @@ function syncHdmiWindow(variant) {
   const win = getHdmiWindow(variant);
   if (!win) return;
   const state = hdmiState[variant];
+  if (Object.keys(outputStyle).length > 0) {
+    win.webContents.send("hdmi-config", outputStyle);
+  }
+  if (Object.keys(state.config).length > 0) {
+    win.webContents.send("hdmi-config", state.config);
+  }
   if (state.bg) win.webContents.send("hdmi-config", { bg: state.bg });
   if (state.html !== null) win.webContents.send("hdmi-update", state.html);
   win.webContents.send("hdmi-blackout", state.blackout);
@@ -264,6 +272,22 @@ ipcMain.handle("net-status", () => netOutput.status());
 ipcMain.on("net-update", (_, html) => netOutput.pushHtml(html));
 ipcMain.on("net-blackout", (_, active) => netOutput.pushBlackout(active));
 ipcMain.on("net-config", (_, config) => netOutput.pushConfig(config));
+
+ipcMain.on("hdmi-set-config", (_, variant, config) => {
+  const state = hdmiState[variant];
+  if (!state || !config || typeof config !== "object") return;
+  Object.assign(state.config, config);
+  getHdmiWindow(variant)?.webContents.send("hdmi-config", config);
+});
+
+ipcMain.on("output-style", (_, style) => {
+  if (!style || typeof style !== "object") return;
+  Object.assign(outputStyle, style);
+  for (const variant of [1, 2]) {
+    getHdmiWindow(variant)?.webContents.send("hdmi-config", style);
+  }
+  netOutput.pushConfig(style);
+});
 
 ipcMain.on("hdmi2-config", (_, config) => {
   if (config && typeof config.bg === "string") {
