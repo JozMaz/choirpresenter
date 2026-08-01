@@ -55,6 +55,7 @@ export function toApiItem(
     translationLabel: secondary
       ? translationLabelFor(secondary.sections.flatMap((s) => s.lines))
       : TRANSLATION_LABEL_DEFAULT,
+    customTranslationLabel: secondary?.translationLabel?.trim() || undefined,
     sections,
     slides,
     fullText,

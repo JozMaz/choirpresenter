@@ -1,31 +1,24 @@
-export function alignSecondary(lines: string[], partCount: number): string[][] {
-  if (partCount <= 1) return [lines];
-  const total = lines.length;
+export const DEFAULT_MAX_LINES = 3;
+
+export function evenSplit(lines: string[], parts: number): string[][] {
+  if (parts <= 1) return [lines];
+  const base = Math.floor(lines.length / parts);
+  const remainder = lines.length % parts;
   const out: string[][] = [];
-  for (let i = 0; i < partCount; i++) {
-    const start = Math.floor((i * total) / partCount);
-    const end = Math.floor(((i + 1) * total) / partCount);
-    out.push(lines.slice(start, end));
+  let start = 0;
+  for (let i = 0; i < parts; i++) {
+    const size = base + (i >= parts - remainder ? 1 : 0);
+    out.push(lines.slice(start, start + size));
+    start += size;
   }
   return out;
 }
 
+export function partsForMax(lineCount: number, maxLines: number): number {
+  if (lineCount <= 0) return 1;
+  return Math.max(1, Math.ceil(lineCount / Math.max(1, maxLines)));
+}
+
 export function splitLines(lines: string[]): string[][] {
-  const n = lines.length;
-  if (n <= 3) return [lines];
-
-  const slice = (...ranges: [number, number][]) =>
-    ranges.map(([a, b]) => lines.slice(a, b));
-
-  if (n === 4) return slice([0, 2], [2, 4]);
-  if (n === 5) return slice([0, 2], [2, 5]);
-  if (n === 6) return slice([0, 3], [3, 6]);
-  if (n === 7) return slice([0, 2], [2, 4], [4, 7]);
-  if (n === 8) return slice([0, 3], [3, 5], [5, 8]);
-  if (n === 9) return slice([0, 3], [3, 6], [6, 9]);
-  if (n === 10) return slice([0, 3], [3, 6], [6, 8], [8, 10]);
-
-  const out: string[][] = [];
-  for (let i = 0; i < n; i += 3) out.push(lines.slice(i, Math.min(i + 3, n)));
-  return out;
+  return evenSplit(lines, partsForMax(lines.length, DEFAULT_MAX_LINES));
 }

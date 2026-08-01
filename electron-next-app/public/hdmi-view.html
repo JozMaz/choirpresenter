@@ -36,8 +36,7 @@
       @font-face {
         font-family: "MyriadPro";
         src:
-          url("fonts/MyriadPro/MyriadProBold/MyriadProBold.woff")
-            format("woff"),
+          url("fonts/MyriadPro/MyriadProBold/MyriadProBold.woff") format("woff"),
           url("fonts/MyriadPro/MyriadProBold/MyriadProBold.ttf")
             format("truetype");
         font-style: normal;
@@ -99,14 +98,41 @@
         opacity: 1;
       }
       .divider {
-        border-top: 3px solid #aaaaaa;
+        border-top: 3px solid #ffffff;
         width: 55%;
         margin: 2vh auto;
-        opacity: 0.85;
+      }
+      .divider.labeled {
+        border-top: none;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 1vw;
+        flex: 0 0 auto;
+      }
+      .divider.labeled::before,
+      .divider.labeled::after {
+        content: "";
+        flex: 1 1 0;
+        border-top: 3px solid #ffffff;
+      }
+      .divider-label {
+        flex: 0 0 auto;
+        border: 3px solid #ffffff;
+        border-radius: 0.2em;
+        padding: 0.375em 0.55em 0.2em;
+        font-size: 2.1vw;
+        line-height: 1;
+        font-weight: 600;
+        letter-spacing: 0.08em;
+        text-indent: 0.08em;
+        text-transform: uppercase;
+        color: #ffffff;
+        white-space: nowrap;
       }
       .sequence {
         font-size: 1.8vw;
-        color: #cccccc;
+        color: #ffffff;
         font-weight: 600;
         letter-spacing: 0.02em;
       }
@@ -289,6 +315,7 @@
 
       const NOWRAP_FLOOR = 0.4;
       const MIN_RATIO = 0.8;
+      const LABEL_RATIO = 0.85;
 
       function freezeBasis(els, blocks) {
         els.forEach((el) => {
@@ -354,10 +381,30 @@
         });
       }
 
+      function capDividerLabel(scope) {
+        const labels = Array.from(scope.querySelectorAll(".divider-label"));
+        if (!labels.length) return;
+        const sizes = Array.from(
+          scope.querySelectorAll(".text-fit:not(.text-flow)"),
+        )
+          .map((el) => parseFloat(getComputedStyle(el).fontSize))
+          .filter((v) => v > 0);
+        if (!sizes.length) return;
+        const cap = Math.min(...sizes) * LABEL_RATIO;
+        labels.forEach((label) => {
+          const base = parseFloat(getComputedStyle(label).fontSize);
+          label.style.fontSize = Math.min(base, cap) + "px";
+        });
+      }
+
       function fitContent(root) {
         const scope = root || document;
+        scope
+          .querySelectorAll(".divider-label")
+          .forEach((el) => (el.style.fontSize = ""));
         Array.from(scope.querySelectorAll(".text-flow")).forEach(fitFontSize);
         fitSongText(scope);
+        capDividerLabel(scope);
       }
 
       const layers = Array.from(document.querySelectorAll(".layer"));

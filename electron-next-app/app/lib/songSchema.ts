@@ -74,7 +74,6 @@ export function buildSectionsAndSlides(
       const altSlide = alt?.slides[i];
       slides.push({
         sectionIndex,
-        label,
         primary: slide,
         secondary: altSlide?.length ? altSlide : undefined,
       });

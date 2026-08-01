@@ -20,6 +20,7 @@ export interface EditorState {
   key: string | null;
   sections: EditorSection[];
   targetBook: TargetBook;
+  translationLabel: string;
 }
 
 interface SongEditorProps {
@@ -113,10 +114,15 @@ export default function SongEditor({
     initial?.targetBook ?? "custom",
   );
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [translationLabel, setTranslationLabel] = useState(
+    initial?.translationLabel ?? "",
+  );
 
-  const secondaryLabel = translationLabelFor(
+  const detectedLabel = translationLabelFor(
     sections.flatMap((s) => (s.showAlt ? toLines(s.altLines) : [])),
   );
+  const secondaryLabel = translationLabel.trim() || detectedLabel;
+  const hasTranslation = sections.some((s) => s.showAlt && s.isTranslation);
 
   const withRegeneratedSlides = (s: EditorSection): EditorSection =>
     s.slidesLocked ? s : { ...s, slides: generateSlides(s) };
@@ -207,6 +213,7 @@ export default function SongEditor({
       key: musicKey || null,
       sections: sections.map(withRegeneratedSlides),
       targetBook,
+      translationLabel: hasTranslation ? translationLabel.trim() : "",
     });
   };
 
@@ -244,6 +251,29 @@ export default function SongEditor({
             >
               {isMoving ? "Update & Move" : isEditing ? "Update" : "Save"}
             </button>
+          </div>
+        </div>
+
+        <div className="flex gap-2 items-start bg-primary/10 border border-primary/30 rounded-md px-3 py-2">
+          <Icon
+            name="Info"
+            size={13}
+            className="shrink-0 mt-0.5 text-primary"
+          />
+          <div className="text-[11px] text-text-secondary leading-snug">
+            <p>
+              <span className="font-semibold text-text-primary">
+                Slides are used only by outputs set to “Saved” in Settings →
+                “What goes on each output”.
+              </span>{" "}
+              Outputs set to “Whole” or “Max lines” split the text themselves
+              and ignore them.
+            </p>
+            <p>
+              Your own split is kept only once a section is marked{" "}
+              <span className="font-semibold text-amber-600">edited</span> —
+              otherwise it is split again on every load.
+            </p>
           </div>
         </div>
 
@@ -307,6 +337,24 @@ export default function SongEditor({
               </div>
             </div>
           </div>
+
+          {hasTranslation && (
+            <div>
+              <label className={labelClass}>Translation label</label>
+              <input
+                type="text"
+                value={translationLabel}
+                onChange={(e) => setTranslationLabel(e.target.value)}
+                placeholder={detectedLabel}
+                className={inputClass}
+              />
+              <p className="text-[10px] text-text-muted mt-0.5 leading-snug">
+                Shown in the box on the divider above the translation. Leave
+                empty to use the songbook setting, or „{detectedLabel}” detected
+                from the text.
+              </p>
+            </div>
+          )}
         </div>
 
         {sections.map((section, idx) => (
@@ -396,7 +444,7 @@ export default function SongEditor({
                         patchSection(section.id, { isTranslation: v })
                       }
                       label="Second language is a translation only"
-                      hint={`Italics + „${secondaryLabel}” label above it on both outputs. Leave off when the second language is also sung.`}
+                      hint={`Italics + a „${secondaryLabel}” box on the divider. Leave off when the second language is also sung.`}
                     />
                   </>
                 )}

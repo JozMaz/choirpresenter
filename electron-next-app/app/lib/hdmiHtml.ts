@@ -1,6 +1,7 @@
 import type { ApiItem, SlideText } from "./types";
 import { buildSongFooter } from "./songAdapter";
 import type { FooterConfig } from "./footerConfig";
+import type { OutputChrome, OutputKey } from "./outputConfig";
 
 const ESCAPES: Record<string, string> = {
   "&": "&amp;",
@@ -16,12 +17,19 @@ const escapeHtml = (s: string): string =>
 const linesToHtml = (lines: string[]): string =>
   lines.map(escapeHtml).join("<br>");
 
-interface BuildHdmiHtmlArgs {
-  currentSong: ApiItem | null;
-  output1: SlideText;
+const labelRow = (label: string): string =>
+  label
+    ? `<div class="title-row"><span class="sequence">${escapeHtml(label)}</span></div>`
+    : "";
+
+interface BuildOutputHtmlArgs {
+  song: ApiItem | null;
+  text: SlideText;
   sectionLabel: string;
-  isTranslation?: boolean;
+  chrome: OutputChrome;
+  output: OutputKey;
   footerConfig?: FooterConfig;
+  translationLabel?: string;
 }
 
 function buildCenteredHtml(
@@ -30,16 +38,13 @@ function buildCenteredHtml(
   bottomLabel: string,
   options: { justify?: boolean } = {},
 ) {
-  const top = topLabel
-    ? `<div class="title-row"><span class="sequence">${escapeHtml(topLabel)}</span></div>`
-    : "";
   const textClass = options.justify
     ? "text-fit text-flow text-justify"
     : "text-fit text-flow";
   return (
-    top +
+    labelRow(topLabel) +
     `<div class="text-block"><div class="${textClass}">${linesToHtml(lines)}</div></div>` +
-    `<div class="title-row"><span class="sequence">${escapeHtml(bottomLabel)}</span></div>`
+    labelRow(bottomLabel)
   );
 }
 
@@ -58,20 +63,22 @@ function buildBody(
   const topExtra = roomy ? (split ? " roomy-top" : " roomy") : "";
   const bottomExtra = roomy ? (split ? " roomy-bottom" : " roomy") : "";
 
+  const badge = isTranslation && translationLabel ? translationLabel : "";
+
   let html = "";
   if (hasPrimary) {
     const block = hug ? "text-block align-bottom" : `text-block${topExtra}`;
     html += `<div class="${block}"><div class="text-fit">${linesToHtml(primary)}</div></div>`;
   }
-  if (hasPrimary && hasSecondary) html += `<div class="divider"></div>`;
+  if (hasSecondary && (hasPrimary || badge)) {
+    html += badge
+      ? `<div class="divider labeled"><span class="divider-label">${escapeHtml(badge)}</span></div>`
+      : `<div class="divider"></div>`;
+  }
   if (hasSecondary) {
     const cls = isTranslation ? "text-fit text-italic" : "text-fit";
     const block = hug ? "text-block align-top" : `text-block${bottomExtra}`;
-    const lines =
-      isTranslation && translationLabel
-        ? [translationLabel, ...secondary!]
-        : secondary!;
-    html += `<div class="${block}"><div class="${cls}">${linesToHtml(lines)}</div></div>`;
+    html += `<div class="${block}"><div class="${cls}">${linesToHtml(secondary!)}</div></div>`;
   }
   return html;
 }
@@ -79,84 +86,56 @@ function buildBody(
 const isEmpty = (t: SlideText) =>
   t.primary.length === 0 && (t.secondary?.length ?? 0) === 0;
 
-export function buildHdmiHtml({
-  currentSong,
-  output1,
+export function buildOutputHtml({
+  song,
+  text,
   sectionLabel,
-  isTranslation,
+  chrome,
+  output,
   footerConfig,
-}: BuildHdmiHtmlArgs): string {
-  if (!currentSong || isEmpty(output1)) return "";
+  translationLabel,
+}: BuildOutputHtmlArgs): string {
+  if (!song || isEmpty(text)) return "";
 
-  if (currentSong.isBible && currentSong.bibleMeta) {
+  if (song.isBible && song.bibleMeta) {
     return buildCenteredHtml(
-      output1.primary,
-      sectionLabel,
-      currentSong.bibleMeta.bibleName,
+      text.primary,
+      chrome.header ? sectionLabel : "",
+      chrome.footer ? song.bibleMeta.bibleName : "",
     );
   }
 
-  if (currentSong.isMessage && currentSong.messageMeta) {
-    return buildCenteredHtml(output1.primary, "", sectionLabel, {
-      justify: true,
-    });
+  if (song.isMessage && song.messageMeta) {
+    return buildCenteredHtml(
+      text.primary,
+      chrome.header ? sectionLabel : "",
+      chrome.footer ? sectionLabel : "",
+      { justify: true },
+    );
   }
 
-  const header = `<div class="header"><span class="sequence">${escapeHtml(sectionLabel)}</span><span class="sequence">${escapeHtml(currentSong.sequence || "")}</span></div>`;
-  const footer = `<div class="title-row"><span class="sequence">${escapeHtml(buildSongFooter(currentSong, footerConfig))}</span></div>`;
+  const stream = output === "stream";
+  const header =
+    chrome.header || chrome.sequence
+      ? `<div class="header"><span class="sequence">${escapeHtml(
+          chrome.header ? sectionLabel : "",
+        )}</span><span class="sequence">${escapeHtml(
+          chrome.sequence ? song.sequence || "" : "",
+        )}</span></div>`
+      : "";
+  const footer = chrome.footer
+    ? labelRow(buildSongFooter(song, footerConfig))
+    : "";
 
-  return (
-    header +
-    buildBody(
-      output1.primary,
-      output1.secondary,
-      isTranslation,
-      currentSong.translationLabel,
-      false,
-      true,
-    ) +
-    footer
+  const body = buildBody(
+    text.primary,
+    chrome.secondary ? text.secondary : undefined,
+    text.isTranslation,
+    translationLabel || song.translationLabel,
+    stream,
+    !stream,
   );
-}
 
-export function buildHdmi2Html(
-  currentSong: ApiItem | null,
-  output2: SlideText,
-  sectionLabel: string,
-  isTranslation?: boolean,
-  includeSecondary = true,
-): string {
-  if (!currentSong || isEmpty(output2)) return "";
-
-  if (currentSong.isBible && currentSong.bibleMeta) {
-    return buildCenteredHtml(
-      output2.primary,
-      sectionLabel,
-      currentSong.bibleMeta.bibleName,
-    );
-  }
-
-  if (currentSong.isMessage && currentSong.messageMeta) {
-    return buildCenteredHtml(output2.primary, "", sectionLabel, {
-      justify: true,
-    });
-  }
-
-  if (!includeSecondary) {
-    return `<div class="out2">${buildBody(
-      output2.primary,
-      undefined,
-      false,
-      undefined,
-      false,
-    )}</div>`;
-  }
-
-  return `<div class="out2">${buildBody(
-    output2.primary,
-    output2.secondary,
-    isTranslation,
-    currentSong.translationLabel,
-    true,
-  )}</div>`;
+  const html = header + body + footer;
+  return stream ? `<div class="out2">${html}</div>` : html;
 }

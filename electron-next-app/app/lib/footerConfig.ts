@@ -35,3 +35,14 @@ export function footerFieldsFor(
 ): FooterFields {
   return config?.[source] ?? DEFAULT_FOOTER_CONFIG[source] ?? ALL;
 }
+
+export type TranslationLabelConfig = Partial<Record<SongSource, string>>;
+
+export const DEFAULT_TRANSLATION_LABELS: TranslationLabelConfig = {};
+
+export function translationLabelOverride(
+  source: SongSource,
+  config?: TranslationLabelConfig,
+): string {
+  return config?.[source]?.trim() ?? "";
+}

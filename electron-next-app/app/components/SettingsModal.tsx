@@ -13,7 +13,21 @@ import {
   footerFieldsFor,
   type FooterConfig,
   type FooterFields,
+  type TranslationLabelConfig,
 } from "../lib/footerConfig";
+import { TRANSLATION_LABEL_DEFAULT } from "../lib/constants";
+import {
+  MAX_GROUP_LINES,
+  MIN_GROUP_LINES,
+  OUTPUT_KEYS,
+  OUTPUT_SCOPE_ORDER,
+  type GroupMode,
+  type OutputConfig,
+  type OutputKey,
+  type OutputScope,
+  type OutputSettings,
+} from "../lib/outputConfig";
+import { DEFAULT_MAX_LINES } from "../lib/slideSplit";
 import { SONGBOOK_NAMES } from "../lib/songAdapter";
 import type { ContentSelection, Identity } from "../lib/access";
 import type { SongSource } from "../lib/types";
@@ -21,7 +35,6 @@ import AdminPanel from "./AdminPanel";
 import Checkbox from "./Checkbox";
 import ConfirmDialog from "./ConfirmDialog";
 import Icon from "./Icon";
-import Toggle from "./Toggle";
 
 const FOOTER_FIELDS: { key: keyof FooterFields; label: string }[] = [
   { key: "number", label: "Number" },
@@ -38,6 +51,48 @@ const FOOTER_SOURCE_LABELS: Record<SongSource, string> = {
   children: SONGBOOK_NAMES.children,
 };
 
+const OUTPUT_SCOPE_LABELS: Record<OutputScope, string> = {
+  newSong: SONGBOOK_NAMES.newSong,
+  newSongPlGb: SONGBOOK_NAMES.newSongPlGb,
+  pielgrzym: SONGBOOK_NAMES.pielgrzym,
+  roboczy: SONGBOOK_NAMES.roboczy,
+  children: SONGBOOK_NAMES.children,
+  custom: "My Songs",
+  bible: "Bible",
+  messages: "Sermons",
+};
+
+const SONG_SCOPES = OUTPUT_SCOPE_ORDER.filter(
+  (s) => s !== "bible" && s !== "messages",
+);
+
+const OUTPUT_LABELS: Record<OutputKey, string> = {
+  local: "Local",
+  stream: "Stream",
+};
+
+const GROUP_CHOICES: { kind: GroupMode["kind"]; label: string }[] = [
+  { kind: "section", label: "Whole" },
+  { kind: "stored", label: "Saved" },
+  { kind: "max", label: "Max lines" },
+];
+
+const SONG_CHROME = {
+  header: "Section label (top left)",
+  footer: "Song caption (bottom)",
+};
+
+const CHROME_LABELS: Record<OutputScope, { header: string; footer: string }> = {
+  newSong: SONG_CHROME,
+  newSongPlGb: SONG_CHROME,
+  pielgrzym: SONG_CHROME,
+  roboczy: SONG_CHROME,
+  children: SONG_CHROME,
+  custom: SONG_CHROME,
+  bible: { header: "Reference on top", footer: "Bible name below" },
+  messages: { header: "Title on top", footer: "Title below" },
+};
+
 export const OUT2_BG_OPTIONS = [
   { value: "#000000", label: "Black", hint: "vMix luma key" },
   { value: "#00ff00", label: "Green", hint: "vMix chroma key" },
@@ -50,15 +105,124 @@ const THEME_OPTIONS: { value: ThemePref; label: string }[] = [
   { value: "system", label: "System" },
 ];
 
+function OutputPanel({
+  scope,
+  output,
+  settings,
+  onChange,
+}: {
+  scope: OutputScope;
+  output: OutputKey;
+  settings: OutputSettings;
+  onChange: (next: OutputSettings) => void;
+}) {
+  const { group, chrome } = settings;
+  const maxLines = group.kind === "max" ? group.lines : DEFAULT_MAX_LINES;
+  const isSong = scope !== "bible" && scope !== "messages";
+
+  const setGroup = (kind: GroupMode["kind"]) =>
+    onChange({
+      ...settings,
+      group: kind === "max" ? { kind, lines: maxLines } : { kind },
+    });
+
+  const stepLines = (delta: number) =>
+    onChange({
+      ...settings,
+      group: {
+        kind: "max",
+        lines: Math.min(
+          MAX_GROUP_LINES,
+          Math.max(MIN_GROUP_LINES, maxLines + delta),
+        ),
+      },
+    });
+
+  const setChrome = (field: keyof typeof chrome, value: boolean) =>
+    onChange({ ...settings, chrome: { ...chrome, [field]: value } });
+
+  return (
+    <div className="flex-1 min-w-0 rounded border border-border p-2.5">
+      <div className="text-[11px] font-semibold text-text-primary mb-2">
+        {OUTPUT_LABELS[output]}
+      </div>
+      <div className="flex items-center gap-1 mb-2">
+        {GROUP_CHOICES.map((choice) => (
+          <button
+            key={choice.kind}
+            onClick={() => setGroup(choice.kind)}
+            className={`px-2 py-0.5 text-[10px] font-semibold rounded border transition-colors ${
+              group.kind === choice.kind
+                ? "bg-primary border-primary text-white"
+                : "bg-surface-secondary border-border text-text-secondary hover:text-text-primary"
+            }`}
+          >
+            {choice.label}
+          </button>
+        ))}
+        {group.kind === "max" && (
+          <span className="flex items-center gap-1 ml-0.5">
+            <button
+              onClick={() => stepLines(-1)}
+              disabled={maxLines <= MIN_GROUP_LINES}
+              className="w-5 h-5 flex items-center justify-center rounded border border-border text-text-secondary hover:text-text-primary disabled:opacity-40"
+            >
+              <Icon name="Minus" size={10} />
+            </button>
+            <span className="w-3 text-center text-[11px] font-semibold text-text-primary tabular-nums">
+              {maxLines}
+            </span>
+            <button
+              onClick={() => stepLines(1)}
+              disabled={maxLines >= MAX_GROUP_LINES}
+              className="w-5 h-5 flex items-center justify-center rounded border border-border text-text-secondary hover:text-text-primary disabled:opacity-40"
+            >
+              <Icon name="Plus" size={10} />
+            </button>
+          </span>
+        )}
+      </div>
+      <div className="space-y-1">
+        <Checkbox
+          checked={chrome.header}
+          onChange={(checked) => setChrome("header", checked)}
+          label={CHROME_LABELS[scope].header}
+        />
+        {isSong && (
+          <Checkbox
+            checked={chrome.sequence}
+            onChange={(checked) => setChrome("sequence", checked)}
+            label="Sequence (top right)"
+          />
+        )}
+        <Checkbox
+          checked={chrome.footer}
+          onChange={(checked) => setChrome("footer", checked)}
+          label={CHROME_LABELS[scope].footer}
+        />
+        {isSong && (
+          <Checkbox
+            checked={chrome.secondary}
+            onChange={(checked) => setChrome("secondary", checked)}
+            label="Second language"
+          />
+        )}
+      </div>
+    </div>
+  );
+}
+
 interface SettingsModalProps {
   open: boolean;
   onClose: () => void;
   out2Bg: string;
   onChangeOut2Bg: (bg: string) => void;
-  out2SecondLang: boolean;
-  onChangeOut2SecondLang: (enabled: boolean) => void;
+  outputConfig: OutputConfig;
+  onChangeOutputConfig: (config: OutputConfig) => void;
   songFooter: FooterConfig;
   onChangeSongFooter: (config: FooterConfig) => void;
+  translationLabels: TranslationLabelConfig;
+  onChangeTranslationLabels: (config: TranslationLabelConfig) => void;
   identity: Identity | null;
   onOpenContentPicker: () => void;
   selection: ContentSelection;
@@ -70,15 +234,18 @@ export default function SettingsModal({
   onClose,
   out2Bg,
   onChangeOut2Bg,
-  out2SecondLang,
-  onChangeOut2SecondLang,
+  outputConfig,
+  onChangeOutputConfig,
   songFooter,
   onChangeSongFooter,
+  translationLabels,
+  onChangeTranslationLabels,
   identity,
   onOpenContentPicker,
   selection,
   selectionSummary,
 }: SettingsModalProps) {
+  const [outputScope, setOutputScope] = useState<OutputScope>("newSong");
   const [token, setToken] = useState("");
   const [savedToken, setSavedToken] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
@@ -279,6 +446,76 @@ export default function SettingsModal({
         <div
           className={`flex-1 overflow-y-auto px-6 pb-5 ${adminView ? "hidden" : ""}`}
         >
+          <div className={`${card} mb-4`}>
+            <label className="block text-xs font-semibold text-text-primary mb-1">
+              What goes on each output
+            </label>
+            <p className="text-[11px] text-text-muted mb-2 leading-snug">
+              How much text each output shows and which captions it prints, set
+              per songbook. Whole = the entire section, Saved = the split stored
+              with the song, Max lines = split evenly into parts of at most N
+              lines, smallest part first.
+            </p>
+            <div className="flex flex-wrap items-center gap-1 mb-3">
+              {OUTPUT_SCOPE_ORDER.map((scope) => (
+                <button
+                  key={scope}
+                  onClick={() => setOutputScope(scope)}
+                  className={`px-2 py-0.5 text-[10px] font-semibold rounded border transition-colors ${
+                    outputScope === scope
+                      ? "bg-primary border-primary text-white"
+                      : "bg-surface-secondary border-border text-text-secondary hover:text-text-primary"
+                  }`}
+                >
+                  {OUTPUT_SCOPE_LABELS[scope]}
+                </button>
+              ))}
+            </div>
+            <div className="flex gap-2">
+              {OUTPUT_KEYS.map((output) => (
+                <OutputPanel
+                  key={output}
+                  scope={outputScope}
+                  output={output}
+                  settings={outputConfig[outputScope][output]}
+                  onChange={(next) =>
+                    onChangeOutputConfig({
+                      ...outputConfig,
+                      [outputScope]: {
+                        ...outputConfig[outputScope],
+                        [output]: next,
+                      },
+                    })
+                  }
+                />
+              ))}
+            </div>
+            {outputScope !== "bible" && outputScope !== "messages" && (
+              <button
+                onClick={() => {
+                  const pair = outputConfig[outputScope];
+                  const next = { ...outputConfig };
+                  for (const scope of SONG_SCOPES) {
+                    next[scope] = {
+                      local: {
+                        ...pair.local,
+                        chrome: { ...pair.local.chrome },
+                      },
+                      stream: {
+                        ...pair.stream,
+                        chrome: { ...pair.stream.chrome },
+                      },
+                    };
+                  }
+                  onChangeOutputConfig(next);
+                }}
+                className="mt-2 px-2.5 py-1 text-[11px] font-semibold rounded border border-border text-text-secondary transition-colors hover:bg-surface-hover hover:text-text-primary"
+              >
+                Copy to every songbook
+              </button>
+            )}
+          </div>
+
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-start">
             <div className="space-y-4">
               <div className={card}>
@@ -356,13 +593,6 @@ export default function SettingsModal({
                 <label className="block text-xs font-semibold text-text-primary mb-2">
                   Stream output
                 </label>
-                <Toggle
-                  checked={out2SecondLang}
-                  onChange={onChangeOut2SecondLang}
-                  label="Second language on stream"
-                  description="Off: stream shows only the main text, without divider and translation. Local output always shows both languages."
-                  className="mb-3 pb-3 border-b border-border"
-                />
                 <p className="text-[11px] text-text-muted mb-2 leading-snug">
                   Background of the stream output. Black works with vMix luma
                   key, green/blue with chroma key.
@@ -438,6 +668,38 @@ export default function SettingsModal({
                       </div>
                     );
                   })}
+                </div>
+              </div>
+
+              <div className={card}>
+                <label className="block text-xs font-semibold text-text-primary mb-1">
+                  Translation label
+                </label>
+                <p className="text-[11px] text-text-muted mb-2 leading-snug">
+                  Text of the box printed on the divider above a translation,
+                  per songbook. Leave empty to detect it from the text of the
+                  translation. A song can override this in the editor.
+                </p>
+                <div className="space-y-1">
+                  {FOOTER_SOURCE_ORDER.map((source) => (
+                    <div key={source} className="flex items-center gap-2">
+                      <span className="flex-1 min-w-0 text-[11px] text-text-secondary truncate">
+                        {FOOTER_SOURCE_LABELS[source]}
+                      </span>
+                      <input
+                        type="text"
+                        value={translationLabels[source] ?? ""}
+                        onChange={(e) =>
+                          onChangeTranslationLabels({
+                            ...translationLabels,
+                            [source]: e.target.value,
+                          })
+                        }
+                        placeholder={`auto (${TRANSLATION_LABEL_DEFAULT})`}
+                        className="w-40 px-2 py-1 text-[11px] border border-border-secondary rounded hover:border-primary/60 transition-colors focus:outline-none focus:ring-1 focus:ring-primary bg-surface text-text-primary placeholder-text-muted"
+                      />
+                    </div>
+                  ))}
                 </div>
               </div>
 

@@ -118,11 +118,7 @@ declare global {
 }
 
 export type SongBookKey =
-  | "newSong"
-  | "newSongPlGb"
-  | "pielgrzym"
-  | "roboczy"
-  | "children";
+  "newSong" | "newSongPlGb" | "pielgrzym" | "roboczy" | "children";
 
 export type SongSource = SongBookKey | "custom";
 
@@ -146,6 +142,7 @@ export interface SectionEntry {
 
 export interface LangBlock {
   isTranslation: boolean;
+  translationLabel?: string;
   sections: SectionEntry[];
 }
 
@@ -184,7 +181,6 @@ export interface SlideText {
 
 export interface Slide extends SlideText {
   sectionIndex: number;
-  label: string;
 }
 
 export interface Section extends SlideText {
@@ -212,6 +208,7 @@ export interface ApiItem {
   bookName: string;
   secondaryIsTranslation: boolean;
   translationLabel: string;
+  customTranslationLabel?: string;
   sections: Section[];
   slides: Slide[];
   searchIndex: string;

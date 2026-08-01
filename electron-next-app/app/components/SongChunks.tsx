@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef } from "react";
+import type { SongPlan } from "../lib/outputPlan";
 import type { ApiItem, SectionType } from "../lib/types";
 
 const TYPE_COLOR: Record<SectionType, string> = {
@@ -12,14 +13,16 @@ const TYPE_COLOR: Record<SectionType, string> = {
 
 interface SongChunksProps {
   currentSong: ApiItem;
-  activeSlideIndex: number;
-  onGoToSlide: (idx: number) => void;
+  plan: SongPlan;
+  activeStepIndex: number;
+  onGoToStep: (idx: number) => void;
 }
 
 export default function SongChunks({
   currentSong,
-  activeSlideIndex,
-  onGoToSlide,
+  plan,
+  activeStepIndex,
+  onGoToStep,
 }: SongChunksProps) {
   const activeRef = useRef<HTMLButtonElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
@@ -29,7 +32,7 @@ export default function SongChunks({
     const songChanged = lastSongIdRef.current !== currentSong.id;
     lastSongIdRef.current = currentSong.id;
 
-    if (activeSlideIndex < 0) {
+    if (activeStepIndex < 0) {
       if (songChanged) listRef.current?.scrollTo({ top: 0 });
       return;
     }
@@ -37,17 +40,17 @@ export default function SongChunks({
       block: songChanged ? "center" : "nearest",
       behavior: songChanged ? "auto" : "smooth",
     });
-  }, [activeSlideIndex, currentSong.id]);
+  }, [activeStepIndex, currentSong.id]);
 
   return (
     <div ref={listRef} className="flex-1 min-h-0 overflow-y-auto px-2 py-2">
       <div className="space-y-2">
         {currentSong.sections.map((section, sIdx) => {
-          const slideIndexes = Array.from(
-            { length: section.slideCount },
-            (_, i) => section.slideStart + i,
+          const stepIndexes = Array.from(
+            { length: plan.sectionCount[sIdx] ?? 0 },
+            (_, i) => (plan.sectionStart[sIdx] ?? 0) + i,
           );
-          const sectionActive = slideIndexes.includes(activeSlideIndex);
+          const sectionActive = stepIndexes.includes(activeStepIndex);
           return (
             <div
               key={sIdx}
@@ -64,21 +67,21 @@ export default function SongChunks({
                 <span className="text-[11px] font-bold uppercase tracking-wide text-text-primary">
                   {section.label}
                 </span>
-                {section.slideCount > 1 && (
+                {stepIndexes.length > 1 && (
                   <span className="text-[10px] text-text-muted">
-                    {section.slideCount} parts
+                    {stepIndexes.length} parts
                   </span>
                 )}
               </div>
               <div className="p-1.5 space-y-1">
-                {slideIndexes.map((slideIdx) => {
-                  const slide = currentSong.slides[slideIdx];
-                  const isActive = slideIdx === activeSlideIndex;
+                {stepIndexes.map((stepIdx) => {
+                  const slide = plan.steps[stepIdx].preview;
+                  const isActive = stepIdx === activeStepIndex;
                   return (
                     <button
-                      key={slideIdx}
+                      key={stepIdx}
                       ref={isActive ? activeRef : null}
-                      onClick={() => onGoToSlide(slideIdx)}
+                      onClick={() => onGoToStep(stepIdx)}
                       className={`w-full text-left rounded border px-2 py-1.5 transition-colors ${
                         isActive
                           ? "bg-primary border-primary text-white"

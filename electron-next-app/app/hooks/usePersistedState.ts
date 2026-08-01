@@ -5,7 +5,7 @@ import { useEffect, useState } from "react";
 export function usePersistedState<T>(
   key: string,
   initialValue: T,
-  parse?: (raw: string) => T,
+  parse?: (raw: string | null) => T,
 ): [T, React.Dispatch<React.SetStateAction<T>>, boolean] {
   const [value, setValue] = useState<T>(initialValue);
   const [hydrated, setHydrated] = useState(false);
@@ -13,9 +13,8 @@ export function usePersistedState<T>(
   useEffect(() => {
     try {
       const raw = localStorage.getItem(key);
-      if (raw !== null) {
-        setValue(parse ? parse(raw) : (JSON.parse(raw) as T));
-      }
+      if (parse) setValue(parse(raw));
+      else if (raw !== null) setValue(JSON.parse(raw) as T);
     } catch (err) {
       console.error(`Failed to hydrate ${key}`, err);
     }

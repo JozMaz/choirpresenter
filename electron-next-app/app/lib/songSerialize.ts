@@ -1,17 +1,19 @@
 import type {
   EditorSection,
   EditorSlide,
+  LangBlock,
   SectionEntry,
   SongEntry,
 } from "./types";
 import { deriveSequence } from "./songSchema";
-import { splitLines, alignSecondary } from "./slideSplit";
+import { splitLines, evenSplit } from "./slideSplit";
 
 export interface BuildSongArgs {
   songName: string;
   key: string | null;
   number: number | null;
   sections: EditorSection[];
+  translationLabel?: string;
   existingId?: string;
 }
 
@@ -29,7 +31,7 @@ export function generateSlides(
 
   const parts = splitLines(lines);
   const alt = section.showAlt ? toLines(section.altLines) : [];
-  const altParts = alt.length ? alignSecondary(alt, parts.length) : [];
+  const altParts = alt.length ? evenSplit(alt, parts.length) : [];
 
   return parts.map((part, i) => ({
     id: crypto.randomUUID(),
@@ -39,7 +41,8 @@ export function generateSlides(
 }
 
 export function buildSongFromEditor(args: BuildSongArgs): SongEntry {
-  const { songName, key, number, sections, existingId } = args;
+  const { songName, key, number, sections, translationLabel, existingId } =
+    args;
 
   const live = sections.filter((s) => toLines(s.lines).length > 0);
 
@@ -48,9 +51,8 @@ export function buildSongFromEditor(args: BuildSongArgs): SongEntry {
 
   live.forEach((s, i) => {
     const order = i + 1;
-    const slides = s.slidesLocked && s.slides.length > 0
-      ? s.slides
-      : generateSlides(s);
+    const slides =
+      s.slidesLocked && s.slides.length > 0 ? s.slides : generateSlides(s);
 
     const primarySlides = slides
       .map((sl) => toLines(sl.lines))
@@ -80,12 +82,17 @@ export function buildSongFromEditor(args: BuildSongArgs): SongEntry {
     }
   });
 
-  const text = [{ isTranslation: false, sections: primarySections }];
+  const text: LangBlock[] = [
+    { isTranslation: false, sections: primarySections },
+  ];
   if (secondarySections.length > 0) {
-    text.push({
+    const block: LangBlock = {
       isTranslation: secondarySections.some((e) => e.isTranslation === true),
       sections: secondarySections,
-    });
+    };
+    if (block.isTranslation && translationLabel?.trim())
+      block.translationLabel = translationLabel.trim();
+    text.push(block);
   }
 
   return {

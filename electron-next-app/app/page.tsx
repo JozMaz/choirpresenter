@@ -14,7 +14,13 @@ import type {
   SongSource,
 } from "./lib/types";
 import { LS_KEYS, TRANSLATION_LABEL_DEFAULT } from "./lib/constants";
-import { DEFAULT_FOOTER_CONFIG, type FooterConfig } from "./lib/footerConfig";
+import {
+  DEFAULT_FOOTER_CONFIG,
+  DEFAULT_TRANSLATION_LABELS,
+  translationLabelOverride,
+  type FooterConfig,
+  type TranslationLabelConfig,
+} from "./lib/footerConfig";
 import {
   ALL_SONGBOOK_KEYS,
   EMPTY_SELECTION,
@@ -30,7 +36,13 @@ import {
   prebuildMessageChunkIndex,
 } from "./lib/messageIndex";
 import { prebuildBibleVerseIndexes } from "./lib/bibleIndex";
-import { buildHdmiHtml, buildHdmi2Html } from "./lib/hdmiHtml";
+import { buildOutputHtml } from "./lib/hdmiHtml";
+import {
+  DEFAULT_OUTPUT_CONFIG,
+  outputSettingsFor,
+  readOutputConfig,
+  type OutputConfig,
+} from "./lib/outputConfig";
 import { buildSongFromEditor, songToEditorSections } from "./lib/songSerialize";
 import { toApiItem, SONGBOOK_NAMES } from "./lib/songAdapter";
 import { splitVerseIntoParts } from "./lib/bibleSlides";
@@ -39,12 +51,7 @@ import { buildSectionsAndSlides } from "./lib/songSchema";
 
 import { usePersistedState } from "./hooks/usePersistedState";
 import { watchSystemTheme } from "./lib/theme";
-import {
-  useSongPlayer,
-  getCurrentSectionLabel,
-  getCurrentPosition,
-  getActiveSectionIndex,
-} from "./hooks/useSongPlayer";
+import { useSongPlayer } from "./hooks/useSongPlayer";
 import { useHdmiSync } from "./hooks/useHdmiSync";
 import { useSongbooks } from "./hooks/useSongbooks";
 import { useBibles } from "./hooks/useBibles";
@@ -131,10 +138,28 @@ function HomeContent({
 
   const { bibles, loaded: biblesLoaded } = useBibles();
 
-  const player = useSongPlayer();
-  const sectionLabel = getCurrentSectionLabel(player);
-  const positionText = getCurrentPosition(player);
-  const activeSectionIndex = getActiveSectionIndex(player);
+  const [out2Bg, setOut2Bg] = usePersistedState<string>(
+    LS_KEYS.out2Bg,
+    "#000000",
+    (raw) => raw ?? "#000000",
+  );
+  const [outputConfig, setOutputConfig] = usePersistedState<OutputConfig>(
+    LS_KEYS.outputConfig,
+    DEFAULT_OUTPUT_CONFIG,
+    readOutputConfig,
+  );
+  const [songFooter, setSongFooter] = usePersistedState<FooterConfig>(
+    LS_KEYS.songFooter,
+    DEFAULT_FOOTER_CONFIG,
+  );
+  const [translationLabels, setTranslationLabels] =
+    usePersistedState<TranslationLabelConfig>(
+      LS_KEYS.translationLabels,
+      DEFAULT_TRANSLATION_LABELS,
+    );
+
+  const player = useSongPlayer(outputConfig);
+  const { sectionLabel, positionText, activeSectionIndex } = player;
 
   const [editorContext, setEditorContext] = useState<EditorContext | null>(
     null,
@@ -188,20 +213,6 @@ function HomeContent({
     if (catalog) localStorage.setItem(LS_KEYS.seenCatalog, catalog.version);
     setFreshOffers([]);
   };
-  const [out2Bg, setOut2Bg] = usePersistedState<string>(
-    LS_KEYS.out2Bg,
-    "#000000",
-    (raw) => raw,
-  );
-  const [out2SecondLang, setOut2SecondLang] = usePersistedState<boolean>(
-    LS_KEYS.out2SecondLang,
-    false,
-  );
-  const [songFooter, setSongFooter] = usePersistedState<FooterConfig>(
-    LS_KEYS.songFooter,
-    DEFAULT_FOOTER_CONFIG,
-  );
-
   const [mainSizes] = useState(() => readPaneSizes(LS_KEYS.layoutMain, 3));
   const [leftSizes] = useState(() => readPaneSizes(LS_KEYS.layoutLeft, 2));
 
@@ -355,6 +366,7 @@ function HomeContent({
         key: song.key,
         sections: songToEditorSections(song),
         targetBook,
+        translationLabel: song.text[1]?.translationLabel ?? "",
       },
       editing: { source: item.source, id: item.id },
     });
@@ -413,6 +425,7 @@ function HomeContent({
       key: state.key,
       number: state.songNumber,
       sections: state.sections,
+      translationLabel: state.translationLabel,
       existingId: editing?.id,
     });
 
@@ -611,20 +624,36 @@ function HomeContent({
     setHdmi2Active(true);
   };
 
-  const hdmiHtml = buildHdmiHtml({
-    currentSong: player.liveSong,
-    output1: player.output1,
-    sectionLabel,
-    isTranslation: player.output1.isTranslation === true,
-    footerConfig: songFooter,
-  });
-  const hdmi2Html = buildHdmi2Html(
-    player.liveSong,
-    player.output2,
-    sectionLabel,
-    player.output2.isTranslation === true,
-    out2SecondLang,
-  );
+  const liveTranslationLabel = player.liveSong
+    ? player.liveSong.customTranslationLabel ||
+      translationLabelOverride(player.liveSong.source, translationLabels) ||
+      player.liveSong.translationLabel
+    : "";
+
+  const hdmiHtml = player.liveSong
+    ? buildOutputHtml({
+        song: player.liveSong,
+        text: player.localText,
+        sectionLabel,
+        chrome: outputSettingsFor(player.liveSong, "local", outputConfig)
+          .chrome,
+        output: "local",
+        footerConfig: songFooter,
+        translationLabel: liveTranslationLabel,
+      })
+    : "";
+  const hdmi2Html = player.liveSong
+    ? buildOutputHtml({
+        song: player.liveSong,
+        text: player.streamText,
+        sectionLabel,
+        chrome: outputSettingsFor(player.liveSong, "stream", outputConfig)
+          .chrome,
+        output: "stream",
+        footerConfig: songFooter,
+        translationLabel: liveTranslationLabel,
+      })
+    : "";
   useHdmiSync(1, hdmiActive, hdmiHtml, blackoutActive);
   useHdmiSync(2, hdmi2Active, hdmi2Html, blackoutActive);
 
@@ -800,9 +829,10 @@ function HomeContent({
                   !player.currentSong.isMessage ? (
                     <SongChunks
                       currentSong={player.currentSong}
-                      activeSlideIndex={player.slideIndex}
-                      onGoToSlide={(idx) => {
-                        player.goToSlide(idx);
+                      plan={player.plan}
+                      activeStepIndex={player.stepIndex}
+                      onGoToStep={(idx) => {
+                        player.goToStep(idx);
                         setBlackoutActive(false);
                       }}
                     />
@@ -935,10 +965,12 @@ function HomeContent({
         }}
         out2Bg={out2Bg}
         onChangeOut2Bg={setOut2Bg}
-        out2SecondLang={out2SecondLang}
+        outputConfig={outputConfig}
+        onChangeOutputConfig={setOutputConfig}
         songFooter={songFooter}
         onChangeSongFooter={setSongFooter}
-        onChangeOut2SecondLang={setOut2SecondLang}
+        translationLabels={translationLabels}
+        onChangeTranslationLabels={setTranslationLabels}
       />
       {freshOffers.length > 0 && !contentPickerOpen && (
         <div className="fixed bottom-4 left-1/2 -translate-x-1/2 z-30 flex items-center gap-3 px-4 py-2.5 rounded-lg bg-surface border border-primary/40 shadow-xl">
