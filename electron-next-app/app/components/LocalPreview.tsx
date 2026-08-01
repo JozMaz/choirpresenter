@@ -1,7 +1,7 @@
 "use client";
 
 import type { DisplayInfo } from "../lib/types";
-import FadeSetting from "./FadeSetting";
+import OutputSettings from "./OutputSettings";
 import MonitorPicker from "./MonitorPicker";
 import OutputFrame from "./OutputFrame";
 
@@ -17,6 +17,12 @@ interface LocalPreviewProps {
   dividerWidth?: number;
   fadeMs: number;
   onChangeFadeMs: (value: number) => void;
+  bibleScale: number;
+  onChangeBibleScale: (value: number) => void;
+  messageScale: number;
+  onChangeMessageScale: (value: number) => void;
+  tightLabels: boolean;
+  onChangeTightLabels: (value: boolean) => void;
 }
 
 export default function LocalPreview({
@@ -31,6 +37,12 @@ export default function LocalPreview({
   dividerWidth,
   fadeMs,
   onChangeFadeMs,
+  bibleScale,
+  onChangeBibleScale,
+  messageScale,
+  onChangeMessageScale,
+  tightLabels,
+  onChangeTightLabels,
 }: LocalPreviewProps) {
   return (
     <div className="flex-1">
@@ -44,7 +56,16 @@ export default function LocalPreview({
           hdmiActive={hdmiActive}
           onToggleHdmi={onToggleHdmi}
         />
-        <FadeSetting value={fadeMs} onChange={onChangeFadeMs} />
+        <OutputSettings
+          fadeMs={fadeMs}
+          onChangeFadeMs={onChangeFadeMs}
+          bibleScale={bibleScale}
+          onChangeBibleScale={onChangeBibleScale}
+          messageScale={messageScale}
+          onChangeMessageScale={onChangeMessageScale}
+          tightLabels={tightLabels}
+          onChangeTightLabels={onChangeTightLabels}
+        />
       </div>
       <div className="border border-border rounded overflow-hidden">
         <OutputFrame
@@ -52,6 +73,9 @@ export default function LocalPreview({
           blackout={blackoutActive}
           dividerWidth={dividerWidth}
           fadeMs={fadeMs}
+          bibleScale={bibleScale}
+          messageScale={messageScale}
+          tightLabels={tightLabels}
         />
       </div>
     </div>

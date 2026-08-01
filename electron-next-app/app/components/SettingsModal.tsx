@@ -89,7 +89,7 @@ const CHROME_LABELS: Record<OutputScope, { header: string; footer: string }> = {
   roboczy: SONG_CHROME,
   children: SONG_CHROME,
   custom: SONG_CHROME,
-  bible: { header: "Reference on top", footer: "Bible name below" },
+  bible: { header: "Reference", footer: "Bible name" },
   messages: { header: "Title on top", footer: "Title below" },
 };
 
@@ -205,6 +205,14 @@ function OutputPanel({
             checked={chrome.secondary}
             onChange={(checked) => setChrome("secondary", checked)}
             label="Second language"
+          />
+        )}
+        {scope === "bible" && (
+          <Checkbox
+            checked={chrome.swapLabels}
+            onChange={(checked) => setChrome("swapLabels", checked)}
+            label="Swap top and bottom"
+            hint="Puts the Bible name on top and the reference below"
           />
         )}
       </div>

@@ -1,10 +1,7 @@
 "use client";
 
 import { buildSearchIndex } from "./textUtils";
-import type {
-  MessageTextEntry,
-  MessageTitlesEntry,
-} from "./types";
+import type { MessageTextEntry, MessageTitlesEntry } from "./types";
 
 export interface ChunkRow {
   date: string;

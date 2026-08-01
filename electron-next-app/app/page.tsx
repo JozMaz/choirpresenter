@@ -11,6 +11,7 @@ import type {
   DisplayInfo,
   NetStatus,
   SongBookKey,
+  NetGroup,
   SongEntry,
   SongSource,
 } from "./lib/types";
@@ -242,6 +243,38 @@ function HomeContent({
     320,
     readMs(320),
   );
+  const [localBibleScale, setLocalBibleScale] = usePersistedState<number>(
+    LS_KEYS.localBibleScale,
+    100,
+    readMs(100),
+  );
+  const [streamBibleScale, setStreamBibleScale] = usePersistedState<number>(
+    LS_KEYS.streamBibleScale,
+    100,
+    readMs(100),
+  );
+  const [localMessageScale, setLocalMessageScale] = usePersistedState<number>(
+    LS_KEYS.localMessageScale,
+    100,
+    readMs(100),
+  );
+  const [streamMessageScale, setStreamMessageScale] = usePersistedState<number>(
+    LS_KEYS.streamMessageScale,
+    100,
+    readMs(100),
+  );
+  const readFlag = (fallback: boolean) => (raw: string | null) =>
+    raw === "true" ? true : raw === "false" ? false : fallback;
+  const [localTightLabels, setLocalTightLabels] = usePersistedState<boolean>(
+    LS_KEYS.localTightLabels,
+    false,
+    readFlag(false),
+  );
+  const [streamTightLabels, setStreamTightLabels] = usePersistedState<boolean>(
+    LS_KEYS.streamTightLabels,
+    true,
+    readFlag(true),
+  );
   const [netStatus, setNetStatus] = useState<NetStatus | null>(null);
   const [netBusy, setNetBusy] = useState(false);
 
@@ -314,12 +347,22 @@ function HomeContent({
   }, [dividerWidth]);
 
   useEffect(() => {
-    window.api?.setHdmiConfig?.(1, { fadeMs: localFadeMs });
-  }, [localFadeMs]);
+    window.api?.setHdmiConfig?.(1, {
+      fadeMs: localFadeMs,
+      bibleScale: localBibleScale,
+      messageScale: localMessageScale,
+      tightLabels: localTightLabels,
+    });
+  }, [localFadeMs, localBibleScale, localMessageScale, localTightLabels]);
 
   useEffect(() => {
-    window.api?.setHdmiConfig?.(2, { fadeMs: streamFadeMs });
-  }, [streamFadeMs]);
+    window.api?.setHdmiConfig?.(2, {
+      fadeMs: streamFadeMs,
+      bibleScale: streamBibleScale,
+      messageScale: streamMessageScale,
+      tightLabels: streamTightLabels,
+    });
+  }, [streamFadeMs, streamBibleScale, streamMessageScale, streamTightLabels]);
   const [saveStatus, setSaveStatus] = useState<
     "idle" | "saving" | "saved" | "local" | "error"
   >("idle");
@@ -723,6 +766,12 @@ function HomeContent({
     setHdmi2Active(true);
   };
 
+  const netGroup: NetGroup = player.liveSong?.isBible
+    ? "bible"
+    : player.liveSong?.isMessage
+      ? "messages"
+      : "songs";
+
   const liveTranslationLabel = player.liveSong
     ? player.liveSong.customTranslationLabel ||
       translationLabelOverride(player.liveSong.source, translationLabels) ||
@@ -1077,6 +1126,12 @@ function HomeContent({
                       dividerWidth={dividerWidth}
                       fadeMs={streamFadeMs}
                       onChangeFadeMs={setStreamFadeMs}
+                      bibleScale={streamBibleScale}
+                      onChangeBibleScale={setStreamBibleScale}
+                      messageScale={streamMessageScale}
+                      onChangeMessageScale={setStreamMessageScale}
+                      tightLabels={streamTightLabels}
+                      onChangeTightLabels={setStreamTightLabels}
                     />
                   </div>
                   <div {...previewSlot("network")}>
@@ -1089,6 +1144,22 @@ function HomeContent({
                       mirror={netMirror}
                       onChangeMirror={setNetMirror}
                       dividerWidth={dividerWidth}
+                      bibleScale={
+                        netMirror === "local"
+                          ? localBibleScale
+                          : streamBibleScale
+                      }
+                      messageScale={
+                        netMirror === "local"
+                          ? localMessageScale
+                          : streamMessageScale
+                      }
+                      tightLabels={
+                        netMirror === "local"
+                          ? localTightLabels
+                          : streamTightLabels
+                      }
+                      group={netGroup}
                     />
                   </div>
                   <div {...previewSlot("local")}>
@@ -1104,6 +1175,12 @@ function HomeContent({
                       dividerWidth={dividerWidth}
                       fadeMs={localFadeMs}
                       onChangeFadeMs={setLocalFadeMs}
+                      bibleScale={localBibleScale}
+                      onChangeBibleScale={setLocalBibleScale}
+                      messageScale={localMessageScale}
+                      onChangeMessageScale={setLocalMessageScale}
+                      tightLabels={localTightLabels}
+                      onChangeTightLabels={setLocalTightLabels}
                     />
                   </div>
                 </div>

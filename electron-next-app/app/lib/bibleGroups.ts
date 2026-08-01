@@ -19,8 +19,18 @@ interface BibleGroup {
 
 export const BIBLE_GROUPS: BibleGroup[] = [
   { key: "torah", label: "Pięcioksiąg", lastIndex: 4, color: "#8a6a4a" },
-  { key: "history", label: "Księgi historyczne", lastIndex: 16, color: "#b07a3e" },
-  { key: "wisdom", label: "Księgi mądrościowe", lastIndex: 21, color: "#a1544d" },
+  {
+    key: "history",
+    label: "Księgi historyczne",
+    lastIndex: 16,
+    color: "#b07a3e",
+  },
+  {
+    key: "wisdom",
+    label: "Księgi mądrościowe",
+    lastIndex: 21,
+    color: "#a1544d",
+  },
   { key: "prophets", label: "Prorocy", lastIndex: 38, color: "#7d5f9e" },
   { key: "gospels", label: "Ewangelie", lastIndex: 42, color: "#4a6491" },
   { key: "acts", label: "Dzieje Apostolskie", lastIndex: 43, color: "#5b93b5" },

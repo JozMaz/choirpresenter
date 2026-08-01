@@ -36,13 +36,27 @@ function buildCenteredHtml(
   lines: string[],
   topLabel: string,
   bottomLabel: string,
-  options: { justify?: boolean } = {},
+  options: {
+    justify?: boolean;
+    bible?: boolean;
+    message?: boolean;
+    spacerTop?: boolean;
+  } = {},
 ) {
-  const textClass = options.justify
-    ? "text-fit text-flow text-justify"
-    : "text-fit text-flow";
+  const textClass = [
+    "text-fit text-flow",
+    options.justify ? "text-justify" : "",
+    options.bible ? "text-bible" : "",
+    options.message ? "text-message" : "",
+  ]
+    .filter(Boolean)
+    .join(" ");
+  const top =
+    topLabel || !options.spacerTop
+      ? labelRow(topLabel)
+      : `<div class="title-row spacer"></div>`;
   return (
-    labelRow(topLabel) +
+    top +
     `<div class="text-block"><div class="${textClass}">${linesToHtml(lines)}</div></div>` +
     labelRow(bottomLabel)
   );
@@ -98,20 +112,24 @@ export function buildOutputHtml({
   if (!song || isEmpty(text)) return "";
 
   if (song.isBible && song.bibleMeta) {
+    const reference = chrome.header ? sectionLabel : "";
+    const bibleName = chrome.footer ? song.bibleMeta.bibleName : "";
     return buildCenteredHtml(
       text.primary,
-      chrome.header ? sectionLabel : "",
-      chrome.footer ? song.bibleMeta.bibleName : "",
+      chrome.swapLabels ? bibleName : reference,
+      chrome.swapLabels ? reference : bibleName,
+      { bible: true },
     );
   }
 
   if (song.isMessage && song.messageMeta) {
-    return buildCenteredHtml(
-      text.primary,
-      chrome.header ? sectionLabel : "",
-      chrome.footer ? sectionLabel : "",
-      { justify: true },
-    );
+    const top = chrome.header ? sectionLabel : "";
+    const bottom = chrome.footer ? sectionLabel : "";
+    return buildCenteredHtml(text.primary, top, bottom, {
+      justify: true,
+      message: true,
+      spacerTop: output === "local" && !top && bottom !== "",
+    });
   }
 
   const stream = output === "stream";

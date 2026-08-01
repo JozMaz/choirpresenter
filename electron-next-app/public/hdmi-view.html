@@ -134,6 +134,10 @@
       .layer.active {
         opacity: 1;
       }
+      html.tight-labels .layer.reader {
+        justify-content: center;
+        gap: var(--reader-gap, 1.6vh);
+      }
       .divider {
         border-top: var(--divider-width, 3px) solid #ffffff;
         width: 55%;
@@ -168,7 +172,7 @@
         white-space: nowrap;
       }
       .sequence {
-        font-size: 1.8vw;
+        font-size: var(--label-size, 1.8vw);
         color: #ffffff;
         font-weight: 600;
         letter-spacing: 0.02em;
@@ -188,6 +192,10 @@
         width: 100%;
         padding: 0 3vw;
         flex-shrink: 0;
+      }
+      .title-row.spacer::before {
+        content: "\00a0";
+        font-size: var(--label-size, 1.8vw);
       }
       .text-block {
         flex: 1 1 auto;
@@ -260,6 +268,12 @@
         text-align: justify;
         text-justify: inter-word;
         padding: 0 4vw;
+      }
+      .text-fit.text-bible {
+        font-size: calc(4vw * var(--bible-scale, 1));
+      }
+      .text-fit.text-message {
+        font-size: calc(4vw * var(--message-scale, 1));
       }
       .text-fit.text-italic {
         font-style: italic;
@@ -442,18 +456,44 @@
         });
       }
 
+      // Bible and sermons: fit against the full height, then shrink the block
+      // down to the text so the labels sit next to it instead of at the edges.
+      function fitFlowText(scope) {
+        const els = Array.from(scope.querySelectorAll(".text-flow"));
+        if (!els.length) return;
+        els.forEach((el) => {
+          const block = el.parentElement;
+          if (!block) return;
+          block.style.flex = "";
+          block.style.height = "";
+        });
+        els.forEach(fitFontSize);
+        els.forEach((el) => {
+          const block = el.parentElement;
+          if (!block) return;
+          const cs = getComputedStyle(block);
+          block.style.flex = "0 0 auto";
+          block.style.height =
+            el.scrollHeight +
+            parseFloat(cs.paddingTop) +
+            parseFloat(cs.paddingBottom) +
+            "px";
+        });
+      }
+
       function fitContent(root) {
         const scope = root || document;
         scope
           .querySelectorAll(".divider-label")
           .forEach((el) => (el.style.fontSize = ""));
-        Array.from(scope.querySelectorAll(".text-flow")).forEach(fitFontSize);
+        fitFlowText(scope);
         fitSongText(scope);
         capDividerLabel(scope);
       }
 
       const INK_SELECTOR = ".text-fit, .sequence, .divider";
 
+      const textScales = { "--bible-scale": "1", "--message-scale": "1" };
       let boxAlignX = "center";
       let boxAlignY = "center";
 
@@ -531,6 +571,7 @@
         const back = layers[1 - frontIndex];
 
         back.innerHTML = html;
+        back.classList.toggle("reader", html.includes("text-flow"));
         fitContent(back);
         updateBoxBounds(back);
 
@@ -547,14 +588,25 @@
         else el.classList.remove("blackout");
       }
 
+      const setVar = (prop, value) =>
+        document.documentElement.style.setProperty(prop, value);
+
+      function applyTextScale(name, percent) {
+        if (typeof percent !== "number") return;
+        const next = String(percent / 100);
+        if (next === textScales[name]) return;
+        textScales[name] = next;
+        setVar(name, next);
+        const layer = activeLayer();
+        if (layer) fitContent(layer);
+      }
+
       function applyConfig(config) {
         if (!config) return;
         if (typeof config.bg === "string") {
           document.documentElement.style.background = config.bg;
           document.body.style.background = config.bg;
         }
-        const setVar = (prop, value) =>
-          document.documentElement.style.setProperty(prop, value);
         if (typeof config.edgeFade === "number") {
           setVar("--edge-fade", String(config.edgeFade));
         }
@@ -584,7 +636,6 @@
         }
         if (typeof config.boxAlignX === "string") boxAlignX = config.boxAlignX;
         if (typeof config.boxAlignY === "string") boxAlignY = config.boxAlignY;
-        updateBoxBounds(activeLayer());
         if (typeof config.boxScale === "number") {
           setVar("--box-scale", String(config.boxScale / 100));
         }
@@ -600,12 +651,21 @@
         if (typeof config.fadeMs === "number") {
           setVar("--fade-ms", config.fadeMs + "ms");
         }
+        if (typeof config.tightLabels === "boolean") {
+          document.documentElement.classList.toggle(
+            "tight-labels",
+            config.tightLabels,
+          );
+        }
+        applyTextScale("--bible-scale", config.bibleScale);
+        applyTextScale("--message-scale", config.messageScale);
         if (typeof config.boxOffsetX === "number") {
           setVar("--box-offset-x", config.boxOffsetX + "vw");
         }
         if (typeof config.boxOffsetY === "number") {
           setVar("--box-offset-y", config.boxOffsetY + "vh");
         }
+        updateBoxBounds(activeLayer());
       }
 
       if (isServed) {
@@ -631,10 +691,30 @@
         else if (d.type === "view-config") applyConfig(d.config);
       });
 
-      window.addEventListener("resize", () => {
+      function remeasure() {
         layers.forEach((l) => fitContent(l));
         updateBoxBounds(layers[frontIndex]);
-      });
+      }
+
+      window.addEventListener("resize", remeasure);
+
+      if (typeof ResizeObserver === "function") {
+        let lastW = 0;
+        let lastH = 0;
+        new ResizeObserver(() => {
+          const el = document.documentElement;
+          const w = el.clientWidth;
+          const h = el.clientHeight;
+          if (!w || !h || (w === lastW && h === lastH)) return;
+          lastW = w;
+          lastH = h;
+          remeasure();
+        }).observe(document.documentElement);
+      }
+
+      if (document.fonts && document.fonts.ready) {
+        document.fonts.ready.then(remeasure);
+      }
     </script>
   </body>
 </html>

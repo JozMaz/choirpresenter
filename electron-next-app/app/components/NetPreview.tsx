@@ -4,7 +4,13 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useDebounced } from "../hooks/useDebounced";
 import { usePersistedState } from "../hooks/usePersistedState";
 import { LS_KEYS } from "../lib/constants";
-import type { BoxAlign, BoxMode, NetStatus, OverlayConfig } from "../lib/types";
+import type {
+  BoxAlign,
+  BoxMode,
+  NetGroup,
+  NetStatus,
+  OverlayConfig,
+} from "../lib/types";
 import Icon from "./Icon";
 import OutputFrame from "./OutputFrame";
 
@@ -19,6 +25,10 @@ interface NetPreviewProps {
   mirror: NetMirror;
   onChangeMirror: (mirror: NetMirror) => void;
   dividerWidth?: number;
+  bibleScale: number;
+  messageScale: number;
+  tightLabels: boolean;
+  group: NetGroup;
 }
 
 const PREVIEW_INTERVAL_MS = 110;
@@ -65,6 +75,26 @@ const ALIGN_Y: { value: BoxAlign; label: string }[] = [
   { value: "end", label: "Bottom" },
 ];
 
+const GROUP_OPTIONS: { value: NetGroup; label: string }[] = [
+  { value: "songs", label: "Songs" },
+  { value: "bible", label: "Bible" },
+  { value: "messages", label: "Sermons" },
+];
+
+const DEFAULTS = {
+  edgeFade: 40,
+  boxPadX: 4,
+  boxPadY: 6,
+  boxWidth: 106,
+  boxHeight: 110,
+  boxScale: 40,
+  boxRadius: 30,
+  boxAlpha: 50,
+  boxOffsetX: 0,
+  boxOffsetY: 0,
+  fadeMs: 320,
+};
+
 const MIRROR_OPTIONS: { value: NetMirror; label: string }[] = [
   { value: "local", label: "Local" },
   { value: "stream", label: "Stream" },
@@ -74,9 +104,62 @@ const SLIDER_CLASS = `flex-1 min-w-0 h-3 appearance-none bg-transparent cursor-p
   [&::-webkit-slider-runnable-track]:h-0.75 [&::-webkit-slider-runnable-track]:rounded-full [&::-webkit-slider-runnable-track]:bg-border-secondary
   [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-3 [&::-webkit-slider-thumb]:h-3 [&::-webkit-slider-thumb]:-mt-[4.5px] [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-primary [&::-webkit-slider-thumb]:transition-transform hover:[&::-webkit-slider-thumb]:scale-110`;
 
-const readNumber = (fallback: number) => (raw: string | null) => {
-  const parsed = raw?.trim() ? Number(raw) : NaN;
-  return Number.isFinite(parsed) ? parsed : fallback;
+const readStoredNumber = (key: string, fallback: number) => {
+  try {
+    const raw = localStorage.getItem(key);
+    const parsed = raw?.trim() ? Number(raw) : NaN;
+    return Number.isFinite(parsed) ? parsed : fallback;
+  } catch {
+    return fallback;
+  }
+};
+
+const writeStoredNumber = (key: string, value: number) => {
+  try {
+    localStorage.setItem(key, String(value));
+  } catch (err) {
+    console.error(`Failed to persist ${key}`, err);
+  }
+};
+
+const readStoredText = (key: string): string | null => {
+  try {
+    return localStorage.getItem(key);
+  } catch {
+    return null;
+  }
+};
+
+// The output always follows whatever is live, even while another profile is
+// open for editing in the modal.
+const readStoredConfig = (
+  group: NetGroup,
+  bibleScale: number,
+  messageScale: number,
+  tightLabels: boolean,
+): OverlayConfig => {
+  const num = (base: string, fallback: number) =>
+    readStoredNumber(`${base}:${group}`, fallback);
+  return {
+    edgeFade: num(LS_KEYS.netEdgeFade, DEFAULTS.edgeFade),
+    boxPadX: num(LS_KEYS.netBoxPadX, DEFAULTS.boxPadX),
+    boxPadY: num(LS_KEYS.netBoxPadY, DEFAULTS.boxPadY),
+    boxWidth: num(LS_KEYS.netBoxWidth, DEFAULTS.boxWidth),
+    boxHeight: num(LS_KEYS.netBoxHeight, DEFAULTS.boxHeight),
+    boxScale: num(LS_KEYS.netBoxScale, DEFAULTS.boxScale),
+    boxRadius: num(LS_KEYS.netBoxRadius, DEFAULTS.boxRadius),
+    boxAlpha: num(LS_KEYS.netBoxAlpha, DEFAULTS.boxAlpha),
+    boxOffsetX: num(LS_KEYS.netBoxOffsetX, DEFAULTS.boxOffsetX),
+    boxOffsetY: num(LS_KEYS.netBoxOffsetY, DEFAULTS.boxOffsetY),
+    fadeMs: num(LS_KEYS.netFadeMs, DEFAULTS.fadeMs),
+    boxModeX: readBoxMode(readStoredText(`${LS_KEYS.netBoxModeX}:${group}`)),
+    boxModeY: readBoxMode(readStoredText(`${LS_KEYS.netBoxModeY}:${group}`)),
+    boxAlignX: readBoxAlign(readStoredText(`${LS_KEYS.netBoxAlignX}:${group}`)),
+    boxAlignY: readBoxAlign(readStoredText(`${LS_KEYS.netBoxAlignY}:${group}`)),
+    bibleScale,
+    messageScale,
+    tightLabels,
+  };
 };
 
 function useSliderSetting(
@@ -84,25 +167,26 @@ function useSliderSetting(
   fallback: number,
   ref: React.RefObject<HTMLInputElement | null>,
 ) {
-  const [stored, setStored, hydrated] = usePersistedState<number>(
-    storageKey,
-    fallback,
-    readNumber(fallback),
-  );
   const [value, setValue] = useState(fallback);
+  // Which key the DOM input currently holds a value for. Until the load effect
+  // has run for a new key, the input still shows the previous profile — writing
+  // it back would overwrite the profile we just switched to.
+  const loadedKey = useRef<string | null>(null);
   const timer = useRef(0);
   const last = useRef(0);
 
   useEffect(() => {
-    if (!hydrated) return;
-    if (ref.current) ref.current.value = String(stored);
-    setValue(stored);
+    const next = readStoredNumber(storageKey, fallback);
+    loadedKey.current = storageKey;
+    if (ref.current) ref.current.value = String(next);
+    setValue(next);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [hydrated]);
+  }, [storageKey]);
 
   useEffect(() => () => clearTimeout(timer.current), []);
 
   const apply = () => {
+    if (loadedKey.current !== storageKey) return;
     last.current = performance.now();
     setValue(Number(ref.current?.value ?? fallback));
   };
@@ -123,11 +207,12 @@ function useSliderSetting(
   const commit = () => {
     clearTimeout(timer.current);
     timer.current = 0;
+    if (loadedKey.current !== storageKey) return;
     apply();
-    setStored(Number(ref.current?.value ?? fallback));
+    writeStoredNumber(storageKey, Number(ref.current?.value ?? fallback));
   };
 
-  return { value, stored, onChange, commit, apply };
+  return { value, stored: value, onChange, commit, apply };
 }
 
 function Slider({
@@ -217,7 +302,22 @@ export default function NetPreview({
   mirror,
   onChangeMirror,
   dividerWidth,
+  bibleScale,
+  messageScale,
+  tightLabels,
+  group,
 }: NetPreviewProps) {
+  // Editing follows whatever is on the output, so tuning always lands on the
+  // profile you can see. Picking another one in the modal is a temporary look
+  // and is dropped as soon as the output moves to a different kind of content.
+  const [override, setOverride] = useState<NetGroup | null>(null);
+  const [lastGroup, setLastGroup] = useState(group);
+  if (group !== lastGroup) {
+    setLastGroup(group);
+    setOverride(null);
+  }
+  const editGroup = override ?? group;
+  const key = (base: string) => `${base}:${editGroup}`;
   const [copied, setCopied] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [addressIndex, setAddressIndex] = useState(0);
@@ -244,37 +344,81 @@ export default function NetPreview({
   const [dragging, setDragging] = useState(false);
 
   useEffect(() => () => cancelAnimationFrame(frameRef.current), []);
-  const edgeFade = useSliderSetting(LS_KEYS.netEdgeFade, 40, edgeRef);
-  const boxPadX = useSliderSetting(LS_KEYS.netBoxPadX, 4, padXRef);
-  const boxPadY = useSliderSetting(LS_KEYS.netBoxPadY, 6, padYRef);
-  const boxWidth = useSliderSetting(LS_KEYS.netBoxWidth, 106, widthRef);
-  const boxHeight = useSliderSetting(LS_KEYS.netBoxHeight, 110, heightRef);
+  const edgeFade = useSliderSetting(
+    key(LS_KEYS.netEdgeFade),
+    DEFAULTS.edgeFade,
+    edgeRef,
+  );
+  const boxPadX = useSliderSetting(
+    key(LS_KEYS.netBoxPadX),
+    DEFAULTS.boxPadX,
+    padXRef,
+  );
+  const boxPadY = useSliderSetting(
+    key(LS_KEYS.netBoxPadY),
+    DEFAULTS.boxPadY,
+    padYRef,
+  );
+  const boxWidth = useSliderSetting(
+    key(LS_KEYS.netBoxWidth),
+    DEFAULTS.boxWidth,
+    widthRef,
+  );
+  const boxHeight = useSliderSetting(
+    key(LS_KEYS.netBoxHeight),
+    DEFAULTS.boxHeight,
+    heightRef,
+  );
   const [boxModeX, setBoxModeX] = usePersistedState<BoxMode>(
-    LS_KEYS.netBoxModeX,
+    key(LS_KEYS.netBoxModeX),
     "padding",
     readBoxMode,
   );
   const [boxModeY, setBoxModeY] = usePersistedState<BoxMode>(
-    LS_KEYS.netBoxModeY,
+    key(LS_KEYS.netBoxModeY),
     "padding",
     readBoxMode,
   );
   const [boxAlignX, setBoxAlignX] = usePersistedState<BoxAlign>(
-    LS_KEYS.netBoxAlignX,
+    key(LS_KEYS.netBoxAlignX),
     "center",
     readBoxAlign,
   );
   const [boxAlignY, setBoxAlignY] = usePersistedState<BoxAlign>(
-    LS_KEYS.netBoxAlignY,
+    key(LS_KEYS.netBoxAlignY),
     "center",
     readBoxAlign,
   );
-  const boxScale = useSliderSetting(LS_KEYS.netBoxScale, 40, scaleRef);
-  const boxRadius = useSliderSetting(LS_KEYS.netBoxRadius, 30, radiusRef);
-  const boxAlpha = useSliderSetting(LS_KEYS.netBoxAlpha, 50, alphaRef);
-  const boxOffsetX = useSliderSetting(LS_KEYS.netBoxOffsetX, 0, offsetRef);
-  const boxOffsetY = useSliderSetting(LS_KEYS.netBoxOffsetY, 0, offsetYRef);
-  const fadeMs = useSliderSetting(LS_KEYS.netFadeMs, 320, fadeRef);
+  const boxScale = useSliderSetting(
+    key(LS_KEYS.netBoxScale),
+    DEFAULTS.boxScale,
+    scaleRef,
+  );
+  const boxRadius = useSliderSetting(
+    key(LS_KEYS.netBoxRadius),
+    DEFAULTS.boxRadius,
+    radiusRef,
+  );
+  const boxAlpha = useSliderSetting(
+    key(LS_KEYS.netBoxAlpha),
+    DEFAULTS.boxAlpha,
+    alphaRef,
+  );
+  const boxOffsetX = useSliderSetting(
+    key(LS_KEYS.netBoxOffsetX),
+    DEFAULTS.boxOffsetX,
+    offsetRef,
+  );
+  const boxOffsetY = useSliderSetting(
+    key(LS_KEYS.netBoxOffsetY),
+    DEFAULTS.boxOffsetY,
+    offsetYRef,
+  );
+  const fadeMs = useSliderSetting(
+    key(LS_KEYS.netFadeMs),
+    DEFAULTS.fadeMs,
+    fadeRef,
+  );
   const running = status?.running === true;
 
   const startDrag = (e: React.PointerEvent<HTMLDivElement>) => {
@@ -347,6 +491,9 @@ export default function NetPreview({
       boxOffsetX: boxOffsetX.value,
       boxOffsetY: boxOffsetY.value,
       fadeMs: fadeMs.value,
+      bibleScale,
+      messageScale,
+      tightLabels,
     }),
     [
       edgeFade.value,
@@ -364,9 +511,26 @@ export default function NetPreview({
       boxOffsetX.value,
       boxOffsetY.value,
       fadeMs.value,
+      bibleScale,
+      messageScale,
+      tightLabels,
     ],
   );
-  const netConfig = useDebounced(config, 120);
+  // The sliders load their profile in an effect, so right after a group change
+  // they still hold the previous profile's numbers. Only trust them while the
+  // modal is actually driving them; otherwise storage is the source of truth,
+  // and it is already correct the moment the group flips.
+  const editing = settingsOpen && editGroup === group;
+  const liveConfig = useMemo(
+    () =>
+      editing
+        ? config
+        : readStoredConfig(group, bibleScale, messageScale, tightLabels),
+    [editing, group, config, bibleScale, messageScale, tightLabels],
+  );
+  // Debounce only the dragging; a group switch has to land before its text does.
+  const debounced = useDebounced(liveConfig, 120);
+  const netConfig = editing ? debounced : liveConfig;
   useEffect(() => {
     if (running) window.api?.netConfig?.(netConfig);
   }, [running, netConfig]);
@@ -414,7 +578,7 @@ export default function NetPreview({
           html={html}
           blackout={blackoutActive}
           overlay
-          overlayConfig={config}
+          overlayConfig={liveConfig}
           dividerWidth={dividerWidth}
         />
       </div>
@@ -429,9 +593,34 @@ export default function NetPreview({
             className="w-full max-w-7xl max-h-[92vh] flex flex-col bg-surface rounded-lg border border-border shadow-xl"
           >
             <div className="shrink-0 flex items-center gap-2 px-5 pt-4 pb-3">
-              <h2 className="flex-1 text-lg font-semibold text-text-primary">
+              <h2 className="text-lg font-semibold text-text-primary">
                 Network output
               </h2>
+              <div className="flex-1 flex justify-center">
+                <div className="inline-flex items-center gap-0.5 p-0.5 rounded-md border border-border bg-surface-secondary">
+                  {GROUP_OPTIONS.map((opt) => (
+                    <button
+                      key={opt.value}
+                      onClick={() => setOverride(opt.value)}
+                      title={
+                        opt.value === group
+                          ? `${opt.label} — currently on the output`
+                          : opt.label
+                      }
+                      className={`px-2.5 py-1 text-[10px] font-semibold rounded transition-colors ${
+                        editGroup === opt.value
+                          ? "bg-primary text-white"
+                          : "text-text-muted hover:bg-surface-hover hover:text-text-primary"
+                      }`}
+                    >
+                      {opt.label}
+                      {opt.value === group && (
+                        <span className="ml-1 inline-block w-1.5 h-1.5 rounded-full bg-success align-middle" />
+                      )}
+                    </button>
+                  ))}
+                </div>
+              </div>
               <div className="inline-flex items-center gap-0.5 p-0.5 rounded-md border border-border bg-surface-secondary">
                 {MIRROR_OPTIONS.map((opt) => (
                   <button
@@ -548,7 +737,7 @@ export default function NetPreview({
                   <Slider
                     label="Soft edges"
                     min={0}
-                    max={300}
+                    max={600}
                     inputRef={edgeRef}
                     {...edgeFade}
                   />

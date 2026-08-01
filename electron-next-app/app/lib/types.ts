@@ -46,6 +46,8 @@ export type BoxMode = "padding" | "size";
 
 export type BoxAlign = "start" | "center" | "end";
 
+export type NetGroup = "songs" | "bible" | "messages";
+
 export interface OverlayConfig {
   edgeFade: number;
   boxModeX: BoxMode;
@@ -62,6 +64,9 @@ export interface OverlayConfig {
   boxOffsetX: number;
   boxOffsetY: number;
   fadeMs: number;
+  bibleScale: number;
+  messageScale: number;
+  tightLabels: boolean;
 }
 
 export interface OutputStyle {
@@ -111,7 +116,15 @@ declare global {
       netBlackout: (active: boolean) => void;
       netConfig: (config: Partial<OverlayConfig>) => void;
       setOutputStyle: (style: Partial<OutputStyle>) => void;
-      setHdmiConfig: (variant: 1 | 2, config: { fadeMs?: number }) => void;
+      setHdmiConfig: (
+        variant: 1 | 2,
+        config: {
+          fadeMs?: number;
+          bibleScale?: number;
+          messageScale?: number;
+          tightLabels?: boolean;
+        },
+      ) => void;
       getAppVersion: () => Promise<string>;
       readSongBook: (book: SongBookKey) => Promise<Songbook | null>;
       writeSongBook: (

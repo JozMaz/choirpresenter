@@ -1,7 +1,7 @@
 "use client";
 
 import type { DisplayInfo } from "../lib/types";
-import FadeSetting from "./FadeSetting";
+import OutputSettings from "./OutputSettings";
 import MonitorPicker from "./MonitorPicker";
 import OutputFrame from "./OutputFrame";
 
@@ -19,6 +19,12 @@ interface StreamPreviewProps {
   dividerWidth?: number;
   fadeMs: number;
   onChangeFadeMs: (value: number) => void;
+  bibleScale: number;
+  onChangeBibleScale: (value: number) => void;
+  messageScale: number;
+  onChangeMessageScale: (value: number) => void;
+  tightLabels: boolean;
+  onChangeTightLabels: (value: boolean) => void;
 }
 
 export default function StreamPreview({
@@ -35,6 +41,12 @@ export default function StreamPreview({
   dividerWidth,
   fadeMs,
   onChangeFadeMs,
+  bibleScale,
+  onChangeBibleScale,
+  messageScale,
+  onChangeMessageScale,
+  tightLabels,
+  onChangeTightLabels,
 }: StreamPreviewProps) {
   return (
     <div className="flex-1">
@@ -48,7 +60,16 @@ export default function StreamPreview({
           hdmiActive={hdmiActive}
           onToggleHdmi={onToggleHdmi}
         />
-        <FadeSetting value={fadeMs} onChange={onChangeFadeMs} />
+        <OutputSettings
+          fadeMs={fadeMs}
+          onChangeFadeMs={onChangeFadeMs}
+          bibleScale={bibleScale}
+          onChangeBibleScale={onChangeBibleScale}
+          messageScale={messageScale}
+          onChangeMessageScale={onChangeMessageScale}
+          tightLabels={tightLabels}
+          onChangeTightLabels={onChangeTightLabels}
+        />
       </div>
       <div className="border border-border rounded overflow-hidden">
         <OutputFrame
@@ -57,6 +78,9 @@ export default function StreamPreview({
           bg={bg}
           dividerWidth={dividerWidth}
           fadeMs={fadeMs}
+          bibleScale={bibleScale}
+          messageScale={messageScale}
+          tightLabels={tightLabels}
         />
       </div>
       <div className="mt-2 h-7 flex justify-end items-center">

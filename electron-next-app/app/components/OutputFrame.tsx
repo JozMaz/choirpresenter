@@ -14,6 +14,9 @@ interface OutputFrameProps {
   overlayConfig?: OverlayConfig;
   dividerWidth?: number;
   fadeMs?: number;
+  bibleScale?: number;
+  messageScale?: number;
+  tightLabels?: boolean;
 }
 
 const CHECKER =
@@ -27,6 +30,9 @@ export default function OutputFrame({
   overlayConfig,
   dividerWidth,
   fadeMs,
+  bibleScale,
+  messageScale,
+  tightLabels,
 }: OutputFrameProps) {
   const boxRef = useRef<HTMLDivElement>(null);
   const frameRef = useRef<HTMLIFrameElement>(null);
@@ -64,11 +70,28 @@ export default function OutputFrame({
     frameRef.current?.contentWindow?.postMessage(
       {
         type: "view-config",
-        config: { bg, dividerWidth, fadeMs, ...overlayConfig },
+        config: {
+          bg,
+          dividerWidth,
+          fadeMs,
+          bibleScale,
+          messageScale,
+          tightLabels,
+          ...overlayConfig,
+        },
       },
       "*",
     );
-  }, [bg, dividerWidth, fadeMs, overlayConfig, ready]);
+  }, [
+    bg,
+    dividerWidth,
+    fadeMs,
+    bibleScale,
+    messageScale,
+    tightLabels,
+    overlayConfig,
+    ready,
+  ]);
 
   return (
     <div

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 export function usePersistedState<T>(
   key: string,
@@ -9,6 +9,7 @@ export function usePersistedState<T>(
 ): [T, React.Dispatch<React.SetStateAction<T>>, boolean] {
   const [value, setValue] = useState<T>(initialValue);
   const [hydrated, setHydrated] = useState(false);
+  const justHydrated = useRef(false);
 
   useEffect(() => {
     try {
@@ -18,12 +19,19 @@ export function usePersistedState<T>(
     } catch (err) {
       console.error(`Failed to hydrate ${key}`, err);
     }
+    justHydrated.current = true;
     setHydrated(true);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [key]);
 
   useEffect(() => {
     if (!hydrated) return;
+    // When the key changes, `value` is still the previous key's — skip that one
+    // pass so it is not written over what we just read.
+    if (justHydrated.current) {
+      justHydrated.current = false;
+      return;
+    }
     try {
       const serialized =
         typeof value === "string" || typeof value === "number"

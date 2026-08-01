@@ -1,4 +1,3 @@
-
 export const MAJOR_KEYS = [
   "C",
   "C#",

@@ -14,6 +14,7 @@ export interface OutputChrome {
   sequence: boolean;
   footer: boolean;
   secondary: boolean;
+  swapLabels: boolean;
 }
 
 export interface OutputSettings {
@@ -44,22 +45,46 @@ export const MAX_GROUP_LINES = 8;
 const songPair = (): OutputPair => ({
   local: {
     group: { kind: "section" },
-    chrome: { header: true, sequence: true, footer: true, secondary: true },
+    chrome: {
+      header: true,
+      sequence: true,
+      footer: true,
+      secondary: true,
+      swapLabels: false,
+    },
   },
   stream: {
     group: { kind: "stored" },
-    chrome: { header: false, sequence: false, footer: false, secondary: false },
+    chrome: {
+      header: false,
+      sequence: false,
+      footer: false,
+      secondary: false,
+      swapLabels: false,
+    },
   },
 });
 
 const readerPair = (header: boolean): OutputPair => ({
   local: {
     group: { kind: "section" },
-    chrome: { header, sequence: false, footer: true, secondary: false },
+    chrome: {
+      header,
+      sequence: false,
+      footer: true,
+      secondary: false,
+      swapLabels: false,
+    },
   },
   stream: {
     group: { kind: "stored" },
-    chrome: { header, sequence: false, footer: true, secondary: false },
+    chrome: {
+      header,
+      sequence: false,
+      footer: true,
+      secondary: false,
+      swapLabels: false,
+    },
   },
 });
 
@@ -112,6 +137,7 @@ function normalizeChrome(value: unknown, fallback: OutputChrome): OutputChrome {
     sequence: pick("sequence"),
     footer: pick("footer"),
     secondary: pick("secondary"),
+    swapLabels: pick("swapLabels"),
   };
 }
 
