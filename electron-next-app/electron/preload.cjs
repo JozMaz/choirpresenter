@@ -13,6 +13,13 @@ contextBridge.exposeInMainWorld("api", {
   setHdmi2Blackout: (active) => ipcRenderer.send("hdmi2-blackout", active),
   setHdmi2Config: (config) => ipcRenderer.send("hdmi2-config", config),
 
+  netStart: () => ipcRenderer.invoke("net-start"),
+  netStop: () => ipcRenderer.invoke("net-stop"),
+  netStatus: () => ipcRenderer.invoke("net-status"),
+  netUpdate: (html) => ipcRenderer.send("net-update", html),
+  netBlackout: (active) => ipcRenderer.send("net-blackout", active),
+  netConfig: (config) => ipcRenderer.send("net-config", config),
+
   getAppVersion: () => ipcRenderer.invoke("get-app-version"),
 
   readSongBook: (book) => ipcRenderer.invoke("read-songbook", book),

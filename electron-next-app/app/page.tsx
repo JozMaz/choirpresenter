@@ -9,6 +9,7 @@ import { getMessageText } from "./lib/messageIndex";
 import type {
   ApiItem,
   DisplayInfo,
+  NetStatus,
   SongBookKey,
   SongEntry,
   SongSource,
@@ -67,6 +68,7 @@ import LoadingScreen from "./components/LoadingScreen";
 import SelectedPanel from "./components/SelectedPanel";
 import SongbooksTree from "./components/SongbooksTree";
 import LocalPreview from "./components/LocalPreview";
+import NetPreview, { type NetMirror } from "./components/NetPreview";
 import StreamPreview from "./components/StreamPreview";
 import SectionsList from "./components/SectionsList";
 import SettingsModal from "./components/SettingsModal";
@@ -75,6 +77,42 @@ import SongEditor, {
   type EditorState,
   type TargetBook,
 } from "./components/SongEditor";
+
+type PreviewKey = "stream" | "network" | "local";
+
+const VISIBLE_PREVIEW_ORDER: PreviewKey[] = ["local", "stream", "network"];
+
+const PREVIEW_LABELS: Record<PreviewKey, string> = {
+  local: "Local",
+  stream: "Stream",
+  network: "Network",
+};
+
+const ALL_PREVIEWS_VISIBLE: PreviewKey[] = ["local", "stream", "network"];
+
+const readVisiblePreviews = (raw: string | null): PreviewKey[] => {
+  if (raw === null) return ALL_PREVIEWS_VISIBLE;
+  try {
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return ALL_PREVIEWS_VISIBLE;
+    return VISIBLE_PREVIEW_ORDER.filter((k) => parsed.includes(k)).sort(
+      (a, b) => parsed.indexOf(a) - parsed.indexOf(b),
+    );
+  } catch {
+    return ALL_PREVIEWS_VISIBLE;
+  }
+};
+
+const callNet = async (
+  method: "netStart" | "netStop" | "netStatus",
+): Promise<NetStatus | null> => {
+  try {
+    return (await window.api?.[method]?.()) ?? null;
+  } catch (err) {
+    console.error(`Network output: ${method} failed`, err);
+    return null;
+  }
+};
 
 const readPaneSizes = (key: string, count: number): number[] | undefined => {
   try {
@@ -157,6 +195,33 @@ function HomeContent({
       LS_KEYS.translationLabels,
       DEFAULT_TRANSLATION_LABELS,
     );
+  const [netMirror, setNetMirror] = usePersistedState<NetMirror>(
+    LS_KEYS.netMirror,
+    "stream",
+    (raw) => (raw === "local" ? "local" : "stream"),
+  );
+  const [visiblePreviews, setVisiblePreviews] = usePersistedState<PreviewKey[]>(
+    LS_KEYS.visiblePreviews,
+    ALL_PREVIEWS_VISIBLE,
+    readVisiblePreviews,
+  );
+  const previewSlot = (key: PreviewKey) => {
+    const index = visiblePreviews.indexOf(key);
+    const paired = visiblePreviews.length === 3 && index > 0;
+    return {
+      className:
+        index === -1
+          ? "hidden"
+          : `w-full max-w-[64vh] ${
+              paired
+                ? "@min-[620px]:w-[calc(50%-0.25rem)] @min-[620px]:max-w-[42.6vh]"
+                : ""
+            }`,
+      style: { order: index === -1 ? VISIBLE_PREVIEW_ORDER.length : index },
+    };
+  };
+  const [netStatus, setNetStatus] = useState<NetStatus | null>(null);
+  const [netBusy, setNetBusy] = useState(false);
 
   const player = useSongPlayer(outputConfig);
   const { sectionLabel, positionText, activeSectionIndex } = player;
@@ -657,6 +722,30 @@ function HomeContent({
   useHdmiSync(1, hdmiActive, hdmiHtml, blackoutActive);
   useHdmiSync(2, hdmi2Active, hdmi2Html, blackoutActive);
 
+  const netHtml = netMirror === "local" ? hdmiHtml : hdmi2Html;
+  const netRunning = netStatus?.running === true;
+
+  useEffect(() => {
+    if (netRunning) window.api?.netUpdate?.(netHtml);
+  }, [netRunning, netHtml]);
+
+  useEffect(() => {
+    if (netRunning) window.api?.netBlackout?.(blackoutActive);
+  }, [netRunning, blackoutActive]);
+
+  useEffect(() => {
+    const refresh = async () => setNetStatus(await callNet("netStatus"));
+    void refresh();
+    window.addEventListener("focus", refresh);
+    return () => window.removeEventListener("focus", refresh);
+  }, []);
+
+  const toggleNet = async () => {
+    setNetBusy(true);
+    setNetStatus(await callNet(netRunning ? "netStop" : "netStart"));
+    setNetBusy(false);
+  };
+
   const [messagesIndexLoaded, setMessagesIndexLoaded] = useState(() =>
     isMessageChunkIndexReady(),
   );
@@ -913,12 +1002,33 @@ function HomeContent({
 
           <Allotment.Pane>
             <div className="h-full flex flex-col bg-surface overflow-hidden">
+              <div className="shrink-0 flex items-center justify-end px-3 pt-2">
+                <div className="inline-flex items-center gap-0.5 p-0.5 rounded-md border border-border bg-surface-secondary">
+                  {VISIBLE_PREVIEW_ORDER.map((key) => (
+                    <button
+                      key={key}
+                      onClick={() =>
+                        setVisiblePreviews((prev) =>
+                          prev.includes(key)
+                            ? prev.filter((k) => k !== key)
+                            : [...prev, key],
+                        )
+                      }
+                      title={`Show or hide the ${PREVIEW_LABELS[key]} preview`}
+                      className={`px-2.5 py-1 text-[10px] font-semibold rounded transition-colors ${
+                        visiblePreviews.includes(key)
+                          ? "bg-primary text-white"
+                          : "text-text-muted hover:bg-surface-hover hover:text-text-primary"
+                      }`}
+                    >
+                      {PREVIEW_LABELS[key]}
+                    </button>
+                  ))}
+                </div>
+              </div>
               <div className="flex-1 min-h-0 overflow-y-auto px-2 py-2 flex">
-                <div className="m-auto w-full flex flex-col items-center gap-2">
-                  <div
-                    className="w-full"
-                    style={{ maxWidth: "calc(36vh * 16 / 9)" }}
-                  >
+                <div className="@container m-auto w-full flex flex-wrap justify-center items-start gap-2">
+                  <div {...previewSlot("stream")}>
                     <StreamPreview
                       html={hdmi2Html}
                       positionText={positionText}
@@ -932,10 +1042,18 @@ function HomeContent({
                       onRefreshDisplays={refreshDisplays}
                     />
                   </div>
-                  <div
-                    className="w-full"
-                    style={{ maxWidth: "calc(36vh * 16 / 9)" }}
-                  >
+                  <div {...previewSlot("network")}>
+                    <NetPreview
+                      html={netHtml}
+                      blackoutActive={blackoutActive}
+                      status={netStatus}
+                      busy={netBusy}
+                      onToggle={toggleNet}
+                      mirror={netMirror}
+                      onChangeMirror={setNetMirror}
+                    />
+                  </div>
+                  <div {...previewSlot("local")}>
                     <LocalPreview
                       html={hdmiHtml}
                       blackoutActive={blackoutActive}

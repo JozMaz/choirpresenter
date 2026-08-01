@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import type { OverlayConfig } from "../lib/types";
 
 const VIEW_WIDTH = 1920;
 const VIEW_HEIGHT = 1080;
@@ -9,9 +10,20 @@ interface OutputFrameProps {
   html: string;
   blackout: boolean;
   bg?: string;
+  overlay?: boolean;
+  overlayConfig?: OverlayConfig;
 }
 
-export default function OutputFrame({ html, blackout, bg }: OutputFrameProps) {
+const CHECKER =
+  "repeating-conic-gradient(#3a3a3a 0% 25%, #2a2a2a 0% 50%) 0 0 / 16px 16px";
+
+export default function OutputFrame({
+  html,
+  blackout,
+  bg,
+  overlay,
+  overlayConfig,
+}: OutputFrameProps) {
   const boxRef = useRef<HTMLDivElement>(null);
   const frameRef = useRef<HTMLIFrameElement>(null);
   const [scale, setScale] = useState(0);
@@ -44,22 +56,27 @@ export default function OutputFrame({ html, blackout, bg }: OutputFrameProps) {
   }, [blackout, ready]);
 
   useEffect(() => {
-    if (!ready || !bg) return;
+    if (!ready) return;
     frameRef.current?.contentWindow?.postMessage(
-      { type: "view-config", config: { bg } },
+      { type: "view-config", config: { bg, ...overlayConfig } },
       "*",
     );
-  }, [bg, ready]);
+  }, [bg, overlayConfig, ready]);
 
   return (
     <div
       ref={boxRef}
-      className="relative w-full overflow-hidden bg-black rounded"
-      style={{ aspectRatio: `${VIEW_WIDTH} / ${VIEW_HEIGHT}` }}
+      className={`relative w-full overflow-hidden rounded ${
+        overlay ? "" : "bg-black"
+      }`}
+      style={{
+        aspectRatio: `${VIEW_WIDTH} / ${VIEW_HEIGHT}`,
+        background: overlay ? CHECKER : undefined,
+      }}
     >
       <iframe
         ref={frameRef}
-        src="hdmi-view.html"
+        src={overlay ? "hdmi-view.html?overlay=1" : "hdmi-view.html"}
         title="output"
         scrolling="no"
         onLoad={() => setReady(true)}

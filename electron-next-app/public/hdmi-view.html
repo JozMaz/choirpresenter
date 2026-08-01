@@ -51,6 +51,38 @@
       body {
         background: #000000;
       }
+      html.overlay,
+      html.overlay body {
+        background: transparent;
+      }
+      html.overlay body {
+        padding: 0 0 4vh;
+        justify-content: flex-end;
+      }
+      html.overlay #content {
+        flex: 0 0 auto;
+        width: var(--box-width, 100%);
+        height: var(--box-height, 100%);
+        transform: scale(var(--box-scale, 0.4));
+        transform-origin: bottom center;
+      }
+      html.overlay .layer {
+        inset: 4vh 4vw;
+      }
+      html.overlay #content::before {
+        content: "";
+        position: absolute;
+        inset: 0;
+        pointer-events: none;
+        opacity: 1;
+        transition: opacity 320ms ease-in-out;
+        background: rgba(0, 0, 0, 0.5);
+        border-radius: var(--box-radius, 3vw);
+        filter: blur(calc(var(--edge-fade, 0) * 0.025vw));
+      }
+      html.overlay.empty #content::before {
+        opacity: 0;
+      }
       body {
         color: #ffffff;
         font-family: "MyriadPro", Arial, Helvetica, sans-serif;
@@ -98,7 +130,7 @@
         opacity: 1;
       }
       .divider {
-        border-top: 3px solid #ffffff;
+        border-top: 2px solid #ffffff;
         width: 55%;
         margin: 2vh auto;
       }
@@ -114,12 +146,12 @@
       .divider.labeled::after {
         content: "";
         flex: 1 1 0;
-        border-top: 3px solid #ffffff;
+        border-top: 2px solid #ffffff;
       }
       .divider-label {
         flex: 0 0 auto;
-        border: 3px solid #ffffff;
-        border-radius: 0.2em;
+        border: 2px solid #ffffff;
+        border-radius: 0.45em;
         padding: 0.375em 0.55em 0.2em;
         font-size: 2.1vw;
         line-height: 1;
@@ -236,10 +268,18 @@
     </div>
     <script>
       const isEmbedded = window.top !== window;
+      const isServed = location.protocol.startsWith("http") && !isEmbedded;
       const ipcRenderer =
-        !isEmbedded && typeof require === "function"
+        !isEmbedded && !isServed && typeof require === "function"
           ? require("electron").ipcRenderer
           : { on() {} };
+
+      if (
+        isServed ||
+        new URLSearchParams(location.search).get("overlay") === "1"
+      ) {
+        document.documentElement.classList.add("overlay", "empty");
+      }
 
       const MAX_GROW = 1.2;
 
@@ -414,6 +454,7 @@
       function applyUpdate(html) {
         if (html === shownHtml) return;
         shownHtml = html;
+        document.documentElement.classList.toggle("empty", !html);
 
         const front = layers[frontIndex];
         const back = layers[1 - frontIndex];
@@ -435,10 +476,39 @@
       }
 
       function applyConfig(config) {
-        if (config && typeof config.bg === "string") {
+        if (!config) return;
+        if (typeof config.bg === "string") {
           document.documentElement.style.background = config.bg;
           document.body.style.background = config.bg;
         }
+        const setVar = (prop, value) =>
+          document.documentElement.style.setProperty(prop, value);
+        if (typeof config.edgeFade === "number") {
+          setVar("--edge-fade", String(config.edgeFade));
+        }
+        if (typeof config.boxWidth === "number") {
+          setVar("--box-width", config.boxWidth + "%");
+        }
+        if (typeof config.boxHeight === "number") {
+          setVar("--box-height", config.boxHeight + "%");
+        }
+        if (typeof config.boxScale === "number") {
+          setVar("--box-scale", String(config.boxScale / 100));
+        }
+        if (typeof config.boxRadius === "number") {
+          setVar("--box-radius", config.boxRadius / 10 + "vw");
+        }
+      }
+
+      if (isServed) {
+        const source = new EventSource("/events");
+        source.addEventListener("html", (e) => applyUpdate(JSON.parse(e.data)));
+        source.addEventListener("blackout", (e) =>
+          applyBlackout(JSON.parse(e.data)),
+        );
+        source.addEventListener("config", (e) =>
+          applyConfig(JSON.parse(e.data)),
+        );
       }
 
       ipcRenderer.on("hdmi-update", (_, html) => applyUpdate(html));

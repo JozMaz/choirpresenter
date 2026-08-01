@@ -12,6 +12,7 @@ import fs from "fs";
 import path from "path";
 import vm from "vm";
 import { fileURLToPath } from "url";
+import * as netOutput from "./netOutput.js";
 
 const CLOUD_DATA_URL =
   process.env.CHOIRPRESENTER_DATA_URL ||
@@ -24,6 +25,13 @@ const HDMI_VIEW = () =>
   app.isPackaged
     ? path.join(__dirname, "..", "out", "hdmi-view.html")
     : path.join(__dirname, "..", "public", "hdmi-view.html");
+
+const NET_ROOT = () =>
+  app.isPackaged
+    ? path.join(__dirname, "..", "out")
+    : path.join(__dirname, "..", "public");
+
+const NET_BASE_PORT = 7777;
 
 const API_BASE = path.join(__dirname, "..", "api");
 
@@ -74,7 +82,10 @@ process.on("unhandledRejection", (reason) => {
 const FETCH_TIMEOUT_MS = 20000;
 const PUT_TIMEOUT_MS = 30000;
 
-app.commandLine.appendSwitch("disable-features", "WindowsScrollingFromInactive");
+app.commandLine.appendSwitch(
+  "disable-features",
+  "WindowsScrollingFromInactive",
+);
 app.commandLine.appendSwitch("disable-renderer-backgrounding");
 app.commandLine.appendSwitch("disable-background-timer-throttling");
 app.commandLine.appendSwitch("disable-backgrounding-occluded-windows");
@@ -247,6 +258,13 @@ ipcMain.on("update-hdmi2", (_, html) => updateHdmi(2, html));
 ipcMain.on("close-hdmi2", () => closeHdmi(2));
 ipcMain.on("hdmi2-blackout", (_, active) => blackoutHdmi(2, active));
 
+ipcMain.handle("net-start", () => netOutput.start(NET_BASE_PORT, NET_ROOT()));
+ipcMain.handle("net-stop", () => netOutput.stop());
+ipcMain.handle("net-status", () => netOutput.status());
+ipcMain.on("net-update", (_, html) => netOutput.pushHtml(html));
+ipcMain.on("net-blackout", (_, active) => netOutput.pushBlackout(active));
+ipcMain.on("net-config", (_, config) => netOutput.pushConfig(config));
+
 ipcMain.on("hdmi2-config", (_, config) => {
   if (config && typeof config.bg === "string") {
     hdmiState[2].bg = config.bg;
@@ -269,7 +287,10 @@ async function readSongbookFile(book) {
         return JSON.parse(raw);
       }
     } catch (err) {
-      console.warn(`Cache read failed for ${book}, falling back to bundle:`, err);
+      console.warn(
+        `Cache read failed for ${book}, falling back to bundle:`,
+        err,
+      );
     }
   }
   const target = SONGBOOK_BUNDLE_PATHS[book];
@@ -289,11 +310,7 @@ ipcMain.handle("read-songbook", async (_, book) => {
 
 const BIBLE_BUNDLE_PATHS = {
   warszawska: path.join(API_BASE, "Bibles", "Biblia Warszawska.json"),
-  gdanska: path.join(
-    API_BASE,
-    "Bibles",
-    "Uwspółcześniona Biblia Gdańska.json",
-  ),
+  gdanska: path.join(API_BASE, "Bibles", "Uwspółcześniona Biblia Gdańska.json"),
 };
 
 const BIBLE_CACHE_KEYS = {
@@ -445,7 +462,9 @@ async function noteUploadedFile(cacheKey, body) {
   try {
     const manifestPath = dataCachePath("manifest.json");
     if (!fs.existsSync(manifestPath)) return;
-    const manifest = JSON.parse(await fs.promises.readFile(manifestPath, "utf8"));
+    const manifest = JSON.parse(
+      await fs.promises.readFile(manifestPath, "utf8"),
+    );
     if (!manifest?.files) return;
     manifest.files[cacheKey] = {
       hash: crypto.createHash("md5").update(body).digest("hex"),
@@ -513,8 +532,7 @@ ipcMain.handle("write-songbook", async (_, book, data) => {
           await fs.promises.writeFile(backupPath, body, "utf8");
           return { localOk: false, cloudOk: null, refused: true };
         }
-      } catch {
-      }
+      } catch {}
     }
     await fs.promises.mkdir(path.dirname(localPath), { recursive: true });
     await fs.promises.writeFile(localPath, body, "utf8");
@@ -675,7 +693,11 @@ ipcMain.handle("admin-create-org", (_, name, role) =>
 );
 
 ipcMain.handle("admin-patch-org", (_, orgId, patch) =>
-  adminRequest(`/admin/orgs/${encodeURIComponent(orgId)}`, "PATCH", patch || {}),
+  adminRequest(
+    `/admin/orgs/${encodeURIComponent(orgId)}`,
+    "PATCH",
+    patch || {},
+  ),
 );
 
 ipcMain.handle("admin-rotate-token", (_, orgId) =>
@@ -747,7 +769,9 @@ ipcMain.handle("data-has-local", async () => {
     const manifestPath = path.join(dir, "manifest.json");
     if (!fs.existsSync(manifestPath)) return false;
 
-    const manifest = JSON.parse(await fs.promises.readFile(manifestPath, "utf8"));
+    const manifest = JSON.parse(
+      await fs.promises.readFile(manifestPath, "utf8"),
+    );
     const keys = Object.keys(manifest?.files || {});
     if (keys.length === 0) return false;
     const missing = keys.filter((k) => !fs.existsSync(dataCachePath(k)));
@@ -976,6 +1000,7 @@ function closeOutputWindows() {
   }
   hdmiWindow = null;
   hdmiWindow2 = null;
+  netOutput.stop();
 }
 
 app.on("before-quit", closeOutputWindows);
@@ -1016,7 +1041,10 @@ async function migrateDataEpoch() {
     );
   } catch (err) {
     wiped = false;
-    console.error("[data-epoch] cache wipe failed, will retry on next start:", err);
+    console.error(
+      "[data-epoch] cache wipe failed, will retry on next start:",
+      err,
+    );
   }
 
   if (!wiped) return;

@@ -139,7 +139,7 @@ body {
     box-shadow: none !important;
   }
 
-  input:focus,
+  input:focus:not([type="range"]),
   textarea:focus,
   select:focus {
     box-shadow: 0 0 0 1px var(--primary) !important;

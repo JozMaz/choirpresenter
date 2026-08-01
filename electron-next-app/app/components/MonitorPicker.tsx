@@ -15,6 +15,9 @@ interface MonitorPickerProps {
 
 const resolution = (d: DisplayInfo) => `${d.bounds.width}×${d.bounds.height}`;
 
+const MENU_WIDTH = 224;
+const VIEWPORT_MARGIN = 8;
+
 export default function MonitorPicker({
   displays,
   selectedDisplayId,
@@ -24,6 +27,7 @@ export default function MonitorPicker({
   onToggleHdmi,
 }: MonitorPickerProps) {
   const [open, setOpen] = useState(false);
+  const [alignRight, setAlignRight] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
 
   const available = useMemo(
@@ -58,7 +62,14 @@ export default function MonitorPicker({
   }, [open]);
 
   const toggleOpen = () => {
-    if (!open) onRefreshDisplays();
+    if (!open) {
+      onRefreshDisplays();
+      const rect = rootRef.current?.getBoundingClientRect();
+      setAlignRight(
+        rect !== undefined &&
+          rect.left + MENU_WIDTH > window.innerWidth - VIEWPORT_MARGIN,
+      );
+    }
     setOpen((v) => !v);
   };
 
@@ -80,7 +91,11 @@ export default function MonitorPicker({
       </button>
 
       {open && (
-        <div className="absolute top-full left-0 mt-1 z-30 min-w-56 bg-surface border border-border-secondary rounded-md shadow-xl overflow-hidden">
+        <div
+          className={`absolute top-full mt-1 z-30 w-56 bg-surface border border-border-secondary rounded-md shadow-xl overflow-hidden ${
+            alignRight ? "right-0" : "left-0"
+          }`}
+        >
           {available.length === 0 ? (
             <p className="px-3 py-2 text-[11px] text-text-muted leading-relaxed">
               No other monitor connected.

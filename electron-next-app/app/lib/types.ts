@@ -42,6 +42,26 @@ export interface WhoamiResult {
   identity?: { role: "admin" | "org"; orgId: string; name: string };
 }
 
+export interface OverlayConfig {
+  edgeFade: number;
+  boxWidth: number;
+  boxHeight: number;
+  boxScale: number;
+  boxRadius: number;
+}
+
+export interface NetAddress {
+  address: string;
+  name: string;
+}
+
+export interface NetStatus {
+  running: boolean;
+  port: number | null;
+  addresses: NetAddress[];
+  error?: string;
+}
+
 export interface CloudManifestEntry {
   hash: string;
   size: number;
@@ -66,6 +86,12 @@ declare global {
       closeHdmi2: () => void;
       setHdmi2Blackout: (active: boolean) => void;
       setHdmi2Config: (config: { bg: string }) => void;
+      netStart: () => Promise<NetStatus>;
+      netStop: () => Promise<NetStatus>;
+      netStatus: () => Promise<NetStatus>;
+      netUpdate: (html: string) => void;
+      netBlackout: (active: boolean) => void;
+      netConfig: (config: Partial<OverlayConfig>) => void;
       getAppVersion: () => Promise<string>;
       readSongBook: (book: SongBookKey) => Promise<Songbook | null>;
       writeSongBook: (
