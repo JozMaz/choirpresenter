@@ -11,7 +11,6 @@ import type {
   DisplayInfo,
   NetStatus,
   SongBookKey,
-  NetGroup,
   SongEntry,
   SongSource,
 } from "./lib/types";
@@ -45,6 +44,15 @@ import {
   readOutputConfig,
   type OutputConfig,
 } from "./lib/outputConfig";
+import {
+  DEFAULT_OUTPUTS,
+  OUTPUT_IDS,
+  outputName,
+  readOutputs,
+  type OutputId,
+  type OutputsConfig,
+} from "./lib/outputs";
+import { displayGroupFor, migrateProfiles } from "./lib/outputProfiles";
 import { buildSongFromEditor, songToEditorSections } from "./lib/songSerialize";
 import { toApiItem, SONGBOOK_NAMES } from "./lib/songAdapter";
 import { splitVerseIntoParts } from "./lib/bibleSlides";
@@ -68,9 +76,7 @@ import TopBar from "./components/TopBar";
 import LoadingScreen from "./components/LoadingScreen";
 import SelectedPanel from "./components/SelectedPanel";
 import SongbooksTree from "./components/SongbooksTree";
-import LocalPreview from "./components/LocalPreview";
-import NetPreview, { type NetMirror } from "./components/NetPreview";
-import StreamPreview from "./components/StreamPreview";
+import OutputPreview from "./components/OutputPreview";
 import SectionsList from "./components/SectionsList";
 import SettingsModal from "./components/SettingsModal";
 import SongChunks from "./components/SongChunks";
@@ -79,38 +85,35 @@ import SongEditor, {
   type TargetBook,
 } from "./components/SongEditor";
 
-type PreviewKey = "stream" | "network" | "local";
-
-const VISIBLE_PREVIEW_ORDER: PreviewKey[] = ["local", "stream", "network"];
-
-const PREVIEW_LABELS: Record<PreviewKey, string> = {
-  local: "Local",
-  stream: "Stream",
-  network: "Network",
+const LEGACY_PREVIEW_KEYS: Record<string, OutputId> = {
+  local: "out1",
+  stream: "out2",
+  network: "out2",
 };
 
-const ALL_PREVIEWS_VISIBLE: PreviewKey[] = ["local", "stream", "network"];
-
-const readVisiblePreviews = (raw: string | null): PreviewKey[] => {
-  if (raw === null) return ALL_PREVIEWS_VISIBLE;
+const readVisiblePreviews = (raw: string | null): OutputId[] => {
+  if (raw === null) return [...OUTPUT_IDS];
   try {
     const parsed = JSON.parse(raw);
-    if (!Array.isArray(parsed)) return ALL_PREVIEWS_VISIBLE;
-    return VISIBLE_PREVIEW_ORDER.filter((k) => parsed.includes(k)).sort(
-      (a, b) => parsed.indexOf(a) - parsed.indexOf(b),
+    if (!Array.isArray(parsed)) return [...OUTPUT_IDS];
+    const wanted = new Set(
+      parsed.map((k: string) => LEGACY_PREVIEW_KEYS[k] ?? k),
     );
+    const visible = OUTPUT_IDS.filter((id) => wanted.has(id));
+    return visible.length > 0 ? visible : [...OUTPUT_IDS];
   } catch {
-    return ALL_PREVIEWS_VISIBLE;
+    return [...OUTPUT_IDS];
   }
 };
 
 const callNet = async (
   method: "netStart" | "netStop" | "netStatus",
+  id: OutputId,
 ): Promise<NetStatus | null> => {
   try {
-    return (await window.api?.[method]?.()) ?? null;
+    return (await window.api?.[method]?.(id)) ?? null;
   } catch (err) {
-    console.error(`Network output: ${method} failed`, err);
+    console.error(`Network output ${id}: ${method} failed`, err);
     return null;
   }
 };
@@ -177,11 +180,6 @@ function HomeContent({
 
   const { bibles, loaded: biblesLoaded } = useBibles();
 
-  const [out2Bg, setOut2Bg] = usePersistedState<string>(
-    LS_KEYS.out2Bg,
-    "#000000",
-    (raw) => raw ?? "#000000",
-  );
   const [outputConfig, setOutputConfig] = usePersistedState<OutputConfig>(
     LS_KEYS.outputConfig,
     DEFAULT_OUTPUT_CONFIG,
@@ -196,19 +194,22 @@ function HomeContent({
       LS_KEYS.translationLabels,
       DEFAULT_TRANSLATION_LABELS,
     );
-  const [netMirror, setNetMirror] = usePersistedState<NetMirror>(
-    LS_KEYS.netMirror,
-    "stream",
-    (raw) => (raw === "local" ? "local" : "stream"),
+  const [outputs, setOutputs] = usePersistedState<OutputsConfig>(
+    LS_KEYS.outputs,
+    DEFAULT_OUTPUTS,
+    readOutputs,
   );
-  const [visiblePreviews, setVisiblePreviews] = usePersistedState<PreviewKey[]>(
+  const [visiblePreviews, setVisiblePreviews] = usePersistedState<OutputId[]>(
     LS_KEYS.visiblePreviews,
-    ALL_PREVIEWS_VISIBLE,
+    [...OUTPUT_IDS],
     readVisiblePreviews,
   );
-  const previewSlot = (key: PreviewKey) => {
-    const index = visiblePreviews.indexOf(key);
-    const paired = visiblePreviews.length === 3 && index > 0;
+  const shownOutputs = OUTPUT_IDS.filter(
+    (id) => outputs[id].enabled && visiblePreviews.includes(id),
+  );
+  const previewSlot = (id: OutputId) => {
+    const index = shownOutputs.indexOf(id);
+    const paired = shownOutputs.length > 1;
     return {
       className:
         index === -1
@@ -218,7 +219,7 @@ function HomeContent({
                 ? "@min-[620px]:w-[calc(50%-0.25rem)] @min-[620px]:max-w-[42.6vh]"
                 : ""
             }`,
-      style: { order: index === -1 ? VISIBLE_PREVIEW_ORDER.length : index },
+      style: { order: index === -1 ? OUTPUT_IDS.length : index },
     };
   };
   const [dividerWidth, setDividerWidth] = usePersistedState<number>(
@@ -229,54 +230,12 @@ function HomeContent({
       return Number.isFinite(parsed) ? parsed : 3;
     },
   );
-  const readMs = (fallback: number) => (raw: string | null) => {
-    const parsed = raw?.trim() ? Number(raw) : NaN;
-    return Number.isFinite(parsed) ? parsed : fallback;
-  };
-  const [localFadeMs, setLocalFadeMs] = usePersistedState<number>(
-    LS_KEYS.localFadeMs,
-    320,
-    readMs(320),
+  const [netStatus, setNetStatus] = useState<Record<OutputId, NetStatus | null>>(
+    { out1: null, out2: null },
   );
-  const [streamFadeMs, setStreamFadeMs] = usePersistedState<number>(
-    LS_KEYS.streamFadeMs,
-    320,
-    readMs(320),
-  );
-  const [localBibleScale, setLocalBibleScale] = usePersistedState<number>(
-    LS_KEYS.localBibleScale,
-    100,
-    readMs(100),
-  );
-  const [streamBibleScale, setStreamBibleScale] = usePersistedState<number>(
-    LS_KEYS.streamBibleScale,
-    100,
-    readMs(100),
-  );
-  const [localMessageScale, setLocalMessageScale] = usePersistedState<number>(
-    LS_KEYS.localMessageScale,
-    100,
-    readMs(100),
-  );
-  const [streamMessageScale, setStreamMessageScale] = usePersistedState<number>(
-    LS_KEYS.streamMessageScale,
-    100,
-    readMs(100),
-  );
-  const readFlag = (fallback: boolean) => (raw: string | null) =>
-    raw === "true" ? true : raw === "false" ? false : fallback;
-  const [localTightLabels, setLocalTightLabels] = usePersistedState<boolean>(
-    LS_KEYS.localTightLabels,
-    false,
-    readFlag(false),
-  );
-  const [streamTightLabels, setStreamTightLabels] = usePersistedState<boolean>(
-    LS_KEYS.streamTightLabels,
-    true,
-    readFlag(true),
-  );
-  const [netStatus, setNetStatus] = useState<NetStatus | null>(null);
   const [netBusy, setNetBusy] = useState(false);
+
+  useEffect(() => migrateProfiles(), []);
 
   const player = useSongPlayer(outputConfig);
   const { sectionLabel, positionText, activeSectionIndex } = player;
@@ -339,30 +298,9 @@ function HomeContent({
   useEffect(() => watchSystemTheme(), []);
 
   useEffect(() => {
-    window.api?.setHdmi2Config?.({ bg: out2Bg });
-  }, [out2Bg]);
-
-  useEffect(() => {
     window.api?.setOutputStyle?.({ dividerWidth });
   }, [dividerWidth]);
 
-  useEffect(() => {
-    window.api?.setHdmiConfig?.(1, {
-      fadeMs: localFadeMs,
-      bibleScale: localBibleScale,
-      messageScale: localMessageScale,
-      tightLabels: localTightLabels,
-    });
-  }, [localFadeMs, localBibleScale, localMessageScale, localTightLabels]);
-
-  useEffect(() => {
-    window.api?.setHdmiConfig?.(2, {
-      fadeMs: streamFadeMs,
-      bibleScale: streamBibleScale,
-      messageScale: streamMessageScale,
-      tightLabels: streamTightLabels,
-    });
-  }, [streamFadeMs, streamBibleScale, streamMessageScale, streamTightLabels]);
   const [saveStatus, setSaveStatus] = useState<
     "idle" | "saving" | "saved" | "local" | "error"
   >("idle");
@@ -384,6 +322,7 @@ function HomeContent({
     chapter: number,
     bibleName: string,
     autoSelectVerseIdx?: number,
+    goLive = false,
   ) => {
     const title = `${bookName} ${chapter}`;
     const entries = rawVerses.map((v, i) => {
@@ -426,7 +365,7 @@ function HomeContent({
       autoSelectVerseIdx >= 0 &&
       autoSelectVerseIdx < sections.length
     ) {
-      player.goToSection(autoSelectVerseIdx);
+      player.goToSection(autoSelectVerseIdx, goLive);
     }
   };
 
@@ -434,6 +373,7 @@ function HomeContent({
     dateKey: string,
     title: string,
     chunkIdx?: number,
+    goLive = false,
   ) => {
     const entry = await getMessageText(dateKey);
     if (!entry || entry.chunks.length === 0) return;
@@ -476,8 +416,7 @@ function HomeContent({
     };
     player.sendFirstPart(item);
     if (chunkIdx !== undefined && chunkIdx >= 0 && chunkIdx < sections.length) {
-      player.goToSection(chunkIdx);
-      setBlackoutActive(true);
+      player.goToSection(chunkIdx, goLive);
     }
   };
 
@@ -766,11 +705,32 @@ function HomeContent({
     setHdmi2Active(true);
   };
 
-  const netGroup: NetGroup = player.liveSong?.isBible
-    ? "bible"
-    : player.liveSong?.isMessage
-      ? "messages"
-      : "songs";
+  // Switching a slot's type or turning it off has to take the previous carrier
+  // down with it, otherwise a stale HDMI window or web server keeps serving
+  // whatever was last on it.
+  useEffect(() => {
+    if (!outputs.out1.enabled || outputs.out1.type !== "hdmi") {
+      if (hdmiActive) {
+        window.api?.closeHdmi();
+        setHdmiActive(false);
+      }
+    }
+    if (!outputs.out2.enabled || outputs.out2.type !== "hdmi") {
+      if (hdmi2Active) {
+        window.api?.closeHdmi2();
+        setHdmi2Active(false);
+      }
+    }
+    for (const id of OUTPUT_IDS) {
+      const stillIp = outputs[id].enabled && outputs[id].type === "ip";
+      if (stillIp || netStatus[id]?.running !== true) continue;
+      void callNet("netStop", id).then((next) =>
+        setNetStatus((prev) => ({ ...prev, [id]: next })),
+      );
+    }
+  }, [outputs, hdmiActive, hdmi2Active, netStatus]);
+
+  const liveGroup = displayGroupFor(player.liveSong ?? {});
 
   const liveTranslationLabel = player.liveSong
     ? player.liveSong.customTranslationLabel ||
@@ -778,54 +738,67 @@ function HomeContent({
       player.liveSong.translationLabel
     : "";
 
-  const hdmiHtml = player.liveSong
-    ? buildOutputHtml({
-        song: player.liveSong,
-        text: player.localText,
-        sectionLabel,
-        chrome: outputSettingsFor(player.liveSong, "local", outputConfig)
-          .chrome,
-        output: "local",
-        footerConfig: songFooter,
-        translationLabel: liveTranslationLabel,
-      })
-    : "";
-  const hdmi2Html = player.liveSong
-    ? buildOutputHtml({
-        song: player.liveSong,
-        text: player.streamText,
-        sectionLabel,
-        chrome: outputSettingsFor(player.liveSong, "stream", outputConfig)
-          .chrome,
-        output: "stream",
-        footerConfig: songFooter,
-        translationLabel: liveTranslationLabel,
-      })
-    : "";
-  useHdmiSync(1, hdmiActive, hdmiHtml, blackoutActive);
-  useHdmiSync(2, hdmi2Active, hdmi2Html, blackoutActive);
+  const outputHtml = useMemo(() => {
+    const build = (id: OutputId) =>
+      player.liveSong
+        ? buildOutputHtml({
+            song: player.liveSong,
+            text: id === "out1" ? player.out1Text : player.out2Text,
+            sectionLabel,
+            chrome: outputSettingsFor(player.liveSong, id, outputConfig).chrome,
+            mode: outputs[id].mode,
+            footerConfig: songFooter,
+            translationLabel: liveTranslationLabel,
+          })
+        : "";
+    return { out1: build("out1"), out2: build("out2") };
+  }, [
+    player.liveSong,
+    player.out1Text,
+    player.out2Text,
+    sectionLabel,
+    outputConfig,
+    outputs,
+    songFooter,
+    liveTranslationLabel,
+  ]);
 
-  const netHtml = netMirror === "local" ? hdmiHtml : hdmi2Html;
-  const netRunning = netStatus?.running === true;
+  const hdmiHtml = outputs.out1.type === "hdmi" ? outputHtml.out1 : "";
+  const hdmi2Html = outputs.out2.type === "hdmi" ? outputHtml.out2 : "";
+  useHdmiSync(1, hdmiActive && outputs.out1.type === "hdmi", hdmiHtml, blackoutActive);
+  useHdmiSync(2, hdmi2Active && outputs.out2.type === "hdmi", hdmi2Html, blackoutActive);
 
-  useEffect(() => {
-    if (netRunning) window.api?.netUpdate?.(netHtml);
-  }, [netRunning, netHtml]);
+  const netRunning = (id: OutputId) => netStatus[id]?.running === true;
 
   useEffect(() => {
-    if (netRunning) window.api?.netBlackout?.(blackoutActive);
-  }, [netRunning, blackoutActive]);
+    for (const id of OUTPUT_IDS) {
+      if (outputs[id].type !== "ip" || netStatus[id]?.running !== true) continue;
+      window.api?.netUpdate?.(id, outputHtml[id]);
+    }
+  }, [netStatus, outputs, outputHtml]);
 
   useEffect(() => {
-    const refresh = async () => setNetStatus(await callNet("netStatus"));
+    for (const id of OUTPUT_IDS) {
+      if (netStatus[id]?.running !== true) continue;
+      window.api?.netBlackout?.(id, blackoutActive);
+    }
+  }, [netStatus, blackoutActive]);
+
+  useEffect(() => {
+    const refresh = async () => {
+      const next = {} as Record<OutputId, NetStatus | null>;
+      for (const id of OUTPUT_IDS) next[id] = await callNet("netStatus", id);
+      setNetStatus(next);
+    };
     void refresh();
     window.addEventListener("focus", refresh);
     return () => window.removeEventListener("focus", refresh);
   }, []);
 
-  const toggleNet = async () => {
+  const toggleNet = async (id: OutputId) => {
     setNetBusy(true);
-    setNetStatus(await callNet(netRunning ? "netStop" : "netStart"));
+    const next = await callNet(netRunning(id) ? "netStop" : "netStart", id);
+    setNetStatus((prev) => ({ ...prev, [id]: next }));
     setNetBusy(false);
   };
 
@@ -1087,102 +1060,58 @@ function HomeContent({
             <div className="h-full flex flex-col bg-surface overflow-hidden">
               <div className="shrink-0 flex items-center justify-end px-3 pt-2">
                 <div className="inline-flex items-center gap-0.5 p-0.5 rounded-md border border-border bg-surface-secondary">
-                  {VISIBLE_PREVIEW_ORDER.map((key) => (
+                  {OUTPUT_IDS.filter((id) => outputs[id].enabled).map((id) => (
                     <button
-                      key={key}
+                      key={id}
                       onClick={() =>
                         setVisiblePreviews((prev) =>
-                          prev.includes(key)
-                            ? prev.filter((k) => k !== key)
-                            : [...prev, key],
+                          prev.includes(id)
+                            ? prev.filter((k) => k !== id)
+                            : [...prev, id],
                         )
                       }
-                      title={`Show or hide the ${PREVIEW_LABELS[key]} preview`}
+                      title={`Show or hide the ${outputName(outputs[id], id)} preview`}
                       className={`px-2.5 py-1 text-[10px] font-semibold rounded transition-colors ${
-                        visiblePreviews.includes(key)
+                        visiblePreviews.includes(id)
                           ? "bg-primary text-white"
                           : "text-text-muted hover:bg-surface-hover hover:text-text-primary"
                       }`}
                     >
-                      {PREVIEW_LABELS[key]}
+                      {outputName(outputs[id], id)}
                     </button>
                   ))}
                 </div>
               </div>
               <div className="flex-1 min-h-0 overflow-y-auto px-2 py-2 flex">
                 <div className="@container m-auto w-full flex flex-wrap justify-center items-start gap-2">
-                  <div {...previewSlot("stream")}>
-                    <StreamPreview
-                      html={hdmi2Html}
-                      positionText={positionText}
-                      blackoutActive={blackoutActive}
-                      bg={out2Bg}
-                      displays={displays}
-                      selectedDisplayId={selectedDisplayId2}
-                      setSelectedDisplayId={setSelectedDisplayId2}
-                      hdmiActive={hdmi2Active}
-                      onToggleHdmi={toggleHdmi2}
-                      onRefreshDisplays={refreshDisplays}
-                      dividerWidth={dividerWidth}
-                      fadeMs={streamFadeMs}
-                      onChangeFadeMs={setStreamFadeMs}
-                      bibleScale={streamBibleScale}
-                      onChangeBibleScale={setStreamBibleScale}
-                      messageScale={streamMessageScale}
-                      onChangeMessageScale={setStreamMessageScale}
-                      tightLabels={streamTightLabels}
-                      onChangeTightLabels={setStreamTightLabels}
-                    />
-                  </div>
-                  <div {...previewSlot("network")}>
-                    <NetPreview
-                      html={netHtml}
-                      blackoutActive={blackoutActive}
-                      status={netStatus}
-                      busy={netBusy}
-                      onToggle={toggleNet}
-                      mirror={netMirror}
-                      onChangeMirror={setNetMirror}
-                      dividerWidth={dividerWidth}
-                      bibleScale={
-                        netMirror === "local"
-                          ? localBibleScale
-                          : streamBibleScale
-                      }
-                      messageScale={
-                        netMirror === "local"
-                          ? localMessageScale
-                          : streamMessageScale
-                      }
-                      tightLabels={
-                        netMirror === "local"
-                          ? localTightLabels
-                          : streamTightLabels
-                      }
-                      group={netGroup}
-                    />
-                  </div>
-                  <div {...previewSlot("local")}>
-                    <LocalPreview
-                      html={hdmiHtml}
-                      blackoutActive={blackoutActive}
-                      displays={displays}
-                      selectedDisplayId={selectedDisplayId}
-                      setSelectedDisplayId={setSelectedDisplayId}
-                      hdmiActive={hdmiActive}
-                      onToggleHdmi={toggleHdmi}
-                      onRefreshDisplays={refreshDisplays}
-                      dividerWidth={dividerWidth}
-                      fadeMs={localFadeMs}
-                      onChangeFadeMs={setLocalFadeMs}
-                      bibleScale={localBibleScale}
-                      onChangeBibleScale={setLocalBibleScale}
-                      messageScale={localMessageScale}
-                      onChangeMessageScale={setLocalMessageScale}
-                      tightLabels={localTightLabels}
-                      onChangeTightLabels={setLocalTightLabels}
-                    />
-                  </div>
+                  {OUTPUT_IDS.map((id) => (
+                    <div key={id} {...previewSlot(id)}>
+                      <OutputPreview
+                        id={id}
+                        def={outputs[id]}
+                        html={outputHtml[id]}
+                        blackoutActive={blackoutActive}
+                        group={liveGroup}
+                        dividerWidth={dividerWidth}
+                        positionText={id === "out2" ? positionText : undefined}
+                        displays={displays}
+                        selectedDisplayId={
+                          id === "out1" ? selectedDisplayId : selectedDisplayId2
+                        }
+                        setSelectedDisplayId={
+                          id === "out1"
+                            ? setSelectedDisplayId
+                            : setSelectedDisplayId2
+                        }
+                        hdmiActive={id === "out1" ? hdmiActive : hdmi2Active}
+                        onToggleHdmi={id === "out1" ? toggleHdmi : toggleHdmi2}
+                        onRefreshDisplays={refreshDisplays}
+                        netStatus={netStatus[id]}
+                        netBusy={netBusy}
+                        onToggleNet={() => toggleNet(id)}
+                      />
+                    </div>
+                  ))}
                 </div>
               </div>
             </div>
@@ -1199,8 +1128,8 @@ function HomeContent({
           setSettingsOpen(false);
           setContentPickerOpen(true);
         }}
-        out2Bg={out2Bg}
-        onChangeOut2Bg={setOut2Bg}
+        outputs={outputs}
+        onChangeOutputs={setOutputs}
         outputConfig={outputConfig}
         onChangeOutputConfig={setOutputConfig}
         songFooter={songFooter}

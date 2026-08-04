@@ -23,10 +23,21 @@ import {
   OUTPUT_SCOPE_ORDER,
   type GroupMode,
   type OutputConfig,
-  type OutputKey,
   type OutputScope,
   type OutputSettings,
 } from "../lib/outputConfig";
+import {
+  DEFAULT_OUTPUT_NAMES,
+  OUTPUT_IDS,
+  OUTPUT_MODE_LABELS,
+  OUTPUT_TYPE_LABELS,
+  outputName,
+  type OutputDef,
+  type OutputId,
+  type OutputMode,
+  type OutputsConfig,
+  type OutputType,
+} from "../lib/outputs";
 import { DEFAULT_MAX_LINES } from "../lib/slideSplit";
 import { SONGBOOK_NAMES } from "../lib/songAdapter";
 import type { ContentSelection, Identity } from "../lib/access";
@@ -66,10 +77,6 @@ const SONG_SCOPES = OUTPUT_SCOPE_ORDER.filter(
   (s) => s !== "bible" && s !== "messages",
 );
 
-const OUTPUT_LABELS: Record<OutputKey, string> = {
-  local: "Local",
-  stream: "Stream",
-};
 
 const GROUP_CHOICES: { kind: GroupMode["kind"]; label: string }[] = [
   { kind: "section", label: "Whole" },
@@ -93,12 +100,6 @@ const CHROME_LABELS: Record<OutputScope, { header: string; footer: string }> = {
   messages: { header: "Title on top", footer: "Title below" },
 };
 
-export const OUT2_BG_OPTIONS = [
-  { value: "#000000", label: "Black", hint: "vMix luma key" },
-  { value: "#00ff00", label: "Green", hint: "vMix chroma key" },
-  { value: "#0000ff", label: "Blue", hint: "vMix chroma key" },
-] as const;
-
 const THEME_OPTIONS: { value: ThemePref; label: string }[] = [
   { value: "dark", label: "Dark" },
   { value: "light", label: "Light" },
@@ -107,12 +108,12 @@ const THEME_OPTIONS: { value: ThemePref; label: string }[] = [
 
 function OutputPanel({
   scope,
-  output,
+  label,
   settings,
   onChange,
 }: {
   scope: OutputScope;
-  output: OutputKey;
+  label: string;
   settings: OutputSettings;
   onChange: (next: OutputSettings) => void;
 }) {
@@ -144,7 +145,7 @@ function OutputPanel({
   return (
     <div className="flex-1 min-w-0 rounded border border-border p-2.5">
       <div className="text-[11px] font-semibold text-text-primary mb-2">
-        {OUTPUT_LABELS[output]}
+        {label}
       </div>
       <div className="flex items-center gap-1 mb-2">
         {GROUP_CHOICES.map((choice) => (
@@ -220,11 +221,143 @@ function OutputPanel({
   );
 }
 
+function OutputsSection({
+  outputs,
+  onChange,
+}: {
+  outputs: OutputsConfig;
+  onChange: (next: OutputsConfig) => void;
+}) {
+  const patch = (id: OutputId, changes: Partial<OutputDef>) =>
+    onChange({ ...outputs, [id]: { ...outputs[id], ...changes } });
+
+  return (
+    <div className="flex flex-col gap-2 sm:flex-row">
+      {OUTPUT_IDS.map((id) => {
+        const def = outputs[id];
+        const only =
+          def.enabled && !OUTPUT_IDS.some((o) => o !== id && outputs[o].enabled);
+        return (
+          <div
+            key={id}
+            className={`flex-1 min-w-0 rounded border p-2.5 transition-colors ${
+              def.enabled ? "border-border" : "border-border/40 opacity-60"
+            }`}
+          >
+            <div className="flex items-center gap-2 mb-2">
+              <input
+                type="text"
+                value={def.name}
+                placeholder={DEFAULT_OUTPUT_NAMES[id]}
+                onChange={(e) => patch(id, { name: e.target.value })}
+                className="flex-1 min-w-0 px-2 py-1 text-[11px] font-semibold border border-border-secondary rounded bg-surface text-text-primary placeholder-text-muted focus:outline-none focus:ring-1 focus:ring-primary"
+              />
+              <button
+                onClick={() => patch(id, { enabled: !def.enabled })}
+                disabled={only}
+                title={
+                  only
+                    ? "At least one output has to stay on"
+                    : def.enabled
+                      ? "Turn this output off"
+                      : "Turn this output on"
+                }
+                className={`px-2 py-1 text-[10px] font-semibold rounded border transition-colors disabled:opacity-40 ${
+                  def.enabled
+                    ? "bg-primary border-primary text-white"
+                    : "bg-surface-secondary border-border text-text-secondary"
+                }`}
+              >
+                {def.enabled ? "On" : "Off"}
+              </button>
+            </div>
+
+            <div className="space-y-1.5">
+              <div className="flex items-center gap-2">
+                <span className="w-10 shrink-0 text-[10px] text-text-muted">
+                  Sent by
+                </span>
+                <div className="inline-flex items-center gap-0.5 p-0.5 rounded-md border border-border bg-surface-secondary">
+                  {(["hdmi", "ip"] as OutputType[]).map((type) => (
+                    <button
+                      key={type}
+                      onClick={() => patch(id, { type })}
+                      title={
+                        type === "hdmi"
+                          ? "A window on a second screen"
+                          : "A web address other machines open in a browser source"
+                      }
+                      className={`px-2 py-0.5 text-[10px] font-semibold rounded transition-colors ${
+                        def.type === type
+                          ? "bg-primary text-white"
+                          : "text-text-muted hover:bg-surface-hover hover:text-text-primary"
+                      }`}
+                    >
+                      {OUTPUT_TYPE_LABELS[type]}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <span className="w-10 shrink-0 text-[10px] text-text-muted">
+                  Shows
+                </span>
+                <div className="inline-flex items-center gap-0.5 p-0.5 rounded-md border border-border bg-surface-secondary">
+                  {(["fullscreen", "lowerThirds"] as OutputMode[]).map(
+                    (mode) => (
+                      <button
+                        key={mode}
+                        onClick={() => patch(id, { mode })}
+                        title={
+                          mode === "fullscreen"
+                            ? "Fills the frame — the main projection"
+                            : "A band of text — for streaming over video"
+                        }
+                        className={`px-2 py-0.5 text-[10px] font-semibold rounded transition-colors ${
+                          def.mode === mode
+                            ? "bg-primary text-white"
+                            : "text-text-muted hover:bg-surface-hover hover:text-text-primary"
+                        }`}
+                      >
+                        {OUTPUT_MODE_LABELS[mode]}
+                      </button>
+                    ),
+                  )}
+                </div>
+              </div>
+            </div>
+
+            <p className="mt-2 text-[10px] text-text-muted leading-snug">
+              {def.mode === "lowerThirds" && def.type !== "ip" ? (
+                <>
+                  Size and position work as usual, but{" "}
+                  <span className="text-text-secondary font-semibold">
+                    HDMI cannot send transparency
+                  </span>{" "}
+                  — it has no alpha channel, so the box behind the text could
+                  never let your video show through. Its controls stay visible
+                  but greyed out, and the box is not drawn. Switch to IP to use
+                  them.
+                </>
+              ) : def.mode === "lowerThirds" ? (
+                "Transparent overlay with a shaped, dimmed box behind the text. Size and position are set per Songs / Bible / Sermons in the preview."
+              ) : (
+                "Fills the frame. Text size and fade are set per Songs / Bible / Sermons in the preview."
+              )}
+            </p>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 interface SettingsModalProps {
   open: boolean;
   onClose: () => void;
-  out2Bg: string;
-  onChangeOut2Bg: (bg: string) => void;
+  outputs: OutputsConfig;
+  onChangeOutputs: (outputs: OutputsConfig) => void;
   outputConfig: OutputConfig;
   onChangeOutputConfig: (config: OutputConfig) => void;
   songFooter: FooterConfig;
@@ -242,8 +375,8 @@ interface SettingsModalProps {
 export default function SettingsModal({
   open,
   onClose,
-  out2Bg,
-  onChangeOut2Bg,
+  outputs,
+  onChangeOutputs,
   outputConfig,
   onChangeOutputConfig,
   songFooter,
@@ -460,6 +593,19 @@ export default function SettingsModal({
         >
           <div className={`${card} mb-4`}>
             <label className="block text-xs font-semibold text-text-primary mb-1">
+              Outputs
+            </label>
+            <p className="text-[11px] text-text-muted mb-2 leading-snug">
+              Up to two outputs run at once. Each one is sent either to a screen
+              over HDMI or to a web address over IP, and shows either the whole
+              frame or a lower third. Size, position and fade are set separately
+              for Songs, Bible and Sermons from the preview on the right.
+            </p>
+            <OutputsSection outputs={outputs} onChange={onChangeOutputs} />
+          </div>
+
+          <div className={`${card} mb-4`}>
+            <label className="block text-xs font-semibold text-text-primary mb-1">
               What goes on each output
             </label>
             <p className="text-[11px] text-text-muted mb-2 leading-snug">
@@ -484,23 +630,25 @@ export default function SettingsModal({
               ))}
             </div>
             <div className="flex gap-2">
-              {OUTPUT_KEYS.map((output) => (
-                <OutputPanel
-                  key={output}
-                  scope={outputScope}
-                  output={output}
-                  settings={outputConfig[outputScope][output]}
-                  onChange={(next) =>
-                    onChangeOutputConfig({
-                      ...outputConfig,
-                      [outputScope]: {
-                        ...outputConfig[outputScope],
-                        [output]: next,
-                      },
-                    })
-                  }
-                />
-              ))}
+              {OUTPUT_KEYS.filter((output) => outputs[output].enabled).map(
+                (output) => (
+                  <OutputPanel
+                    key={output}
+                    scope={outputScope}
+                    label={outputName(outputs[output], output)}
+                    settings={outputConfig[outputScope][output]}
+                    onChange={(next) =>
+                      onChangeOutputConfig({
+                        ...outputConfig,
+                        [outputScope]: {
+                          ...outputConfig[outputScope],
+                          [output]: next,
+                        },
+                      })
+                    }
+                  />
+                ),
+              )}
             </div>
             {outputScope !== "bible" && outputScope !== "messages" && (
               <button
@@ -509,14 +657,8 @@ export default function SettingsModal({
                   const next = { ...outputConfig };
                   for (const scope of SONG_SCOPES) {
                     next[scope] = {
-                      local: {
-                        ...pair.local,
-                        chrome: { ...pair.local.chrome },
-                      },
-                      stream: {
-                        ...pair.stream,
-                        chrome: { ...pair.stream.chrome },
-                      },
+                      out1: { ...pair.out1, chrome: { ...pair.out1.chrome } },
+                      out2: { ...pair.out2, chrome: { ...pair.out2.chrome } },
                     };
                   }
                   onChangeOutputConfig(next);
@@ -602,38 +744,8 @@ export default function SettingsModal({
               </div>
 
               <div className={card}>
-                <label className="block text-xs font-semibold text-text-primary mb-2">
-                  Stream output
-                </label>
-                <p className="text-[11px] text-text-muted mb-2 leading-snug">
-                  Background of the stream output. Black works with vMix luma
-                  key, green/blue with chroma key.
-                </p>
-                <div className="flex items-center gap-1.5">
-                  {OUT2_BG_OPTIONS.map((opt) => (
-                    <button
-                      key={opt.value}
-                      onClick={() => onChangeOut2Bg(opt.value)}
-                      title={opt.hint}
-                      className={`flex items-center gap-1.5 px-3 py-1 text-xs font-semibold rounded border transition-colors ${
-                        out2Bg === opt.value
-                          ? "bg-primary border-primary text-white"
-                          : "bg-surface-secondary border-border text-text-secondary hover:text-text-primary"
-                      }`}
-                    >
-                      <span
-                        className="w-3 h-3 rounded-sm border border-border-secondary"
-                        style={{ backgroundColor: opt.value }}
-                      />
-                      {opt.label}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              <div className={card}>
                 <label className="block text-xs font-semibold text-text-primary mb-1">
-                  Song footer on the local output
+                  Song footer on the fullscreen output
                 </label>
                 <p className="text-[11px] text-text-muted mb-2 leading-snug">
                   Which parts of the caption are printed under the lyrics, per

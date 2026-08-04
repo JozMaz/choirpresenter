@@ -16,7 +16,33 @@ function longestRun(idx: string, tokens: string[]): number {
   return 0;
 }
 
-export function scoreMatch(idx: string, tokens: string[]): number {
+export function exactPhrase(tokens: string[]): string {
+  return tokens.filter(Boolean).join(" ");
+}
+
+function scoreExact(idx: string, tokens: string[]): number {
+  const phrase = exactPhrase(tokens);
+  if (!phrase) return 0;
+  const nl = idx.indexOf("\n");
+  const limit = nl === -1 ? idx.length : nl;
+  let score = 0;
+  let pos = 0;
+  while ((pos = idx.indexOf(phrase, pos)) !== -1) {
+    if (pos + phrase.length > limit) break;
+    score += phrase.length;
+    const prev = pos === 0 ? " " : idx[pos - 1];
+    if (prev === " ") score += WORD_START_BONUS;
+    pos += phrase.length;
+  }
+  return score;
+}
+
+export function scoreMatch(
+  idx: string,
+  tokens: string[],
+  exact = false,
+): number {
+  if (exact) return scoreExact(idx, tokens);
   let occ = 0;
   let present = 0;
   let total = 0;

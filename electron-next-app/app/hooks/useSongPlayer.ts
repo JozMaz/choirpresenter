@@ -100,7 +100,7 @@ export function useSongPlayer(config: OutputConfig) {
     });
   };
 
-  const goToSection = (sectionIndex: number) => {
+  const goToSection = (sectionIndex: number, live = true) => {
     setState((prev) => {
       const song = prev.currentSong;
       if (!song) return prev;
@@ -111,7 +111,7 @@ export function useSongPlayer(config: OutputConfig) {
         ...prev,
         restorePoint: null,
         stepIndex,
-        live: { song, stepIndex },
+        live: live ? { song, stepIndex } : prev.live,
       };
     });
   };
@@ -265,8 +265,8 @@ export function useSongPlayer(config: OutputConfig) {
     plan: currentPlan,
     stepIndex: currentStepIndex,
     liveSong: live?.song ?? null,
-    localText: step ? step.local : EMPTY_TEXT,
-    streamText: step ? step.stream : EMPTY_TEXT,
+    out1Text: step ? step.out1 : EMPTY_TEXT,
+    out2Text: step ? step.out2 : EMPTY_TEXT,
     sectionLabel:
       live && step ? sectionLabelFor(live.song, livePlan, liveStepIndex) : "",
     positionText: live ? `${liveStepIndex + 1} / ${livePlan.steps.length}` : "",

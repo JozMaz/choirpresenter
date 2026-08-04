@@ -12,6 +12,8 @@ import { buildSearchIndex, normalizeSearch } from "../lib/textUtils";
 import { highlightSnippet } from "../lib/searchHighlight";
 import { scoreMatch } from "../lib/searchScore";
 import { scoreItemsAsync } from "../lib/asyncSearch";
+import ExactSearchToggle from "./ExactSearchToggle";
+import { useExactSearch } from "../hooks/useExactSearch";
 import {
   getCachedTitles,
   getMessageChunkIndex,
@@ -44,7 +46,12 @@ type SearchResult = TitleResult | ChunkResult;
 
 interface MessagesBrowserProps {
   activeDateKey?: string | null;
-  onShowMessage?: (date: string, title: string, chunkIdx?: number) => void;
+  onShowMessage?: (
+    date: string,
+    title: string,
+    chunkIdx?: number,
+    goLive?: boolean,
+  ) => void;
 }
 
 const MAX_RESULTS = 200;
@@ -62,26 +69,28 @@ function countUppercase(s: string): number {
 const MessageTitleRow = memo(function MessageTitleRow({
   row,
   tokens,
+  exact,
   label,
   isActive,
   onClick,
 }: {
   row: TitleResult;
   tokens: string[];
+  exact: boolean;
   label?: string;
   isActive: boolean;
   onClick: (r: TitleResult) => void;
 }) {
   const titleHl = useMemo(
-    () => highlightSnippet(row.title, tokens, { snippetLen: 0 }),
-    [row.title, tokens],
+    () => highlightSnippet(row.title, tokens, { snippetLen: 0, exact }),
+    [row.title, tokens, exact],
   );
   const dateHl = useMemo(
     () =>
       label === undefined
-        ? highlightSnippet(row.date, tokens, { snippetLen: 0 })
+        ? highlightSnippet(row.date, tokens, { snippetLen: 0, exact })
         : null,
-    [row.date, tokens, label],
+    [row.date, tokens, label, exact],
   );
   return (
     <div
@@ -118,20 +127,24 @@ const MessageTitleRow = memo(function MessageTitleRow({
 const ChunkResultRow = memo(function ChunkResultRow({
   result,
   tokens,
+  exact,
   onClick,
 }: {
   result: ChunkResult;
   tokens: string[];
-  onClick: (r: ChunkResult) => void;
+  exact: boolean;
+  onClick: (r: ChunkResult, goLive: boolean) => void;
 }) {
   const hl = useMemo(
-    () => highlightSnippet(result.text, tokens),
-    [result.text, tokens],
+    () => highlightSnippet(result.text, tokens, { exact }),
+    [result.text, tokens, exact],
   );
   return (
     <div
-      onClick={() => onClick(result)}
-      className="flex items-start gap-3 px-2 py-1 bg-surface-secondary rounded border border-border hover:bg-surface-hover transition-colors cursor-pointer"
+      onClick={() => onClick(result, false)}
+      onDoubleClick={() => onClick(result, true)}
+      title="Click to load, double-click to send to the outputs"
+      className="flex items-start gap-3 px-2 py-1 bg-surface-secondary rounded border border-border hover:bg-surface-hover transition-colors cursor-pointer select-none"
     >
       <span className="text-xs font-semibold text-primary shrink-0 pt-0.5">
         par.{result.pnum}
@@ -221,6 +234,8 @@ export default function MessagesBrowser({
     [allTitleRows],
   );
 
+  const [exact, setExact] = useExactSearch();
+
   const tokens = useMemo(() => {
     const norm = normalizeSearch(debouncedTerm);
     return norm ? norm.split(" ").filter(Boolean) : [];
@@ -238,14 +253,14 @@ export default function MessagesBrowser({
     if (titleTokens.length === 0) return allTitleRows;
     const scored: { row: TitleResult; score: number }[] = [];
     for (let i = 0; i < allTitleRows.length; i++) {
-      const score = scoreMatch(titleIndex[i], titleTokens);
+      const score = scoreMatch(titleIndex[i], titleTokens, exact);
       if (score > 0) scored.push({ row: allTitleRows[i], score });
     }
     scored.sort(
       (a, b) => b.score - a.score || a.row.date.localeCompare(b.row.date),
     );
     return scored.map((s) => s.row);
-  }, [titleTokens, allTitleRows, titleIndex]);
+  }, [titleTokens, allTitleRows, titleIndex, exact]);
 
   const allowedDates = useMemo(
     () =>
@@ -277,7 +292,7 @@ export default function MessagesBrowser({
       const out: { result: SearchResult; score: number }[] = [];
       for (let i = 0; i < allTitleRows.length; i++) {
         if (allowedDates && !allowedDates.has(allTitleRows[i].date)) continue;
-        const score = scoreMatch(titleIndex[i], tokens);
+        const score = scoreMatch(titleIndex[i], tokens, exact);
         if (score > 0) out.push({ result: allTitleRows[i], score });
       }
 
@@ -286,6 +301,7 @@ export default function MessagesBrowser({
         (r) => r.idx,
         tokens,
         () => cancelled,
+        exact,
       );
       if (!chunkScored) return;
 
@@ -312,7 +328,7 @@ export default function MessagesBrowser({
     return () => {
       cancelled = true;
     };
-  }, [tokens, allTitleRows, titleIndex, searchChunkRows, allowedDates]);
+  }, [tokens, allTitleRows, titleIndex, searchChunkRows, allowedDates, exact]);
 
   const grouped = useMemo(() => {
     const map = new Map<
@@ -348,8 +364,8 @@ export default function MessagesBrowser({
   );
 
   const handleChunkClick = useCallback(
-    (r: ChunkResult) => {
-      onShowMessage?.(r.date, r.title, r.chunkIdx);
+    (r: ChunkResult, goLive: boolean) => {
+      onShowMessage?.(r.date, r.title, r.chunkIdx, goLive);
     },
     [onShowMessage],
   );
@@ -357,47 +373,53 @@ export default function MessagesBrowser({
   return (
     <div className="h-full flex flex-col bg-surface overflow-hidden">
       <div className="shrink-0 px-2 pt-2 space-y-1">
-        <div className="relative">
-          <input
-            type="text"
-            placeholder="Title or year..."
-            value={titleTerm}
-            onChange={(e) => setTitleTerm(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Escape") setTitleTerm("");
-            }}
-            className={inputClass}
-          />
-          {titleTerm && (
-            <button
-              onClick={() => setTitleTerm("")}
-              title="Clear title search (Esc)"
-              className={clearButtonClass}
-            >
-              <Icon name="X" size={12} />
-            </button>
-          )}
+        <div className="flex items-center gap-1">
+          <div className="relative flex-1 min-w-0">
+            <input
+              type="text"
+              placeholder="Title or year..."
+              value={titleTerm}
+              onChange={(e) => setTitleTerm(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Escape") setTitleTerm("");
+              }}
+              className={inputClass}
+            />
+            {titleTerm && (
+              <button
+                onClick={() => setTitleTerm("")}
+                title="Clear title search (Esc)"
+                className={clearButtonClass}
+              >
+                <Icon name="X" size={12} />
+              </button>
+            )}
+          </div>
+          <div className="w-7 shrink-0" />
         </div>
-        <div className="relative">
-          <input
-            type="text"
-            placeholder="Search full text..."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Escape") setSearchTerm("");
-            }}
-            className={inputClass}
-          />
-          {searchTerm && (
-            <button
-              onClick={() => setSearchTerm("")}
-              title="Clear full-text search (Esc)"
-              className={clearButtonClass}
-            >
-              <Icon name="X" size={12} />
-            </button>
-          )}
+        <div className="flex items-center gap-1">
+          <div className="relative flex-1 min-w-0">
+            <input
+              type="text"
+              placeholder="Search full text..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Escape") setSearchTerm("");
+              }}
+              className={inputClass}
+            />
+            {searchTerm && (
+              <button
+                onClick={() => setSearchTerm("")}
+                title="Clear full-text search (Esc)"
+                className={clearButtonClass}
+              >
+                <Icon name="X" size={12} />
+              </button>
+            )}
+          </div>
+          <ExactSearchToggle exact={exact} onChange={setExact} />
         </div>
       </div>
 
@@ -424,6 +446,7 @@ export default function MessagesBrowser({
                 key={m.date}
                 row={m}
                 tokens={titleTokens}
+                exact={exact}
                 isActive={m.date === activeDateKey}
                 onClick={handleTitleClick}
               />
@@ -451,6 +474,7 @@ export default function MessagesBrowser({
                           key={`t-${rIdx}`}
                           row={r}
                           tokens={tokens}
+                          exact={exact}
                           label="title"
                           isActive={r.date === activeDateKey}
                           onClick={handleTitleClick}
@@ -462,6 +486,7 @@ export default function MessagesBrowser({
                         key={`c-${rIdx}`}
                         result={r}
                         tokens={tokens}
+                        exact={exact}
                         onClick={handleChunkClick}
                       />
                     );

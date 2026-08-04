@@ -9,8 +9,8 @@ import type { ApiItem, Section, SlideText } from "./types";
 
 export interface Step {
   sectionIndex: number;
-  local: SlideText;
-  stream: SlideText;
+  out1: SlideText;
+  out2: SlideText;
   preview: SlideText;
 }
 
@@ -138,33 +138,33 @@ export function buildPlan(song: ApiItem, config: OutputConfig): SongPlan {
   const sectionCount: number[] = [];
 
   song.sections.forEach((section, sectionIndex) => {
-    const localOwn = cutsFor(song, section, pair.local.group);
-    const streamOwn = cutsFor(song, section, pair.stream.group);
-    const localIsOuter = localOwn.length <= streamOwn.length;
+    const out1Own = cutsFor(song, section, pair.out1.group);
+    const out2Own = cutsFor(song, section, pair.out2.group);
+    const out1IsOuter = out1Own.length <= out2Own.length;
 
-    const outerCuts = localIsOuter ? localOwn : streamOwn;
+    const outerCuts = out1IsOuter ? out1Own : out2Own;
     const innerCuts = nestedCuts(
       outerCuts,
       song,
       section,
-      localIsOuter ? pair.stream.group : pair.local.group,
+      out1IsOuter ? pair.out2.group : pair.out1.group,
     );
 
-    const localBlocks = materialize(
+    const out1Blocks = materialize(
       song,
       section,
-      localIsOuter ? outerCuts : innerCuts,
-      pair.local.group,
+      out1IsOuter ? outerCuts : innerCuts,
+      pair.out1.group,
     );
-    const streamBlocks = materialize(
+    const out2Blocks = materialize(
       song,
       section,
-      localIsOuter ? innerCuts : outerCuts,
-      pair.stream.group,
+      out1IsOuter ? innerCuts : outerCuts,
+      pair.out2.group,
     );
 
-    const outerBlocks = localIsOuter ? localBlocks : streamBlocks;
-    const innerBlocks = localIsOuter ? streamBlocks : localBlocks;
+    const outerBlocks = out1IsOuter ? out1Blocks : out2Blocks;
+    const innerBlocks = out1IsOuter ? out2Blocks : out1Blocks;
 
     sectionStart.push(steps.length);
     sectionCount.push(innerBlocks.length);
@@ -180,8 +180,8 @@ export function buildPlan(song: ApiItem, config: OutputConfig): SongPlan {
       const outer = outerBlocks[outerIndex];
       steps.push({
         sectionIndex,
-        local: localIsOuter ? outer : block,
-        stream: localIsOuter ? block : outer,
+        out1: out1IsOuter ? outer : block,
+        out2: out1IsOuter ? block : outer,
         preview: block,
       });
     });

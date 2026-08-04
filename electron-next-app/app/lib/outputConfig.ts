@@ -1,10 +1,11 @@
 import { LS_KEYS } from "./constants";
+import { OUTPUT_IDS, type OutputId } from "./outputs";
 import { DEFAULT_MAX_LINES } from "./slideSplit";
 import type { ApiItem, SongSource } from "./types";
 
 export type OutputScope = SongSource | "bible" | "messages";
 
-export type OutputKey = "local" | "stream";
+export type OutputKey = OutputId;
 
 export type GroupMode =
   { kind: "section" } | { kind: "stored" } | { kind: "max"; lines: number };
@@ -37,13 +38,13 @@ export const OUTPUT_SCOPE_ORDER: OutputScope[] = [
   "messages",
 ];
 
-export const OUTPUT_KEYS: OutputKey[] = ["local", "stream"];
+export const OUTPUT_KEYS: OutputKey[] = OUTPUT_IDS;
 
 export const MIN_GROUP_LINES = 1;
 export const MAX_GROUP_LINES = 8;
 
 const songPair = (): OutputPair => ({
-  local: {
+  out1: {
     group: { kind: "section" },
     chrome: {
       header: true,
@@ -53,7 +54,7 @@ const songPair = (): OutputPair => ({
       swapLabels: false,
     },
   },
-  stream: {
+  out2: {
     group: { kind: "stored" },
     chrome: {
       header: false,
@@ -66,7 +67,7 @@ const songPair = (): OutputPair => ({
 });
 
 const readerPair = (header: boolean): OutputPair => ({
-  local: {
+  out1: {
     group: { kind: "section" },
     chrome: {
       header,
@@ -76,7 +77,7 @@ const readerPair = (header: boolean): OutputPair => ({
       swapLabels: false,
     },
   },
-  stream: {
+  out2: {
     group: { kind: "stored" },
     chrome: {
       header,
@@ -141,18 +142,26 @@ function normalizeChrome(value: unknown, fallback: OutputChrome): OutputChrome {
   };
 }
 
+const LEGACY_OUTPUT_KEYS: Record<OutputKey, string> = {
+  out1: "local",
+  out2: "stream",
+};
+
 function normalizeConfig(value: unknown): OutputConfig {
   const raw = (value ?? {}) as Partial<
-    Record<OutputScope, Partial<Record<OutputKey, unknown>>>
+    Record<OutputScope, Record<string, unknown>>
   >;
   const out = {} as OutputConfig;
   for (const scope of OUTPUT_SCOPE_ORDER) {
     const fallbackPair = DEFAULT_OUTPUT_CONFIG[scope];
     const rawPair = raw[scope] ?? {};
-    out[scope] = {
-      local: normalizeSettings(rawPair.local, fallbackPair.local),
-      stream: normalizeSettings(rawPair.stream, fallbackPair.stream),
-    };
+    out[scope] = {} as OutputPair;
+    for (const key of OUTPUT_KEYS) {
+      out[scope][key] = normalizeSettings(
+        rawPair[key] ?? rawPair[LEGACY_OUTPUT_KEYS[key]],
+        fallbackPair[key],
+      );
+    }
   }
   return out;
 }
@@ -171,7 +180,7 @@ function normalizeSettings(
 function withStreamSecondary(enabled: boolean): OutputConfig {
   const config = normalizeConfig(null);
   for (const scope of OUTPUT_SCOPE_ORDER) {
-    config[scope].stream.chrome.secondary = enabled;
+    config[scope].out2.chrome.secondary = enabled;
   }
   return config;
 }

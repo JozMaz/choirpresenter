@@ -26,24 +26,35 @@ import HighlightedText from "./HighlightedText";
 import { bibleGroupTint } from "../lib/bibleGroups";
 import Icon from "./Icon";
 import Dropdown, { type DropdownOption } from "./Dropdown";
+import ExactSearchToggle from "./ExactSearchToggle";
+import { useExactSearch } from "../hooks/useExactSearch";
 
 const VerseResultRow = memo(function VerseResultRow({
   v,
   tokens,
+  exact,
   onClick,
 }: {
   v: FlatVerse;
   tokens: string[];
-  onClick: (v: FlatVerse) => void;
+  exact: boolean;
+  onClick: (v: FlatVerse, goLive: boolean) => void;
 }) {
   const hl = useMemo(
-    () => highlightSnippet(v.text, tokens, { snippetLen: 240, before: 40 }),
-    [v.text, tokens],
+    () =>
+      highlightSnippet(v.text, tokens, {
+        snippetLen: 240,
+        before: 40,
+        exact,
+      }),
+    [v.text, tokens, exact],
   );
   return (
     <div
-      onClick={() => onClick(v)}
-      className="flex items-start gap-2 px-2 py-0.5 bg-surface-secondary rounded border border-border hover:bg-surface-hover transition-colors cursor-pointer"
+      onClick={() => onClick(v, false)}
+      onDoubleClick={() => onClick(v, true)}
+      title="Click to load, double-click to send to the outputs"
+      className="flex items-start gap-2 px-2 py-0.5 bg-surface-secondary rounded border border-border hover:bg-surface-hover transition-colors cursor-pointer select-none"
     >
       <span className="text-xs font-semibold text-primary shrink-0 pt-0.5">
         {v.chapterIdx + 1}:{v.verseId}
@@ -65,6 +76,7 @@ interface BibleBrowserProps {
     chapter: number,
     bibleName: string,
     autoSelectVerseIdx?: number,
+    goLive?: boolean,
   ) => void;
 }
 
@@ -126,6 +138,8 @@ export default function BibleBrowser({
     return getBibleVerseIndex(bible, activeBible);
   }, [bible, activeBible]);
 
+  const [exact, setExact] = useExactSearch();
+
   const tokens = useMemo(() => {
     const norm = normalizeSearch(deferredTerm);
     return norm ? norm.split(" ").filter(Boolean) : [];
@@ -147,6 +161,7 @@ export default function BibleBrowser({
         (v) => v.searchIndex,
         tokens,
         () => cancelled,
+        exact,
       );
       if (!scored) return;
       const top = scored.slice(0, 200).map(({ item, score }) => ({
@@ -160,7 +175,7 @@ export default function BibleBrowser({
     return () => {
       cancelled = true;
     };
-  }, [tokens, allVerses]);
+  }, [tokens, allVerses, exact]);
 
   const groupedResults = useMemo(() => {
     const map = new Map<
@@ -203,7 +218,7 @@ export default function BibleBrowser({
   };
 
   const handleSearchResultClick = useCallback(
-    (v: FlatVerse) => {
+    (v: FlatVerse, goLive: boolean) => {
       setActiveChapter({ bookIdx: v.bookFlatIdx, chapterIdx: v.chapterIdx });
       onShowChapter(
         v.chapterVerses,
@@ -211,6 +226,7 @@ export default function BibleBrowser({
         v.chapterIdx + 1,
         BIBLE_LABELS[activeBible],
         v.verseIdx,
+        goLive,
       );
     },
     [onShowChapter, activeBible],
@@ -246,8 +262,8 @@ export default function BibleBrowser({
         />
       </div>
 
-      <div className="shrink-0 px-2 pt-1">
-        <div className="relative">
+      <div className="shrink-0 px-2 pt-1 flex items-center gap-1">
+        <div className="relative flex-1 min-w-0">
           <input
             ref={inputRef}
             type="text"
@@ -269,6 +285,7 @@ export default function BibleBrowser({
             </button>
           )}
         </div>
+        <ExactSearchToggle exact={exact} onChange={setExact} />
       </div>
 
       {isSearching && (
@@ -297,6 +314,7 @@ export default function BibleBrowser({
                       key={`${v.bookFlatIdx}-${v.chapterIdx}-${v.verseIdx}`}
                       v={v}
                       tokens={tokens}
+                      exact={exact}
                       onClick={handleSearchResultClick}
                     />
                   ))}

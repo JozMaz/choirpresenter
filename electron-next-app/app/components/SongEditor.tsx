@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { EditorSection, SectionType, SongBookKey } from "../lib/types";
 import { MUSICAL_KEYS, formatKey } from "../lib/musicKeys";
 import { deriveSequence, sectionLabel } from "../lib/songSchema";
@@ -81,11 +81,6 @@ const TYPE_OPTIONS: { value: SectionType; label: string }[] = [
   { value: "ending", label: "Ending" },
 ];
 
-const NUMBER_OPTIONS = [1, 2, 3, 4, 5, 6, 7, 8, 9].map((n) => ({
-  value: n,
-  label: String(n),
-}));
-
 const SECTION_STYLE: Record<SectionType, string> = {
   verse: "bg-primary",
   chorus: "bg-success",
@@ -134,12 +129,76 @@ export default function SongEditor({
       ),
     );
 
-  const addSection = () => {
-    const verseCount = sections.filter((s) => s.type === "verse").length;
-    setSections([
-      ...sections,
-      { ...createEmptySection(), number: verseCount + 1 },
+  // Functional so it composes with a patch queued in the same handler.
+  const addSection = (): string => {
+    const id = crypto.randomUUID();
+    setSections((prev) => [
+      ...prev,
+      {
+        ...createEmptySection(),
+        id,
+        number: prev.filter((s) => s.type === "verse").length + 1,
+      },
     ]);
+    return id;
+  };
+
+  // The field is free text so it can be cleared and retyped; the section keeps
+  // its last valid number until a usable one is entered.
+  const [numberDrafts, setNumberDrafts] = useState<Record<string, string>>({});
+
+  const typeNumber = (id: string, raw: string) => {
+    const digits = raw.replace(/\D/g, "").slice(0, 3);
+    setNumberDrafts((prev) => ({ ...prev, [id]: digits }));
+    const parsed = Number(digits);
+    if (digits !== "" && parsed >= 1) patchSection(id, { number: parsed });
+  };
+
+  const clearNumberDraft = (id: string) =>
+    setNumberDrafts((prev) => {
+      if (!(id in prev)) return prev;
+      const next = { ...prev };
+      delete next[id];
+      return next;
+    });
+
+  const lineRefs = useRef(new Map<string, HTMLTextAreaElement>());
+  const pendingFocus = useRef<string | null>(null);
+
+  const registerLines = (id: string) => (el: HTMLTextAreaElement | null) => {
+    if (el) lineRefs.current.set(id, el);
+    else lineRefs.current.delete(id);
+  };
+
+  useEffect(() => {
+    const id = pendingFocus.current;
+    if (!id) return;
+    pendingFocus.current = null;
+    const el = lineRefs.current.get(id);
+    if (!el) return;
+    el.focus();
+    el.setSelectionRange(el.value.length, el.value.length);
+  }, [sections]);
+
+  // A blank line is how you finish a verse on paper, so a second Enter at the
+  // end of a section moves on instead of leaving an empty line behind.
+  const handleLinesKeyDown = (
+    e: React.KeyboardEvent<HTMLTextAreaElement>,
+    section: EditorSection,
+    index: number,
+  ) => {
+    if (e.key !== "Enter" || e.shiftKey || e.ctrlKey || e.metaKey || e.altKey) {
+      return;
+    }
+    const el = e.currentTarget;
+    const at = el.selectionStart;
+    if (at !== el.selectionEnd) return;
+    if (!el.value.slice(0, at).endsWith("\n")) return;
+    if (el.value.slice(at).trim() !== "") return;
+
+    e.preventDefault();
+    patchSection(section.id, { lines: el.value.slice(0, at - 1) });
+    pendingFocus.current = sections[index + 1]?.id ?? addSection();
   };
 
   const removeSection = (id: string) =>
@@ -375,11 +434,14 @@ export default function SongEditor({
                 onChange={(v) => patchSection(section.id, { type: v })}
                 className="w-22"
               />
-              <Dropdown
-                value={section.number}
-                options={NUMBER_OPTIONS}
-                onChange={(v) => patchSection(section.id, { number: v })}
-                className="w-13"
+              <input
+                type="text"
+                inputMode="numeric"
+                value={numberDrafts[section.id] ?? String(section.number)}
+                onChange={(e) => typeNumber(section.id, e.target.value)}
+                onBlur={() => clearNumberDraft(section.id)}
+                title="Section number — digits only"
+                className="w-13 px-2 py-1 text-xs text-center rounded border border-border-secondary bg-surface text-text-primary transition-colors hover:bg-surface-hover focus:outline-none focus:ring-1 focus:ring-primary"
               />
               <span className="text-[11px] text-text-muted truncate">
                 {sectionLabel(section.type, section.number)}
@@ -419,13 +481,16 @@ export default function SongEditor({
                   Output 1 — full section
                 </div>
                 <AutoTextarea
+                  ref={registerLines(section.id)}
                   value={section.lines}
                   onChange={(e) =>
                     patchSection(section.id, { lines: e.target.value })
                   }
+                  onKeyDown={(e) => handleLinesKeyDown(e, section, idx)}
                   placeholder="Lyrics…"
                   minRows={3}
                   className={areaClass}
+                  title="Press Enter twice to move to the next section"
                 />
                 {section.showAlt && (
                   <>

@@ -266,16 +266,21 @@ ipcMain.on("update-hdmi2", (_, html) => updateHdmi(2, html));
 ipcMain.on("close-hdmi2", () => closeHdmi(2));
 ipcMain.on("hdmi2-blackout", (_, active) => blackoutHdmi(2, active));
 
-ipcMain.handle("net-start", () => netOutput.start(NET_BASE_PORT, NET_ROOT()));
-ipcMain.handle("net-stop", () => netOutput.stop());
-ipcMain.handle("net-status", () => netOutput.status());
-ipcMain.on("net-update", (_, html) => netOutput.pushHtml(html));
-ipcMain.on("net-blackout", (_, active) => netOutput.pushBlackout(active));
-ipcMain.on("net-config", (_, config) => netOutput.pushConfig(config));
+ipcMain.handle("net-start", (_, id) =>
+  netOutput.start(id, NET_BASE_PORT, NET_ROOT()),
+);
+ipcMain.handle("net-stop", (_, id) => netOutput.stop(id));
+ipcMain.handle("net-status", (_, id) => netOutput.status(id));
+ipcMain.on("net-update", (_, id, html) => netOutput.pushHtml(id, html));
+ipcMain.on("net-blackout", (_, id, active) =>
+  netOutput.pushBlackout(id, active),
+);
+ipcMain.on("net-config", (_, id, config) => netOutput.pushConfig(id, config));
 
 ipcMain.on("hdmi-set-config", (_, variant, config) => {
   const state = hdmiState[variant];
   if (!state || !config || typeof config !== "object") return;
+  if (typeof config.bg === "string") state.bg = config.bg;
   Object.assign(state.config, config);
   getHdmiWindow(variant)?.webContents.send("hdmi-config", config);
 });
@@ -286,7 +291,7 @@ ipcMain.on("output-style", (_, style) => {
   for (const variant of [1, 2]) {
     getHdmiWindow(variant)?.webContents.send("hdmi-config", style);
   }
-  netOutput.pushConfig(style);
+  netOutput.pushConfigAll(style);
 });
 
 ipcMain.on("hdmi2-config", (_, config) => {
@@ -1024,7 +1029,7 @@ function closeOutputWindows() {
   }
   hdmiWindow = null;
   hdmiWindow2 = null;
-  netOutput.stop();
+  netOutput.stopAll();
 }
 
 app.on("before-quit", closeOutputWindows);

@@ -109,12 +109,12 @@ declare global {
       closeHdmi2: () => void;
       setHdmi2Blackout: (active: boolean) => void;
       setHdmi2Config: (config: { bg: string }) => void;
-      netStart: () => Promise<NetStatus>;
-      netStop: () => Promise<NetStatus>;
-      netStatus: () => Promise<NetStatus>;
-      netUpdate: (html: string) => void;
-      netBlackout: (active: boolean) => void;
-      netConfig: (config: Partial<OverlayConfig>) => void;
+      netStart: (id: string) => Promise<NetStatus>;
+      netStop: (id: string) => Promise<NetStatus>;
+      netStatus: (id: string) => Promise<NetStatus>;
+      netUpdate: (id: string, html: string) => void;
+      netBlackout: (id: string, active: boolean) => void;
+      netConfig: (id: string, config: Partial<OverlayConfig>) => void;
       setOutputStyle: (style: Partial<OutputStyle>) => void;
       setHdmiConfig: (
         variant: 1 | 2,
@@ -123,6 +123,13 @@ declare global {
           bibleScale?: number;
           messageScale?: number;
           tightLabels?: boolean;
+          bg?: string;
+          boxed?: boolean;
+          boxScale?: number;
+          boxAlignX?: BoxAlign;
+          boxAlignY?: BoxAlign;
+          boxOffsetX?: number;
+          boxOffsetY?: number;
         },
       ) => void;
       getAppVersion: () => Promise<string>;

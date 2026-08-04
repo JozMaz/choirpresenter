@@ -1,21 +1,33 @@
 "use client";
 
-import { useLayoutEffect, useRef } from "react";
+import { useCallback, useLayoutEffect, useRef } from "react";
 
-interface AutoTextareaProps extends React.TextareaHTMLAttributes<HTMLTextAreaElement> {
+interface AutoTextareaProps
+  extends React.TextareaHTMLAttributes<HTMLTextAreaElement> {
   minRows?: number;
+  ref?: React.Ref<HTMLTextAreaElement>;
 }
 
 export default function AutoTextarea({
   minRows = 2,
   className = "",
   value,
+  ref,
   ...rest
 }: AutoTextareaProps) {
-  const ref = useRef<HTMLTextAreaElement>(null);
+  const inner = useRef<HTMLTextAreaElement>(null);
+
+  const setRef = useCallback(
+    (el: HTMLTextAreaElement | null) => {
+      inner.current = el;
+      if (typeof ref === "function") ref(el);
+      else if (ref) ref.current = el;
+    },
+    [ref],
+  );
 
   useLayoutEffect(() => {
-    const el = ref.current;
+    const el = inner.current;
     if (!el) return;
     el.style.height = "auto";
     el.style.height = `${el.scrollHeight + 2}px`;
@@ -23,7 +35,7 @@ export default function AutoTextarea({
 
   return (
     <textarea
-      ref={ref}
+      ref={setRef}
       rows={minRows}
       value={value}
       className={`resize-none overflow-hidden ${className}`}

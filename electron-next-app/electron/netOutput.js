@@ -15,11 +15,29 @@ const MIME = {
 
 const HEARTBEAT_MS = 15000;
 
-let server = null;
-let activePort = null;
-let heartbeat = null;
-const clients = new Set();
-const state = { html: "", blackout: true, config: { edgeFade: 0 } };
+const PORT_STRIDE = 10;
+
+const instances = new Map();
+
+function instanceFor(id) {
+  let inst = instances.get(id);
+  if (!inst) {
+    inst = {
+      server: null,
+      activePort: null,
+      heartbeat: null,
+      clients: new Set(),
+      state: { html: "", blackout: true, config: { edgeFade: 0 } },
+    };
+    instances.set(id, inst);
+  }
+  return inst;
+}
+
+function portOffset(id) {
+  const index = Number(String(id).replace(/\D/g, "")) - 1;
+  return Number.isFinite(index) && index > 0 ? index * PORT_STRIDE : 0;
+}
 
 function addressRank(ip) {
   if (ip.startsWith("192.168.")) return 0;
@@ -46,34 +64,41 @@ export function localAddresses() {
 const frame = (event, data) =>
   `event: ${event}\ndata: ${JSON.stringify(data)}\n\n`;
 
-function broadcast(event, data) {
+function broadcast(inst, event, data) {
   const payload = frame(event, data);
-  for (const res of clients) {
+  for (const res of inst.clients) {
     try {
       res.write(payload);
     } catch {
-      clients.delete(res);
+      inst.clients.delete(res);
     }
   }
 }
 
-export function pushHtml(html) {
-  if (html === state.html) return;
-  state.html = html;
-  broadcast("html", html);
+export function pushHtml(id, html) {
+  const inst = instanceFor(id);
+  if (html === inst.state.html) return;
+  inst.state.html = html;
+  broadcast(inst, "html", html);
 }
 
-export function pushBlackout(active) {
-  if (active === state.blackout) return;
-  state.blackout = active;
-  broadcast("blackout", active);
+export function pushBlackout(id, active) {
+  const inst = instanceFor(id);
+  if (active === inst.state.blackout) return;
+  inst.state.blackout = active;
+  broadcast(inst, "blackout", active);
 }
 
-export function pushConfig(config) {
-  const next = { ...state.config, ...config };
-  if (JSON.stringify(next) === JSON.stringify(state.config)) return;
-  state.config = next;
-  broadcast("config", next);
+export function pushConfig(id, config) {
+  const inst = instanceFor(id);
+  const next = { ...inst.state.config, ...config };
+  if (JSON.stringify(next) === JSON.stringify(inst.state.config)) return;
+  inst.state.config = next;
+  broadcast(inst, "config", next);
+}
+
+export function pushConfigAll(config) {
+  for (const id of instances.keys()) pushConfig(id, config);
 }
 
 function serveFile(res, root, relPath) {
@@ -97,7 +122,7 @@ function serveFile(res, root, relPath) {
   });
 }
 
-function openStream(req, res) {
+function openStream(inst, req, res) {
   res.writeHead(200, {
     "Content-Type": "text/event-stream",
     "Cache-Control": "no-store",
@@ -106,30 +131,26 @@ function openStream(req, res) {
     "Access-Control-Allow-Origin": "*",
   });
   res.write("retry: 1000\n\n");
-  res.write(frame("config", state.config));
-  res.write(frame("html", state.html));
-  res.write(frame("blackout", state.blackout));
-  clients.add(res);
-  req.on("close", () => clients.delete(res));
+  res.write(frame("config", inst.state.config));
+  res.write(frame("html", inst.state.html));
+  res.write(frame("blackout", inst.state.blackout));
+  inst.clients.add(res);
+  req.on("close", () => inst.clients.delete(res));
 }
 
-function listen(port, root) {
+function listen(inst, port, root) {
   return new Promise((resolve) => {
     const srv = http.createServer((req, res) => {
       const url = new URL(req.url ?? "/", "http://localhost");
       if (url.pathname === "/events") {
-        openStream(req, res);
+        openStream(inst, req, res);
         return;
       }
       if (url.pathname === "/" || url.pathname === "/index.html") {
         serveFile(res, root, "hdmi-view.html");
         return;
       }
-      serveFile(
-        res,
-        root,
-        decodeURIComponent(url.pathname).replace(/^\/+/, ""),
-      );
+      serveFile(res, root, decodeURIComponent(url.pathname).replace(/^\/+/, ""));
     });
 
     srv.requestTimeout = 0;
@@ -141,53 +162,66 @@ function listen(port, root) {
   });
 }
 
-export async function start(basePort, root) {
-  if (server) return status();
+export async function start(id, basePort, root) {
+  const inst = instanceFor(id);
+  if (inst.server) return status(id);
+
+  const taken = new Set(
+    [...instances.values()].map((i) => i.activePort).filter(Boolean),
+  );
+  const from = basePort + portOffset(id);
 
   let lastError = "EADDRINUSE";
-  for (let port = basePort; port < basePort + 5; port++) {
-    const result = await listen(port, root);
+  for (let port = from; port < from + 5; port++) {
+    if (taken.has(port)) continue;
+    const result = await listen(inst, port, root);
     if (result.ok) {
-      server = result.server;
-      activePort = port;
-      heartbeat = setInterval(() => {
-        for (const res of clients) {
+      inst.server = result.server;
+      inst.activePort = port;
+      inst.heartbeat = setInterval(() => {
+        for (const res of inst.clients) {
           try {
             res.write(": ping\n\n");
           } catch {
-            clients.delete(res);
+            inst.clients.delete(res);
           }
         }
       }, HEARTBEAT_MS);
-      return status();
+      return status(id);
     }
     lastError = result.error;
     if (lastError !== "EADDRINUSE") break;
   }
-  return { ...status(), error: lastError };
+  return { ...status(id), error: lastError };
 }
 
-export function stop() {
-  if (heartbeat) clearInterval(heartbeat);
-  heartbeat = null;
-  for (const res of clients) {
+export function stop(id) {
+  const inst = instanceFor(id);
+  if (inst.heartbeat) clearInterval(inst.heartbeat);
+  inst.heartbeat = null;
+  for (const res of inst.clients) {
     try {
       res.end();
     } catch {
       /* already gone */
     }
   }
-  clients.clear();
-  server?.close();
-  server = null;
-  activePort = null;
-  return status();
+  inst.clients.clear();
+  inst.server?.close();
+  inst.server = null;
+  inst.activePort = null;
+  return status(id);
 }
 
-export function status() {
+export function stopAll() {
+  for (const id of instances.keys()) stop(id);
+}
+
+export function status(id) {
+  const inst = instanceFor(id);
   return {
-    running: server !== null,
-    port: activePort,
+    running: inst.server !== null,
+    port: inst.activePort,
     addresses: localAddresses(),
   };
 }

@@ -16,8 +16,14 @@ interface LibraryProps {
     chapter: number,
     bibleName: string,
     autoSelectVerseIdx?: number,
+    goLive?: boolean,
   ) => void;
-  onShowMessage?: (date: string, title: string, chunkIdx?: number) => void;
+  onShowMessage?: (
+    date: string,
+    title: string,
+    chunkIdx?: number,
+    goLive?: boolean,
+  ) => void;
   activeDateKey?: string | null;
   activeBibleRef?: { bookName: string; chapter: number } | null;
 }

@@ -8,6 +8,7 @@ export interface HighlightResult {
 export interface HighlightOptions {
   snippetLen?: number;
   before?: number;
+  exact?: boolean;
 }
 
 const CHAR_CACHE = new Map<string, string>();
@@ -29,11 +30,15 @@ function normChar(ch: string): string {
 
 export function highlightSnippet(
   text: string,
-  tokens: string[],
+  rawTokens: string[],
   opts: HighlightOptions = {},
 ): HighlightResult {
   const SNIPPET_LEN = opts.snippetLen ?? 200;
   const BEFORE = opts.before ?? 60;
+  const exact = opts.exact ?? false;
+  const tokens = exact
+    ? [rawTokens.filter(Boolean).join(" ")].filter(Boolean)
+    : rawTokens;
 
   const parts: string[] = [];
   const origIdx: number[] = [];
@@ -48,11 +53,13 @@ export function highlightSnippet(
 
   const nospaceParts: string[] = [];
   const nospaceOrigIdx: number[] = [];
-  for (let i = 0; i < normalized.length; i++) {
-    const c = normalized[i];
-    if (c !== " " && c !== "\t" && c !== "\n" && c !== "\r") {
-      nospaceParts.push(c);
-      nospaceOrigIdx.push(origIdx[i]);
+  if (!exact) {
+    for (let i = 0; i < normalized.length; i++) {
+      const c = normalized[i];
+      if (c !== " " && c !== "\t" && c !== "\n" && c !== "\r") {
+        nospaceParts.push(c);
+        nospaceOrigIdx.push(origIdx[i]);
+      }
     }
   }
   const nospace = nospaceParts.join("");
@@ -97,7 +104,7 @@ export function highlightSnippet(
       ranges.push([start, end]);
       pos++;
     }
-    if (foundAny) continue;
+    if (foundAny || exact) continue;
 
     let nspos = 0;
     while ((nspos = nospace.indexOf(t, nspos)) !== -1) {

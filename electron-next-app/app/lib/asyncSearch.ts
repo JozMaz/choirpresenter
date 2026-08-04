@@ -24,6 +24,7 @@ export async function scoreItemsAsync<T>(
   getIndex: (item: T) => string,
   tokens: string[],
   isCancelled: () => boolean,
+  exact = false,
   batchSize = 5000,
 ): Promise<ScoredItem<T>[] | null> {
   const out: ScoredItem<T>[] = [];
@@ -32,7 +33,7 @@ export async function scoreItemsAsync<T>(
     const end = Math.min(items.length, i + batchSize);
     for (let j = i; j < end; j++) {
       const item = items[j];
-      const score = scoreMatch(getIndex(item), tokens);
+      const score = scoreMatch(getIndex(item), tokens, exact);
       if (score > 0) out.push({ item, score });
     }
     if (end < items.length) await yieldToMain();

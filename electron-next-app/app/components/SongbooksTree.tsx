@@ -14,6 +14,8 @@ import { scoreItemsAsync } from "../lib/asyncSearch";
 import { SONGBOOK_KEYS } from "../hooks/useSongbooks";
 import Icon from "./Icon";
 import SongListRow from "./SongListRow";
+import ExactSearchToggle from "./ExactSearchToggle";
+import { useExactSearch } from "../hooks/useExactSearch";
 
 const MAX_SEARCH_RESULTS = 100;
 
@@ -69,6 +71,8 @@ export default function SongbooksTree({
   const isActive = (item: ApiItem) =>
     activeItem?.id === item.id && activeItem?.source === item.source;
 
+  const [exact, setExact] = useExactSearch();
+
   const tokens = useMemo(() => {
     const norm = normalizeSearch(deferredTerm);
     return norm ? norm.split(" ").filter(Boolean) : [];
@@ -97,6 +101,7 @@ export default function SongbooksTree({
           (i) => i.searchIndex,
           tokens,
           () => cancelled,
+          exact,
         );
         if (!scored) return;
         for (const { item, score } of scored) {
@@ -113,7 +118,7 @@ export default function SongbooksTree({
     return () => {
       cancelled = true;
     };
-  }, [tokens, dataByBook]);
+  }, [tokens, dataByBook, exact]);
 
   const groupedResults = useMemo(() => {
     const groups = new Map<
@@ -173,8 +178,8 @@ export default function SongbooksTree({
 
   return (
     <div className="h-full flex flex-col bg-surface overflow-hidden">
-      <div className="shrink-0 pt-2 px-2">
-        <div className="relative">
+      <div className="shrink-0 pt-2 px-2 flex items-center gap-1">
+        <div className="relative flex-1 min-w-0">
           <input
             ref={inputRef}
             type="text"
@@ -196,6 +201,7 @@ export default function SongbooksTree({
             </button>
           )}
         </div>
+        <ExactSearchToggle exact={exact} onChange={setExact} />
       </div>
 
       {isSearching && (

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { OverlayConfig } from "../lib/types";
 
 const VIEW_WIDTH = 1920;
@@ -11,6 +11,7 @@ interface OutputFrameProps {
   blackout: boolean;
   bg?: string;
   overlay?: boolean;
+  boxed?: boolean;
   overlayConfig?: OverlayConfig;
   dividerWidth?: number;
   fadeMs?: number;
@@ -27,6 +28,7 @@ export default function OutputFrame({
   blackout,
   bg,
   overlay,
+  boxed,
   overlayConfig,
   dividerWidth,
   fadeMs,
@@ -39,6 +41,36 @@ export default function OutputFrame({
   const [scale, setScale] = useState(0);
   const [ready, setReady] = useState(false);
 
+  const config = useMemo(
+    () => ({
+      bg,
+      dividerWidth,
+      fadeMs,
+      bibleScale,
+      messageScale,
+      tightLabels,
+      ...overlayConfig,
+      boxed: boxed ?? overlay ?? false,
+    }),
+    [
+      bg,
+      dividerWidth,
+      fadeMs,
+      bibleScale,
+      messageScale,
+      tightLabels,
+      overlayConfig,
+      boxed,
+      overlay,
+    ],
+  );
+
+  const latest = useRef({ html, blackout, config });
+
+  useEffect(() => {
+    latest.current = { html, blackout, config };
+  }, [html, blackout, config]);
+
   useEffect(() => {
     const box = boxRef.current;
     if (!box) return;
@@ -49,49 +81,42 @@ export default function OutputFrame({
     return () => ro.disconnect();
   }, []);
 
+  const push = useCallback((message: unknown) => {
+    frameRef.current?.contentWindow?.postMessage(message, "*");
+  }, []);
+
+  const pushAll = useCallback(() => {
+    const { html, blackout, config } = latest.current;
+    push({ type: "view-config", config });
+    push({ type: "view-update", html });
+    push({ type: "view-blackout", active: blackout });
+  }, [push]);
+
+  // The embedded view announces itself whenever its document (re)loads. Without
+  // this the frame would keep whatever it had before the reload, because the
+  // effects below only fire when their own input changes.
   useEffect(() => {
-    if (!ready) return;
-    frameRef.current?.contentWindow?.postMessage(
-      { type: "view-update", html },
-      "*",
-    );
-  }, [html, ready]);
+    const onMessage = (e: MessageEvent) => {
+      if (e.source !== frameRef.current?.contentWindow) return;
+      if ((e.data as { type?: string } | null)?.type !== "view-ready") return;
+      setReady(true);
+      pushAll();
+    };
+    window.addEventListener("message", onMessage);
+    return () => window.removeEventListener("message", onMessage);
+  }, [pushAll]);
 
   useEffect(() => {
-    if (!ready) return;
-    frameRef.current?.contentWindow?.postMessage(
-      { type: "view-blackout", active: blackout },
-      "*",
-    );
-  }, [blackout, ready]);
+    if (ready) push({ type: "view-update", html });
+  }, [html, ready, push]);
 
   useEffect(() => {
-    if (!ready) return;
-    frameRef.current?.contentWindow?.postMessage(
-      {
-        type: "view-config",
-        config: {
-          bg,
-          dividerWidth,
-          fadeMs,
-          bibleScale,
-          messageScale,
-          tightLabels,
-          ...overlayConfig,
-        },
-      },
-      "*",
-    );
-  }, [
-    bg,
-    dividerWidth,
-    fadeMs,
-    bibleScale,
-    messageScale,
-    tightLabels,
-    overlayConfig,
-    ready,
-  ]);
+    if (ready) push({ type: "view-blackout", active: blackout });
+  }, [blackout, ready, push]);
+
+  useEffect(() => {
+    if (ready) push({ type: "view-config", config });
+  }, [config, ready, push]);
 
   return (
     <div

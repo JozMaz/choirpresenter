@@ -36,6 +36,11 @@ export const LS_KEYS = {
   contentSelection: "app:contentSelection",
   identity: "app:identity",
   seenCatalog: "app:seenCatalog",
+  searchExact: "app:searchExact",
+  outputs: "app:outputs:v1",
+  outputProfiles: "app:outputProfile",
+  outputProfilesMigrated: "app:outputProfile:migrated",
+  outputPreviewZoom: "app:outputPreviewZoom",
   layoutMain: "app:layout:main",
   layoutLeft: "app:layout:left",
 } as const;

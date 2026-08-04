@@ -55,7 +55,10 @@
       html.overlay body {
         background: transparent;
       }
-      html.overlay #content {
+      /* Placement is independent of the painted box: a lower third over HDMI
+         positions and scales its text the same way, it just cannot carry a
+         transparent background, so nothing is drawn behind it. */
+      html.boxed #content {
         transform: translate(
             calc(var(--box-offset-x, 0vw) + var(--box-align-x, 0vw)),
             calc(var(--box-offset-y, 0vh) + var(--box-align-y, 0vh))
@@ -297,7 +300,7 @@
         isServed ||
         new URLSearchParams(location.search).get("overlay") === "1"
       ) {
-        document.documentElement.classList.add("overlay", "empty");
+        document.documentElement.classList.add("overlay", "boxed", "empty");
       }
 
       const MAX_GROW = 1.2;
@@ -504,7 +507,7 @@
       };
 
       function updateBoxBounds(layer) {
-        if (!document.documentElement.classList.contains("overlay")) return;
+        if (!document.documentElement.classList.contains("boxed")) return;
         const content = document.getElementById("content");
         if (!layer || !content) return;
         const base = content.getBoundingClientRect();
@@ -569,6 +572,7 @@
 
         const front = layers[frontIndex];
         const back = layers[1 - frontIndex];
+        frontIndex = 1 - frontIndex;
 
         back.innerHTML = html;
         back.classList.toggle("reader", html.includes("text-flow"));
@@ -578,7 +582,6 @@
         requestAnimationFrame(() => {
           back.classList.add("active");
           front.classList.remove("active");
-          frontIndex = 1 - frontIndex;
         });
       }
 
@@ -603,6 +606,13 @@
 
       function applyConfig(config) {
         if (!config) return;
+        if (
+          typeof config.boxed === "boolean" &&
+          !document.documentElement.classList.contains("overlay")
+        ) {
+          document.documentElement.classList.toggle("boxed", config.boxed);
+          updateBoxBounds(activeLayer());
+        }
         if (typeof config.bg === "string") {
           document.documentElement.style.background = config.bg;
           document.body.style.background = config.bg;
@@ -690,6 +700,10 @@
         else if (d.type === "view-blackout") applyBlackout(d.active);
         else if (d.type === "view-config") applyConfig(d.config);
       });
+
+      if (isEmbedded) {
+        window.parent.postMessage({ type: "view-ready" }, "*");
+      }
 
       function remeasure() {
         layers.forEach((l) => fitContent(l));

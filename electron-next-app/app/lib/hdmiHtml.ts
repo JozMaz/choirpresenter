@@ -1,7 +1,8 @@
 import type { ApiItem, SlideText } from "./types";
 import { buildSongFooter } from "./songAdapter";
 import type { FooterConfig } from "./footerConfig";
-import type { OutputChrome, OutputKey } from "./outputConfig";
+import type { OutputChrome } from "./outputConfig";
+import type { OutputMode } from "./outputs";
 
 const ESCAPES: Record<string, string> = {
   "&": "&amp;",
@@ -27,7 +28,7 @@ interface BuildOutputHtmlArgs {
   text: SlideText;
   sectionLabel: string;
   chrome: OutputChrome;
-  output: OutputKey;
+  mode: OutputMode;
   footerConfig?: FooterConfig;
   translationLabel?: string;
 }
@@ -105,11 +106,12 @@ export function buildOutputHtml({
   text,
   sectionLabel,
   chrome,
-  output,
+  mode,
   footerConfig,
   translationLabel,
 }: BuildOutputHtmlArgs): string {
   if (!song || isEmpty(text)) return "";
+  const lower = mode === "lowerThirds";
 
   if (song.isBible && song.bibleMeta) {
     const reference = chrome.header ? sectionLabel : "";
@@ -128,11 +130,10 @@ export function buildOutputHtml({
     return buildCenteredHtml(text.primary, top, bottom, {
       justify: true,
       message: true,
-      spacerTop: output === "local" && !top && bottom !== "",
+      spacerTop: !lower && !top && bottom !== "",
     });
   }
 
-  const stream = output === "stream";
   const header =
     chrome.header || chrome.sequence
       ? `<div class="header"><span class="sequence">${escapeHtml(
@@ -150,10 +151,10 @@ export function buildOutputHtml({
     chrome.secondary ? text.secondary : undefined,
     text.isTranslation,
     translationLabel || song.translationLabel,
-    stream,
-    !stream,
+    lower,
+    !lower,
   );
 
   const html = header + body + footer;
-  return stream ? `<div class="out2">${html}</div>` : html;
+  return lower ? `<div class="out2">${html}</div>` : html;
 }

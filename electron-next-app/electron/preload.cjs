@@ -13,12 +13,12 @@ contextBridge.exposeInMainWorld("api", {
   setHdmi2Blackout: (active) => ipcRenderer.send("hdmi2-blackout", active),
   setHdmi2Config: (config) => ipcRenderer.send("hdmi2-config", config),
 
-  netStart: () => ipcRenderer.invoke("net-start"),
-  netStop: () => ipcRenderer.invoke("net-stop"),
-  netStatus: () => ipcRenderer.invoke("net-status"),
-  netUpdate: (html) => ipcRenderer.send("net-update", html),
-  netBlackout: (active) => ipcRenderer.send("net-blackout", active),
-  netConfig: (config) => ipcRenderer.send("net-config", config),
+  netStart: (id) => ipcRenderer.invoke("net-start", id),
+  netStop: (id) => ipcRenderer.invoke("net-stop", id),
+  netStatus: (id) => ipcRenderer.invoke("net-status", id),
+  netUpdate: (id, html) => ipcRenderer.send("net-update", id, html),
+  netBlackout: (id, active) => ipcRenderer.send("net-blackout", id, active),
+  netConfig: (id, config) => ipcRenderer.send("net-config", id, config),
   setOutputStyle: (style) => ipcRenderer.send("output-style", style),
   setHdmiConfig: (variant, config) =>
     ipcRenderer.send("hdmi-set-config", variant, config),
