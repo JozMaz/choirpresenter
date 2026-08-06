@@ -106,6 +106,13 @@ export default function OutputFrame({
     return () => window.removeEventListener("message", onMessage);
   }, [pushAll]);
 
+  // Same order as pushAll and as the network stream: the config has to land
+  // before the html it applies to, or a group switch lays the new text out
+  // under the profile of the one that just left.
+  useEffect(() => {
+    if (ready) push({ type: "view-config", config });
+  }, [config, ready, push]);
+
   useEffect(() => {
     if (ready) push({ type: "view-update", html });
   }, [html, ready, push]);
@@ -113,10 +120,6 @@ export default function OutputFrame({
   useEffect(() => {
     if (ready) push({ type: "view-blackout", active: blackout });
   }, [blackout, ready, push]);
-
-  useEffect(() => {
-    if (ready) push({ type: "view-config", config });
-  }, [config, ready, push]);
 
   return (
     <div

@@ -559,11 +559,14 @@
         );
       }
 
-      const activeLayer = () => document.querySelector(".layer.active");
-
       const layers = Array.from(document.querySelectorAll(".layer"));
       let frontIndex = 0;
       let shownHtml = null;
+
+      // The layer holding the newest html. applyUpdate hands it over a frame
+      // before the fade moves the active class onto it, so `.layer.active` is
+      // one update behind and anything measured from it would be too.
+      const currentLayer = () => layers[frontIndex];
 
       function applyUpdate(html) {
         if (html === shownHtml) return;
@@ -600,8 +603,7 @@
         if (next === textScales[name]) return;
         textScales[name] = next;
         setVar(name, next);
-        const layer = activeLayer();
-        if (layer) fitContent(layer);
+        fitContent(currentLayer());
       }
 
       function applyConfig(config) {
@@ -611,7 +613,7 @@
           !document.documentElement.classList.contains("overlay")
         ) {
           document.documentElement.classList.toggle("boxed", config.boxed);
-          updateBoxBounds(activeLayer());
+          updateBoxBounds(currentLayer());
         }
         if (typeof config.bg === "string") {
           document.documentElement.style.background = config.bg;
@@ -661,11 +663,16 @@
         if (typeof config.fadeMs === "number") {
           setVar("--fade-ms", config.fadeMs + "ms");
         }
-        if (typeof config.tightLabels === "boolean") {
+        if (
+          typeof config.tightLabels === "boolean" &&
+          document.documentElement.classList.contains("tight-labels") !==
+            config.tightLabels
+        ) {
           document.documentElement.classList.toggle(
             "tight-labels",
             config.tightLabels,
           );
+          fitContent(currentLayer());
         }
         applyTextScale("--bible-scale", config.bibleScale);
         applyTextScale("--message-scale", config.messageScale);
@@ -675,7 +682,7 @@
         if (typeof config.boxOffsetY === "number") {
           setVar("--box-offset-y", config.boxOffsetY + "vh");
         }
-        updateBoxBounds(activeLayer());
+        updateBoxBounds(currentLayer());
       }
 
       if (isServed) {
@@ -707,7 +714,7 @@
 
       function remeasure() {
         layers.forEach((l) => fitContent(l));
-        updateBoxBounds(layers[frontIndex]);
+        updateBoxBounds(currentLayer());
       }
 
       window.addEventListener("resize", remeasure);
