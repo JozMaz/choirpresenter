@@ -364,8 +364,8 @@ function OutputsSection({
                 </div>
               </div>
 
-              <div className="flex items-center gap-2">
-                <span className="w-10 shrink-0 text-[10px] text-text-muted">
+              <div className="flex items-center gap-1.5">
+                <span className="shrink-0 text-[10px] text-text-muted">
                   {t.settings.delay}
                 </span>
                 <input
@@ -402,6 +402,17 @@ function OutputsSection({
                   </span>
                 )}
               </div>
+
+              {def.delayMs > 0 && (
+                <div className="pl-1">
+                  <Checkbox
+                    checked={def.delayPreview}
+                    onChange={(checked) => patch(id, { delayPreview: checked })}
+                    label={t.settings.delayPreview}
+                    hint={t.settings.delayPreviewHint}
+                  />
+                </div>
+              )}
             </div>
 
             <p className="mt-2 text-[10px] text-text-muted leading-snug">

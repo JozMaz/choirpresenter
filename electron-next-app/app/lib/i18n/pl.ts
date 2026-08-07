@@ -237,6 +237,8 @@ export const pl: Dict = {
     fitOff: "Podgląd wygląda dokładnie tak jak wyjście",
     delayBadge: (seconds) => `+${seconds} s`,
     delayBadgeHint: (seconds) =>
+      `To wyjście jest opóźnione o ${seconds} s — podgląd pokazuje na bieżąco`,
+    delayBadgeHintMirrored: (seconds) =>
       `To wyjście jest opóźnione o ${seconds} s — i ten podgląd też`,
     fit: "Powiększ",
     oneToOne: "1:1",
@@ -318,6 +320,9 @@ export const pl: Dict = {
     delay: "Opóźnienie",
     delayUnit: "s",
     delayOff: "brak",
+    delayPreview: "Opóźnij też podgląd",
+    delayPreviewHint:
+      "Wyłączone — podgląd pokazuje wszystko od razu, więc widzisz, że kliknięcie zadziałało, zanim dojdzie na wyjście. Włączone — podgląd wygląda dokładnie tak jak wyjście.",
     delayHint:
       "Przytrzymuje to wyjście o zadany czas — każda zmiana dociera na nie później, w tej samej kolejności, w jakiej ją zrobiłeś. Przydatne, gdy stream albo projektor jest opóźniony względem sali. Zostaw 0, żeby nic nie opóźniać. Ustawiane osobno dla każdego wyjścia, drugie zostaje bez zmian.",
 

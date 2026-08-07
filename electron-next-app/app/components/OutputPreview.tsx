@@ -581,7 +581,11 @@ export default function OutputPreview({
         </h2>
         {def.delayMs > 0 && (
           <span
-            title={t.outputPreview.delayBadgeHint(delaySeconds)}
+            title={
+              def.delayPreview
+                ? t.outputPreview.delayBadgeHintMirrored(delaySeconds)
+                : t.outputPreview.delayBadgeHint(delaySeconds)
+            }
             className="shrink-0 flex items-center gap-1 px-1.5 py-0.5 rounded border border-amber-500/60 bg-amber-500/15 text-[10px] font-semibold text-amber-600"
           >
             <Icon name="Clock" size={10} />

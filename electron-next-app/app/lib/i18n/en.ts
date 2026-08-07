@@ -227,6 +227,8 @@ export const en = {
     fitOff: "Preview matches the output exactly",
     delayBadge: (seconds: string) => `+${seconds} s`,
     delayBadgeHint: (seconds: string) =>
+      `This output runs ${seconds} s behind what you do — the preview is live`,
+    delayBadgeHintMirrored: (seconds: string) =>
       `This output runs ${seconds} s behind, and so does this preview`,
     fit: "Fit",
     oneToOne: "1:1",
@@ -306,6 +308,9 @@ export const en = {
     delay: "Delay",
     delayUnit: "s",
     delayOff: "off",
+    delayPreview: "Delay the preview too",
+    delayPreviewHint:
+      "Off, the panel stays live so you can see a click land straight away while the output catches up. On, the panel matches the output exactly.",
     delayHint:
       "Holds this output behind by the set time — every change reaches it that much later, in the order you made it. Useful when a stream or a projector runs behind the room. Leave at 0 for no delay. Set per output, so the other one is unaffected.",
 

@@ -850,6 +850,17 @@ function HomeContent({
     out2: out2Frame,
   };
 
+  // The preview and the carriers are independent renders of the same HTML, so
+  // the panel can stay live while the screen runs behind.
+  const previewFrames: Record<OutputId, OutputFrame> = {
+    out1: outputs.out1.delayPreview
+      ? out1Frame
+      : { html: outputHtml.out1, blackout: blackoutActive },
+    out2: outputs.out2.delayPreview
+      ? out2Frame
+      : { html: outputHtml.out2, blackout: blackoutActive },
+  };
+
   useHdmiSync(
     1,
     hdmiActive && outputs.out1.type === "hdmi",
@@ -1177,8 +1188,8 @@ function HomeContent({
                       <OutputPreview
                         id={id}
                         def={outputs[id]}
-                        html={frames[id].html}
-                        blackoutActive={frames[id].blackout}
+                        html={previewFrames[id].html}
+                        blackoutActive={previewFrames[id].blackout}
                         group={liveGroup}
                         dividerWidth={dividerWidth}
                         positionText={id === "out2" ? positionText : undefined}
