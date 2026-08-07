@@ -23,6 +23,9 @@ import {
 import type { MessageTitlesEntry } from "../lib/types";
 import { useDebounced } from "../hooks/useDebounced";
 import HighlightedText from "./HighlightedText";
+import { useI18n } from "../lib/i18n/context";
+import { useLibraryState } from "../lib/libraryState";
+import { useRememberedScroll } from "../hooks/useRememberedScroll";
 import Icon from "./Icon";
 
 interface TitleResult {
@@ -81,6 +84,7 @@ const MessageTitleRow = memo(function MessageTitleRow({
   isActive: boolean;
   onClick: (r: TitleResult) => void;
 }) {
+  const { t } = useI18n();
   const titleHl = useMemo(
     () => highlightSnippet(row.title, tokens, { snippetLen: 0, exact }),
     [row.title, tokens, exact],
@@ -97,7 +101,7 @@ const MessageTitleRow = memo(function MessageTitleRow({
       onClick={() => onClick(row)}
       title={
         !row.hasText
-          ? "Text not available"
+          ? t.messagesBrowser.textNotAvailable
           : row.altTitles.length > 0
             ? row.altTitles.join(" / ")
             : undefined
@@ -135,6 +139,7 @@ const ChunkResultRow = memo(function ChunkResultRow({
   exact: boolean;
   onClick: (r: ChunkResult, goLive: boolean) => void;
 }) {
+  const { t } = useI18n();
   const hl = useMemo(
     () => highlightSnippet(result.text, tokens, { exact }),
     [result.text, tokens, exact],
@@ -143,11 +148,12 @@ const ChunkResultRow = memo(function ChunkResultRow({
     <div
       onClick={() => onClick(result, false)}
       onDoubleClick={() => onClick(result, true)}
-      title="Click to load, double-click to send to the outputs"
+      title={t.messagesBrowser.loadOrGoLive}
       className="flex items-start gap-3 px-2 py-1 bg-surface-secondary rounded border border-border hover:bg-surface-hover transition-colors cursor-pointer select-none"
     >
       <span className="text-xs font-semibold text-primary shrink-0 pt-0.5">
-        par.{result.pnum}
+        {t.messagesBrowser.paragraphShort}
+        {result.pnum}
       </span>
       <span className="text-xs text-text-secondary flex-1 min-w-0 line-clamp-3 leading-snug">
         {hl.prefix}
@@ -155,7 +161,7 @@ const ChunkResultRow = memo(function ChunkResultRow({
           s.hit ? (
             <mark
               key={i}
-              className="bg-primary/30 text-text-primary rounded px-0.5"
+              className="bg-primary/10 text-text-primary rounded px-0.5"
             >
               {s.text}
             </mark>
@@ -173,8 +179,11 @@ export default function MessagesBrowser({
   activeDateKey,
   onShowMessage,
 }: MessagesBrowserProps) {
-  const [titleTerm, setTitleTerm] = useState("");
-  const [searchTerm, setSearchTerm] = useState("");
+  const { t } = useI18n();
+  const titleTerm = useLibraryState((s) => s.messageTitleSearch);
+  const setTitleTerm = useLibraryState((s) => s.setMessageTitleSearch);
+  const searchTerm = useLibraryState((s) => s.messageTextSearch);
+  const setSearchTerm = useLibraryState((s) => s.setMessageTextSearch);
   const debouncedTitleTerm = useDebounced(titleTerm, 150);
   const debouncedTerm = useDebounced(searchTerm, 150);
 
@@ -370,6 +379,11 @@ export default function MessagesBrowser({
     [onShowMessage],
   );
 
+  const { ref: listRef, onScroll: onListScroll } = useRememberedScroll<HTMLDivElement>(
+    "messages",
+    allTitleRows.length > 0,
+  );
+
   return (
     <div className="h-full flex flex-col bg-surface overflow-hidden">
       <div className="shrink-0 px-2 pt-2 space-y-1">
@@ -377,7 +391,7 @@ export default function MessagesBrowser({
           <div className="relative flex-1 min-w-0">
             <input
               type="text"
-              placeholder="Title or year..."
+              placeholder={t.messagesBrowser.titlePlaceholder}
               value={titleTerm}
               onChange={(e) => setTitleTerm(e.target.value)}
               onKeyDown={(e) => {
@@ -388,7 +402,7 @@ export default function MessagesBrowser({
             {titleTerm && (
               <button
                 onClick={() => setTitleTerm("")}
-                title="Clear title search (Esc)"
+                title={t.messagesBrowser.clearTitleSearch}
                 className={clearButtonClass}
               >
                 <Icon name="X" size={12} />
@@ -401,7 +415,7 @@ export default function MessagesBrowser({
           <div className="relative flex-1 min-w-0">
             <input
               type="text"
-              placeholder="Search full text..."
+              placeholder={t.messagesBrowser.fullTextPlaceholder}
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               onKeyDown={(e) => {
@@ -412,7 +426,7 @@ export default function MessagesBrowser({
             {searchTerm && (
               <button
                 onClick={() => setSearchTerm("")}
-                title="Clear full-text search (Esc)"
+                title={t.messagesBrowser.clearFullTextSearch}
                 className={clearButtonClass}
               >
                 <Icon name="X" size={12} />
@@ -425,20 +439,31 @@ export default function MessagesBrowser({
 
       <div className="shrink-0 px-2 pt-1 text-[10px] text-text-muted">
         {isSearching
-          ? `Results: ${searchResults.length}${
-              searchResults.length === MAX_RESULTS ? "+" : ""
-            }${isTitleFiltering ? ` in ${titleMatches.length} messages` : ""}`
+          ? t.common.results(
+              searchResults.length,
+              searchResults.length === MAX_RESULTS,
+            ) +
+            (isTitleFiltering
+              ? t.messagesBrowser.inMessages(titleMatches.length)
+              : "")
           : isTitleFiltering
-            ? `Messages: ${titleMatches.length} of ${allTitleRows.length}`
-            : `Messages: ${allTitleRows.length}`}
+            ? t.messagesBrowser.countOf(
+                titleMatches.length,
+                allTitleRows.length,
+              )
+            : t.messagesBrowser.count(allTitleRows.length)}
       </div>
 
-      <div className="flex-1 overflow-y-auto px-2 pt-2 pb-2 mt-1">
+      <div
+        ref={listRef}
+        onScroll={onListScroll}
+        className="flex-1 overflow-y-auto px-2 pt-2 pb-2 mt-1"
+      >
         {!isSearching && (
           <div className="space-y-0.5">
             {isTitleFiltering && titleMatches.length === 0 && (
               <p className="text-text-muted text-xs text-center py-2">
-                No titles match
+                {t.messagesBrowser.noTitlesMatch}
               </p>
             )}
             {titleMatches.map((m) => (
@@ -458,7 +483,7 @@ export default function MessagesBrowser({
           <div>
             {grouped.length === 0 && (
               <p className="text-text-muted text-xs text-center py-2">
-                No results
+                {t.common.noResults}
               </p>
             )}
             {grouped.map((group, gIdx) => (
@@ -475,7 +500,7 @@ export default function MessagesBrowser({
                           row={r}
                           tokens={tokens}
                           exact={exact}
-                          label="title"
+                          label={t.messagesBrowser.titleMatch}
                           isActive={r.date === activeDateKey}
                           onClick={handleTitleClick}
                         />

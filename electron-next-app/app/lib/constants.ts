@@ -43,6 +43,7 @@ export const LS_KEYS = {
   outputPreviewZoom: "app:outputPreviewZoom",
   layoutMain: "app:layout:main",
   layoutLeft: "app:layout:left",
+  language: "app:lang",
 } as const;
 
 export const TRANSLATION_LABEL_PL = "Tłumaczenie";

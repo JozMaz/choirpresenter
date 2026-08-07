@@ -16,13 +16,17 @@ import Icon from "./Icon";
 import SongListRow from "./SongListRow";
 import ExactSearchToggle from "./ExactSearchToggle";
 import { useExactSearch } from "../hooks/useExactSearch";
+import { useI18n } from "../lib/i18n/context";
+import { songEntryKey } from "../lib/selection";
+import { useLibraryState } from "../lib/libraryState";
+import { useRememberedScroll } from "../hooks/useRememberedScroll";
 
 const MAX_SEARCH_RESULTS = 100;
 
 interface SongbooksTreeProps {
   dataByBook: Record<SongBookKey, ApiItem[]>;
   bookNames: Record<SongBookKey, string>;
-  selectedItems: ApiItem[];
+  selectedKeys: Set<string>;
   activeItem: ApiItem | null;
   onShow: (item: ApiItem) => void;
   onPlay: (item: ApiItem) => void;
@@ -32,14 +36,17 @@ interface SongbooksTreeProps {
 export default function SongbooksTree({
   dataByBook,
   bookNames,
-  selectedItems,
+  selectedKeys,
   activeItem,
   onShow,
   onPlay,
   onSelect,
 }: SongbooksTreeProps) {
-  const [searchTerm, setSearchTerm] = useState("");
-  const [openBook, setOpenBook] = useState<SongBookKey | null>(null);
+  const { t } = useI18n();
+  const searchTerm = useLibraryState((s) => s.songSearch);
+  const setSearchTerm = useLibraryState((s) => s.setSongSearch);
+  const openBook = useLibraryState((s) => s.openSongBook);
+  const setOpenBook = useLibraryState((s) => s.setOpenSongBook);
   const deferredTerm = useDeferredValue(searchTerm);
   const inputRef = useRef<HTMLInputElement>(null);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -62,12 +69,8 @@ export default function SongbooksTree({
     setSearchTerm("");
   };
 
-  const selectedKeys = useMemo(
-    () => new Set(selectedItems.map((i) => `${i.source}:${i.id}`)),
-    [selectedItems],
-  );
   const isSelected = (item: ApiItem) =>
-    selectedKeys.has(`${item.source}:${item.id}`);
+    selectedKeys.has(songEntryKey(item.source, item.id));
   const isActive = (item: ApiItem) =>
     activeItem?.id === item.id && activeItem?.source === item.source;
 
@@ -149,15 +152,18 @@ export default function SongbooksTree({
 
   const visibleBooks = isSearching ? groupedResults : browseBooks;
 
-  const [collapsedInSearch, setCollapsedInSearch] = useState<Set<SongBookKey>>(
-    new Set(),
+  const collapsedList = useLibraryState((s) => s.collapsedSongBooks);
+  const setCollapsedList = useLibraryState((s) => s.setCollapsedSongBooks);
+  const collapsedInSearch = useMemo(
+    () => new Set(collapsedList),
+    [collapsedList],
   );
 
   const tokenKey = tokens.join(" ");
   const [lastTokenKey, setLastTokenKey] = useState(tokenKey);
   if (tokenKey !== lastTokenKey) {
     setLastTokenKey(tokenKey);
-    if (collapsedInSearch.size > 0) setCollapsedInSearch(new Set());
+    if (collapsedList.length > 0) setCollapsedList([]);
   }
 
   const isBookOpen = (key: SongBookKey) =>
@@ -165,16 +171,20 @@ export default function SongbooksTree({
 
   const toggleBook = (key: SongBookKey) => {
     if (isSearching) {
-      setCollapsedInSearch((prev) => {
-        const next = new Set(prev);
-        if (next.has(key)) next.delete(key);
-        else next.add(key);
-        return next;
-      });
+      setCollapsedList(
+        collapsedInSearch.has(key)
+          ? collapsedList.filter((k) => k !== key)
+          : [...collapsedList, key],
+      );
       return;
     }
-    setOpenBook((prev) => (prev === key ? null : key));
+    setOpenBook(openBook === key ? null : key);
   };
+
+  const { ref: listRef, onScroll: onListScroll } = useRememberedScroll<HTMLDivElement>(
+    "songbooks",
+    visibleBooks.length > 0,
+  );
 
   return (
     <div className="h-full flex flex-col bg-surface overflow-hidden">
@@ -183,8 +193,8 @@ export default function SongbooksTree({
           <input
             ref={inputRef}
             type="text"
-            placeholder="Search all songbooks..."
-            defaultValue=""
+            placeholder={t.songbooksTree.searchPlaceholder}
+            defaultValue={searchTerm}
             onChange={(e) => scheduleSearch(e.target.value)}
             onKeyDown={(e) => {
               if (e.key === "Escape") clearSearch();
@@ -194,7 +204,7 @@ export default function SongbooksTree({
           {isSearching && (
             <button
               onClick={clearSearch}
-              title="Clear search (Esc)"
+              title={t.common.clearSearch}
               className="absolute right-1 top-1/2 -translate-y-1/2 w-5 h-5 flex items-center justify-center rounded text-text-muted hover:text-text-primary hover:bg-surface-hover transition-colors"
             >
               <Icon name="X" size={12} />
@@ -206,17 +216,21 @@ export default function SongbooksTree({
 
       {isSearching && (
         <div className="shrink-0 px-2 pt-1 text-[10px] text-text-muted">
-          Results: {searchTotal}
+          {t.songbooksTree.resultsCount(searchTotal)}
         </div>
       )}
 
-      <div className="flex-1 overflow-y-auto px-2 pt-2 pb-2 mt-1">
+      <div
+        ref={listRef}
+        onScroll={onListScroll}
+        className="flex-1 overflow-y-auto px-2 pt-2 pb-2 mt-1"
+      >
         <div>
           {visibleBooks.length === 0 && (
             <p className="text-text-muted text-xs text-center py-2">
               {isSearching
-                ? "No results"
-                : "No songbooks downloaded — pick some in Settings."}
+                ? t.common.noResults
+                : t.songbooksTree.noSongbooks}
             </p>
           )}
           {visibleBooks.map((book) => {
@@ -260,7 +274,7 @@ export default function SongbooksTree({
           })}
           {isSearching && searchTotal > MAX_SEARCH_RESULTS && (
             <p className="text-text-muted text-[10px] text-center py-1">
-              (showing first {MAX_SEARCH_RESULTS} results)
+              {t.common.showingFirst(MAX_SEARCH_RESULTS)}
             </p>
           )}
         </div>

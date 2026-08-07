@@ -7,12 +7,7 @@ const TOKEN_PREFIX: Record<SectionType, string> = {
   ending: "E",
 };
 
-const TYPE_LABEL: Record<SectionType, string> = {
-  verse: "Verse",
-  chorus: "Chorus",
-  bridge: "Bridge",
-  ending: "Ending",
-};
+export type SectionTypeLabels = Record<SectionType, string>;
 
 export function sequenceToken(type: SectionType, number: number): string {
   if (type === "verse") return `V${number}`;
@@ -35,9 +30,13 @@ export function deriveSequence(
   return tokens.join(" ");
 }
 
-export function sectionLabel(type: SectionType, number: number): string {
-  if (type === "verse") return `${TYPE_LABEL.verse} ${number}`;
-  return number === 1 ? TYPE_LABEL[type] : `${TYPE_LABEL[type]} ${number}`;
+export function sectionLabel(
+  type: SectionType,
+  number: number,
+  labels: SectionTypeLabels,
+): string {
+  if (type === "verse") return `${labels.verse} ${number}`;
+  return number === 1 ? labels[type] : `${labels[type]} ${number}`;
 }
 
 export function buildSectionsAndSlides(
@@ -54,10 +53,8 @@ export function buildSectionsAndSlides(
 
   for (const sec of primary) {
     const alt = secondaryByOrder?.get(sec.order);
-    const label = sectionLabel(sec.type, sec.number);
 
     sections.push({
-      label,
       type: sec.type,
       number: sec.number,
       primary: sec.lines,

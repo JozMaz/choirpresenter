@@ -5,6 +5,8 @@ import { wantsFile, type ContentSelection } from "./access";
 
 const MANIFEST_KEY = "manifest.json";
 
+export const NO_CACHE_ERROR = "NO_CLOUD_NO_CACHE";
+
 export interface BootstrapProgress {
   phase: "init" | "checking" | "downloading" | "done" | "error";
   ratio: number;
@@ -105,13 +107,8 @@ async function runSync(
       onProgress({ phase: "done", ratio: 1 });
       return;
     }
-    onProgress({
-      phase: "error",
-      ratio: 0,
-      message:
-        "Cloud unavailable and no local cache. Connect to internet and restart.",
-    });
-    throw new Error("No cloud and no cache");
+    onProgress({ phase: "error", ratio: 0, message: NO_CACHE_ERROR });
+    throw new Error(NO_CACHE_ERROR);
   }
 
   const ledgerFiles = ledger?.files ?? {};

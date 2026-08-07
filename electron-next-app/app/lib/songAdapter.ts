@@ -1,6 +1,7 @@
 import type { ApiItem, SectionListItem, SongEntry, SongSource } from "./types";
 import { footerFieldsFor, type FooterConfig } from "./footerConfig";
-import { buildSectionsAndSlides } from "./songSchema";
+import { buildSectionsAndSlides, sectionLabel } from "./songSchema";
+import type { SectionTypeLabels } from "./songSchema";
 import { splitLines } from "./slideSplit";
 import { buildSearchIndex } from "./textUtils";
 import { formatKey } from "./musicKeys";
@@ -67,9 +68,16 @@ export function toApiItem(
   };
 }
 
-export function getSongSections(item: ApiItem): SectionListItem[] {
+export function getSongSections(
+  item: ApiItem,
+  typeLabels: SectionTypeLabels,
+): SectionListItem[] {
   return item.sections.map((s) => ({
-    label: item.isMessage ? "" : item.isBible ? `${s.number}.` : s.label,
+    label: item.isMessage
+      ? ""
+      : item.isBible
+        ? `${s.number}.`
+        : sectionLabel(s.type, s.number, typeLabels),
     previewPrimary: s.primary[0] ?? "",
     previewPrimary2: s.secondary?.length ? "" : (s.primary[1] ?? ""),
     previewSecondary: s.secondary?.[0] ?? "",
@@ -77,11 +85,14 @@ export function getSongSections(item: ApiItem): SectionListItem[] {
   }));
 }
 
-export function getSelectionTitle(song: ApiItem | null): {
+export function getSelectionTitle(
+  song: ApiItem | null,
+  fallbackTitle: string,
+): {
   main: string;
   sub: string;
 } {
-  if (!song) return { main: "Sections", sub: "" };
+  if (!song) return { main: fallbackTitle, sub: "" };
   if (song.isBible && song.bibleMeta) {
     const { bookName, chapter, bibleName } = song.bibleMeta;
     return { main: `${bookName} ${chapter}`, sub: bibleName };

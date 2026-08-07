@@ -1,6 +1,9 @@
 "use client";
 
 import { useState } from "react";
+import { useI18n } from "../lib/i18n/context";
+import { sectionLabel } from "../lib/songSchema";
+import type { SectionTypeLabels } from "../lib/songSchema";
 import type { OutputConfig } from "../lib/outputConfig";
 import { EMPTY_TEXT, planFor, type SongPlan } from "../lib/outputPlan";
 import type { ApiItem } from "../lib/types";
@@ -32,6 +35,7 @@ function sectionLabelFor(
   song: ApiItem,
   plan: SongPlan,
   stepIndex: number,
+  typeLabels: SectionTypeLabels,
 ): string {
   const step = plan.steps[stepIndex];
   if (!step) return "";
@@ -46,10 +50,12 @@ function sectionLabelFor(
     return `${title} - ${dateKey}`;
   }
 
-  return song.sections[step.sectionIndex]?.label ?? "";
+  const section = song.sections[step.sectionIndex];
+  return section ? sectionLabel(section.type, section.number, typeLabels) : "";
 }
 
 export function useSongPlayer(config: OutputConfig) {
+  const { t } = useI18n();
   const [state, setState] = useState<SongPlayerState>(emptyState);
 
   const loadSong = (item: ApiItem) => {
@@ -57,6 +63,17 @@ export function useSongPlayer(config: OutputConfig) {
       ...prev,
       currentSong: item,
       stepIndex: -1,
+      restorePoint: null,
+    }));
+  };
+
+  // Reopening what a tab had last: the position comes back with the item, but
+  // nothing is pushed to the outputs until the operator clicks.
+  const restoreOpened = (item: ApiItem, stepIndex: number) => {
+    setState((prev) => ({
+      ...prev,
+      currentSong: item,
+      stepIndex,
       restorePoint: null,
     }));
   };
@@ -235,12 +252,14 @@ export function useSongPlayer(config: OutputConfig) {
       const song = prev.currentSong;
       if (!song) return prev;
       const plan = planFor(song, config);
-      if (stepIndex < 0 || stepIndex >= plan.steps.length) return prev;
+      if (plan.steps.length === 0) return prev;
+      // A stored spot can outlive an edit that shortened the song.
+      const target = Math.min(Math.max(0, stepIndex), plan.steps.length - 1);
       return {
         ...prev,
         restorePoint: null,
-        stepIndex,
-        live: { song, stepIndex },
+        stepIndex: target,
+        live: { song, stepIndex: target },
       };
     });
   };
@@ -260,6 +279,12 @@ export function useSongPlayer(config: OutputConfig) {
   const currentStep =
     currentStepIndex >= 0 ? currentPlan.steps[currentStepIndex] : null;
 
+  // The panel can sit on something the outputs are not showing — either a
+  // pre-selected entry or a tab that was reopened. Only report a live index
+  // when the outputs really are on the item in front of the operator.
+  const showingLive =
+    !!live && !!state.currentSong && live.song.id === state.currentSong.id;
+
   return {
     currentSong: state.currentSong,
     plan: currentPlan,
@@ -268,10 +293,15 @@ export function useSongPlayer(config: OutputConfig) {
     out1Text: step ? step.out1 : EMPTY_TEXT,
     out2Text: step ? step.out2 : EMPTY_TEXT,
     sectionLabel:
-      live && step ? sectionLabelFor(live.song, livePlan, liveStepIndex) : "",
+      live && step
+        ? sectionLabelFor(live.song, livePlan, liveStepIndex, t.sectionTypes)
+        : "",
     positionText: live ? `${liveStepIndex + 1} / ${livePlan.steps.length}` : "",
     activeSectionIndex: currentStep ? currentStep.sectionIndex : -1,
+    liveStepIndex: showingLive ? liveStepIndex : -1,
+    liveSectionIndex: showingLive && step ? step.sectionIndex : -1,
     sendFirstPart: loadSong,
+    restoreOpened,
     navigatePart,
     navigateSection,
     navigateParagraph,

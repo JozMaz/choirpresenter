@@ -82,6 +82,7 @@ export function wantsFile(key: string, selection: ContentSelection): boolean {
 export function newlyOffered(
   catalog: Catalog,
   selection: ContentSelection,
+  sermonsLabel: string,
 ): string[] {
   const fresh: string[] = [];
   for (const book of catalog.songbooks) {
@@ -91,7 +92,7 @@ export function newlyOffered(
     if (!selection.bibles.includes(bible.key)) fresh.push(bible.name);
   }
   if ((catalog.messages?.count ?? 0) > 0 && !selection.messages) {
-    fresh.push("Sermons");
+    fresh.push(sermonsLabel);
   }
   return fresh;
 }

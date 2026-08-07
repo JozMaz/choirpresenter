@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect } from "react";
+import { useI18n } from "../lib/i18n/context";
 import Icon, { type IconName } from "./Icon";
 
 interface ConfirmDialogProps {
@@ -19,13 +20,14 @@ export default function ConfirmDialog({
   open,
   title,
   message,
-  confirmLabel = "Confirm",
-  cancelLabel = "Cancel",
+  confirmLabel,
+  cancelLabel,
   icon = "TriangleAlert",
   danger = true,
   onConfirm,
   onCancel,
 }: ConfirmDialogProps) {
+  const { t } = useI18n();
   useEffect(() => {
     if (!open) return;
     const onKey = (e: KeyboardEvent) => {
@@ -70,7 +72,7 @@ export default function ConfirmDialog({
             onClick={onCancel}
             className="px-3 py-1.5 text-xs font-semibold text-text-secondary border border-border rounded hover:bg-surface-hover transition-colors"
           >
-            {cancelLabel}
+            {cancelLabel ?? t.common.cancel}
           </button>
           <button
             onClick={onConfirm}
@@ -81,7 +83,7 @@ export default function ConfirmDialog({
                 : "bg-primary hover:bg-primary-hover"
             }`}
           >
-            {confirmLabel}
+            {confirmLabel ?? t.common.confirm}
           </button>
         </div>
       </div>

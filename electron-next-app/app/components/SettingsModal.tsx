@@ -29,7 +29,6 @@ import {
 import {
   DEFAULT_OUTPUT_NAMES,
   OUTPUT_IDS,
-  OUTPUT_MODE_LABELS,
   OUTPUT_TYPE_LABELS,
   outputName,
   type OutputDef,
@@ -42,69 +41,86 @@ import { DEFAULT_MAX_LINES } from "../lib/slideSplit";
 import { SONGBOOK_NAMES } from "../lib/songAdapter";
 import type { ContentSelection, Identity } from "../lib/access";
 import type { SongSource } from "../lib/types";
+import { useI18n } from "../lib/i18n/context";
+import type { Dict } from "../lib/i18n";
 import AdminPanel from "./AdminPanel";
 import Checkbox from "./Checkbox";
 import ConfirmDialog from "./ConfirmDialog";
-import Icon from "./Icon";
+import Icon, { type IconName } from "./Icon";
+import LanguageSwitch from "./LanguageSwitch";
 
-const FOOTER_FIELDS: { key: keyof FooterFields; label: string }[] = [
-  { key: "number", label: "Number" },
-  { key: "title", label: "Title" },
-  { key: "key", label: "Key" },
+const footerFields = (
+  t: Dict,
+): { key: keyof FooterFields; label: string }[] => [
+  { key: "number", label: t.settings.footerNumber },
+  { key: "title", label: t.settings.footerTitle },
+  { key: "key", label: t.settings.footerKey },
 ];
 
-const FOOTER_SOURCE_LABELS: Record<SongSource, string> = {
-  custom: "My Songs",
+const footerSourceLabels = (t: Dict): Record<SongSource, string> => ({
+  custom: t.common.mySongs,
   newSong: SONGBOOK_NAMES.newSong,
   newSongPlGb: SONGBOOK_NAMES.newSongPlGb,
   pielgrzym: SONGBOOK_NAMES.pielgrzym,
   roboczy: SONGBOOK_NAMES.roboczy,
   children: SONGBOOK_NAMES.children,
-};
+});
 
-const OUTPUT_SCOPE_LABELS: Record<OutputScope, string> = {
-  newSong: SONGBOOK_NAMES.newSong,
-  newSongPlGb: SONGBOOK_NAMES.newSongPlGb,
-  pielgrzym: SONGBOOK_NAMES.pielgrzym,
-  roboczy: SONGBOOK_NAMES.roboczy,
-  children: SONGBOOK_NAMES.children,
-  custom: "My Songs",
-  bible: "Bible",
-  messages: "Sermons",
-};
+const outputScopeLabels = (t: Dict): Record<OutputScope, string> => ({
+  ...footerSourceLabels(t),
+  bible: t.common.bible,
+  messages: t.common.sermons,
+});
 
 const SONG_SCOPES = OUTPUT_SCOPE_ORDER.filter(
   (s) => s !== "bible" && s !== "messages",
 );
 
-
-const GROUP_CHOICES: { kind: GroupMode["kind"]; label: string }[] = [
-  { kind: "section", label: "Whole" },
-  { kind: "stored", label: "Saved" },
-  { kind: "max", label: "Max lines" },
+const groupChoices = (
+  t: Dict,
+): { kind: GroupMode["kind"]; label: string }[] => [
+  { kind: "section", label: t.settings.groupWhole },
+  { kind: "stored", label: t.settings.groupSaved },
+  { kind: "max", label: t.settings.groupMaxLines },
 ];
 
-const SONG_CHROME = {
-  header: "Section label (top left)",
-  footer: "Song caption (bottom)",
+const chromeLabels = (
+  t: Dict,
+): Record<OutputScope, { header: string; footer: string }> => {
+  const song = {
+    header: t.settings.chromeSongHeader,
+    footer: t.settings.chromeSongFooter,
+  };
+  return {
+    newSong: song,
+    newSongPlGb: song,
+    pielgrzym: song,
+    roboczy: song,
+    children: song,
+    custom: song,
+    bible: {
+      header: t.settings.chromeBibleHeader,
+      footer: t.settings.chromeBibleFooter,
+    },
+    messages: {
+      header: t.settings.chromeMessageHeader,
+      footer: t.settings.chromeMessageFooter,
+    },
+  };
 };
 
-const CHROME_LABELS: Record<OutputScope, { header: string; footer: string }> = {
-  newSong: SONG_CHROME,
-  newSongPlGb: SONG_CHROME,
-  pielgrzym: SONG_CHROME,
-  roboczy: SONG_CHROME,
-  children: SONG_CHROME,
-  custom: SONG_CHROME,
-  bible: { header: "Reference", footer: "Bible name" },
-  messages: { header: "Title on top", footer: "Title below" },
-};
-
-const THEME_OPTIONS: { value: ThemePref; label: string }[] = [
-  { value: "dark", label: "Dark" },
-  { value: "light", label: "Light" },
-  { value: "system", label: "System" },
+const themeOptions = (
+  t: Dict,
+): { value: ThemePref; label: string; icon: IconName }[] => [
+  { value: "dark", label: t.settings.themeDark, icon: "Moon" },
+  { value: "light", label: t.settings.themeLight, icon: "Sun" },
+  { value: "system", label: t.settings.themeSystem, icon: "Monitor" },
 ];
+
+const outputModeLabels = (t: Dict): Record<OutputMode, string> => ({
+  fullscreen: t.outputModes.fullscreen,
+  lowerThirds: t.outputModes.lowerThirds,
+});
 
 function OutputPanel({
   scope,
@@ -117,6 +133,9 @@ function OutputPanel({
   settings: OutputSettings;
   onChange: (next: OutputSettings) => void;
 }) {
+  const { t } = useI18n();
+  const GROUP_CHOICES = groupChoices(t);
+  const CHROME_LABELS = chromeLabels(t);
   const { group, chrome } = settings;
   const maxLines = group.kind === "max" ? group.lines : DEFAULT_MAX_LINES;
   const isSong = scope !== "bible" && scope !== "messages";
@@ -193,7 +212,7 @@ function OutputPanel({
           <Checkbox
             checked={chrome.sequence}
             onChange={(checked) => setChrome("sequence", checked)}
-            label="Sequence (top right)"
+            label={t.settings.chromeSequence}
           />
         )}
         <Checkbox
@@ -205,15 +224,15 @@ function OutputPanel({
           <Checkbox
             checked={chrome.secondary}
             onChange={(checked) => setChrome("secondary", checked)}
-            label="Second language"
+            label={t.settings.chromeSecondary}
           />
         )}
         {scope === "bible" && (
           <Checkbox
             checked={chrome.swapLabels}
             onChange={(checked) => setChrome("swapLabels", checked)}
-            label="Swap top and bottom"
-            hint="Puts the Bible name on top and the reference below"
+            label={t.settings.chromeSwapLabels}
+            hint={t.settings.chromeSwapLabelsHint}
           />
         )}
       </div>
@@ -228,6 +247,8 @@ function OutputsSection({
   outputs: OutputsConfig;
   onChange: (next: OutputsConfig) => void;
 }) {
+  const { t } = useI18n();
+  const OUTPUT_MODE_LABELS = outputModeLabels(t);
   const patch = (id: OutputId, changes: Partial<OutputDef>) =>
     onChange({ ...outputs, [id]: { ...outputs[id], ...changes } });
 
@@ -257,10 +278,10 @@ function OutputsSection({
                 disabled={only}
                 title={
                   only
-                    ? "At least one output has to stay on"
+                    ? t.settings.keepOneOutputOn
                     : def.enabled
-                      ? "Turn this output off"
-                      : "Turn this output on"
+                      ? t.settings.turnOutputOff
+                      : t.settings.turnOutputOn
                 }
                 className={`px-2 py-1 text-[10px] font-semibold rounded border transition-colors disabled:opacity-40 ${
                   def.enabled
@@ -268,14 +289,14 @@ function OutputsSection({
                     : "bg-surface-secondary border-border text-text-secondary"
                 }`}
               >
-                {def.enabled ? "On" : "Off"}
+                {def.enabled ? t.settings.on : t.settings.off}
               </button>
             </div>
 
             <div className="space-y-1.5">
               <div className="flex items-center gap-2">
                 <span className="w-10 shrink-0 text-[10px] text-text-muted">
-                  Sent by
+                  {t.settings.sentBy}
                 </span>
                 <div className="inline-flex items-center gap-0.5 p-0.5 rounded-md border border-border bg-surface-secondary">
                   {(["hdmi", "ip"] as OutputType[]).map((type) => (
@@ -283,9 +304,7 @@ function OutputsSection({
                       key={type}
                       onClick={() => patch(id, { type })}
                       title={
-                        type === "hdmi"
-                          ? "A window on a second screen"
-                          : "A web address other machines open in a browser source"
+                        type === "hdmi" ? t.settings.hdmiHint : t.settings.ipHint
                       }
                       className={`px-2 py-0.5 text-[10px] font-semibold rounded transition-colors ${
                         def.type === type
@@ -301,7 +320,7 @@ function OutputsSection({
 
               <div className="flex items-center gap-2">
                 <span className="w-10 shrink-0 text-[10px] text-text-muted">
-                  Shows
+                  {t.settings.shows}
                 </span>
                 <div className="inline-flex items-center gap-0.5 p-0.5 rounded-md border border-border bg-surface-secondary">
                   {(["fullscreen", "lowerThirds"] as OutputMode[]).map(
@@ -311,8 +330,8 @@ function OutputsSection({
                         onClick={() => patch(id, { mode })}
                         title={
                           mode === "fullscreen"
-                            ? "Fills the frame — the main projection"
-                            : "A band of text — for streaming over video"
+                            ? t.settings.fullscreenHint
+                            : t.settings.lowerThirdsHint
                         }
                         className={`px-2 py-0.5 text-[10px] font-semibold rounded transition-colors ${
                           def.mode === mode
@@ -331,19 +350,16 @@ function OutputsSection({
             <p className="mt-2 text-[10px] text-text-muted leading-snug">
               {def.mode === "lowerThirds" && def.type !== "ip" ? (
                 <>
-                  Size and position work as usual, but{" "}
+                  {t.settings.hdmiNoAlphaBefore}
                   <span className="text-text-secondary font-semibold">
-                    HDMI cannot send transparency
-                  </span>{" "}
-                  — it has no alpha channel, so the box behind the text could
-                  never let your video show through. Its controls stay visible
-                  but greyed out, and the box is not drawn. Switch to IP to use
-                  them.
+                    {t.settings.hdmiNoAlphaBold}
+                  </span>
+                  {t.settings.hdmiNoAlphaAfter}
                 </>
               ) : def.mode === "lowerThirds" ? (
-                "Transparent overlay with a shaped, dimmed box behind the text. Size and position are set per Songs / Bible / Sermons in the preview."
+                t.settings.lowerThirdsNote
               ) : (
-                "Fills the frame. Text size and fade are set per Songs / Bible / Sermons in the preview."
+                t.settings.fullscreenNote
               )}
             </p>
           </div>
@@ -390,6 +406,11 @@ export default function SettingsModal({
   selection,
   selectionSummary,
 }: SettingsModalProps) {
+  const { t } = useI18n();
+  const FOOTER_FIELDS = footerFields(t);
+  const FOOTER_SOURCE_LABELS = footerSourceLabels(t);
+  const OUTPUT_SCOPE_LABELS = outputScopeLabels(t);
+  const THEME_OPTIONS = themeOptions(t);
   const [outputScope, setOutputScope] = useState<OutputScope>("newSong");
   const [token, setToken] = useState("");
   const [savedToken, setSavedToken] = useState<string | null>(null);
@@ -418,23 +439,27 @@ export default function SettingsModal({
 
   const [exporting, setExporting] = useState(false);
   const [exportMsg, setExportMsg] = useState<string | null>(null);
+  const [exportFailed, setExportFailed] = useState(false);
 
   const runExport = async (categories: string[]) => {
     if (!window.api?.exportData) return;
     setExporting(true);
     setExportMsg(null);
+    setExportFailed(false);
     try {
       const customSongs = categories.includes("songs")
         ? (localStorage.getItem(LS_KEYS.customSongs) ?? undefined)
         : undefined;
       const r = await window.api.exportData(categories, customSongs);
       if (r?.canceled) return;
+      setExportFailed(!r?.ok);
       setExportMsg(
         r?.ok
-          ? `Exported ${r.files} files to ${r.path}`
-          : (r?.error ?? "Export failed."),
+          ? t.settings.exported(r.files ?? 0, r.path ?? "")
+          : (r?.error ?? t.settings.exportFailed),
       );
     } catch (err) {
+      setExportFailed(true);
       setExportMsg(String((err as Error)?.message || err));
     } finally {
       setExporting(false);
@@ -453,6 +478,7 @@ export default function SettingsModal({
     setSavedMsg(null);
     setSyncProgress(null);
     setExportMsg(null);
+    setExportFailed(false);
     setTheme(getThemePref());
     setAdminView(false);
     (async () => {
@@ -484,9 +510,9 @@ export default function SettingsModal({
     setSaving(false);
     if (ok) {
       setSavedToken(token.trim() || null);
-      setSavedMsg("Saved.");
+      setSavedMsg(t.settings.tokenSavedMsg);
     } else {
-      setSavedMsg("Failed to save.");
+      setSavedMsg(t.settings.tokenSaveFailed);
     }
   };
 
@@ -495,7 +521,7 @@ export default function SettingsModal({
     await window.api.setWriteToken("");
     setSavedToken(null);
     setToken("");
-    setSavedMsg("Cleared.");
+    setSavedMsg(t.settings.tokenCleared);
   };
 
   const handleSync = async (forceAll: boolean) => {
@@ -505,7 +531,11 @@ export default function SettingsModal({
       await applyUpdate((p) => setSyncProgress(p), { forceAll, selection });
       const local = getLastManifest();
       setLocalVersion(local?.version ?? null);
-      setSyncProgress({ phase: "done", ratio: 1, message: "Data updated." });
+      setSyncProgress({
+        phase: "done",
+        ratio: 1,
+        message: t.settings.dataUpdated,
+      });
       setTimeout(() => {
         window.location.reload();
       }, 800);
@@ -513,7 +543,7 @@ export default function SettingsModal({
       setSyncProgress({
         phase: "error",
         ratio: 0,
-        message: (err as Error)?.message || "Sync failed",
+        message: (err as Error)?.message || t.settings.syncFailed,
       });
     } finally {
       setSyncBusy(false);
@@ -536,18 +566,18 @@ export default function SettingsModal({
     >
       <ConfirmDialog
         open={confirmWipe}
-        title="Delete downloaded data?"
-        message="Songbooks, Bibles and sermons are removed from this device and the app restarts. Your own songs and the token stay. Anything you pick again gets downloaded from the cloud."
-        confirmLabel="Delete"
+        title={t.settings.confirmWipeTitle}
+        message={t.settings.confirmWipeMessage}
+        confirmLabel={t.settings.confirmWipeButton}
         icon="Trash2"
         onConfirm={() => void wipeLocalData()}
         onCancel={() => setConfirmWipe(false)}
       />
       <ConfirmDialog
         open={confirmSignOut}
-        title="Forget the token?"
-        message="The app restarts and asks for a token again. Downloaded data and your own songs stay on the disk."
-        confirmLabel="Forget"
+        title={t.settings.confirmSignOutTitle}
+        message={t.settings.confirmSignOutMessage}
+        confirmLabel={t.settings.confirmSignOutButton}
         icon="LogOut"
         onConfirm={() => void signOut()}
         onCancel={() => setConfirmSignOut(false)}
@@ -560,14 +590,14 @@ export default function SettingsModal({
           {adminView && (
             <button
               onClick={() => setAdminView(false)}
-              title="Back to settings"
+              title={t.settings.backToSettings}
               className="w-7 h-7 flex items-center justify-center rounded border border-border-secondary text-text-secondary transition-colors hover:bg-surface-hover hover:text-text-primary"
             >
               <Icon name="ChevronLeft" size={13} />
             </button>
           )}
           <h2 className="flex-1 text-lg font-semibold text-text-primary">
-            {adminView ? "Admin" : "Settings"}
+            {adminView ? t.settings.admin : t.settings.title}
           </h2>
           {identity?.role === "admin" && !adminView && (
             <button
@@ -575,7 +605,7 @@ export default function SettingsModal({
               className="flex items-center gap-1.5 px-2.5 py-1 text-xs font-semibold rounded border border-border-secondary text-text-secondary transition-colors hover:bg-surface-hover hover:text-text-primary"
             >
               <Icon name="ShieldCheck" size={13} />
-              Admin
+              {t.settings.admin}
             </button>
           )}
           <button
@@ -593,26 +623,20 @@ export default function SettingsModal({
         >
           <div className={`${card} mb-4`}>
             <label className="block text-xs font-semibold text-text-primary mb-1">
-              Outputs
+              {t.settings.outputs}
             </label>
             <p className="text-[11px] text-text-muted mb-2 leading-snug">
-              Up to two outputs run at once. Each one is sent either to a screen
-              over HDMI or to a web address over IP, and shows either the whole
-              frame or a lower third. Size, position and fade are set separately
-              for Songs, Bible and Sermons from the preview on the right.
+              {t.settings.outputsHint}
             </p>
             <OutputsSection outputs={outputs} onChange={onChangeOutputs} />
           </div>
 
           <div className={`${card} mb-4`}>
             <label className="block text-xs font-semibold text-text-primary mb-1">
-              What goes on each output
+              {t.settings.whatGoesOnOutputs}
             </label>
             <p className="text-[11px] text-text-muted mb-2 leading-snug">
-              How much text each output shows and which captions it prints, set
-              per songbook. Whole = the entire section, Saved = the split stored
-              with the song, Max lines = split evenly into parts of at most N
-              lines, smallest part first.
+              {t.settings.whatGoesOnOutputsHint}
             </p>
             <div className="flex flex-wrap items-center gap-1 mb-3">
               {OUTPUT_SCOPE_ORDER.map((scope) => (
@@ -665,7 +689,7 @@ export default function SettingsModal({
                 }}
                 className="mt-2 px-2.5 py-1 text-[11px] font-semibold rounded border border-border text-text-secondary transition-colors hover:bg-surface-hover hover:text-text-primary"
               >
-                Copy to every songbook
+                {t.settings.copyToEverySongbook}
               </button>
             )}
           </div>
@@ -674,12 +698,12 @@ export default function SettingsModal({
             <div className="space-y-4">
               <div className={card}>
                 <label className="block text-xs font-semibold text-text-primary mb-1">
-                  Downloaded content
+                  {t.settings.downloadedContent}
                 </label>
                 <p className="text-[11px] text-text-muted mb-2 leading-snug">
                   {selectionSummary
-                    ? `Now downloaded: ${selectionSummary}. Only these are kept up to date.`
-                    : "Nothing is downloaded yet, so the library on the left is empty."}
+                    ? t.settings.nowDownloaded(selectionSummary)
+                    : t.settings.nothingDownloaded}
                 </p>
                 <div className="flex flex-wrap items-center gap-1.5">
                   <button
@@ -687,41 +711,42 @@ export default function SettingsModal({
                     className="flex items-center gap-1.5 px-3 py-1 text-xs font-semibold rounded border border-primary/50 bg-primary/10 text-primary transition-colors hover:bg-primary hover:text-white"
                   >
                     <Icon name="Download" size={13} />
-                    Choose what to download
+                    {t.settings.chooseWhatToDownload}
                   </button>
                   <button
                     onClick={() => setConfirmWipe(true)}
                     className="flex items-center gap-1.5 px-3 py-1 text-xs font-semibold rounded border border-border text-text-secondary transition-colors hover:bg-danger hover:text-white hover:border-danger"
                   >
                     <Icon name="Trash2" size={13} />
-                    Delete downloaded data
+                    {t.settings.deleteDownloadedData}
                   </button>
                 </div>
               </div>
 
               <div className={card}>
                 <label className="block text-xs font-semibold text-text-primary mb-1">
-                  Access
+                  {t.settings.access}
                 </label>
                 <p className="text-[11px] text-text-muted mb-2 leading-snug">
                   {identity
-                    ? `Signed in as ${identity.name}${
-                        identity.role === "admin" ? " (admin)" : ""
-                      }. The token works on any number of devices.`
-                    : "Not signed in."}
+                    ? t.settings.signedInAs(
+                        identity.name,
+                        identity.role === "admin",
+                      )
+                    : t.settings.notSignedIn}
                 </p>
                 <button
                   onClick={() => setConfirmSignOut(true)}
                   className="flex items-center gap-1.5 px-3 py-1 text-xs font-semibold rounded border border-border text-text-secondary transition-colors hover:bg-surface-hover hover:text-text-primary"
                 >
                   <Icon name="LogOut" size={13} />
-                  Forget token on this device
+                  {t.settings.forgetToken}
                 </button>
               </div>
 
               <div className={card}>
                 <label className="block text-xs font-semibold text-text-primary mb-2">
-                  Appearance
+                  {t.settings.appearance}
                 </label>
                 <div className="flex items-center gap-1.5">
                   {THEME_OPTIONS.map((opt) => (
@@ -731,26 +756,34 @@ export default function SettingsModal({
                         setThemePref(opt.value);
                         setTheme(opt.value);
                       }}
-                      className={`px-3 py-1 text-xs font-semibold rounded border transition-colors ${
+                      title={opt.label}
+                      aria-label={opt.label}
+                      aria-pressed={theme === opt.value}
+                      className={`w-8 h-7 flex items-center justify-center rounded border transition-colors ${
                         theme === opt.value
                           ? "bg-primary border-primary text-white"
                           : "bg-surface-secondary border-border text-text-secondary hover:text-text-primary"
                       }`}
                     >
-                      {opt.label}
+                      <Icon name={opt.icon} size={14} />
                     </button>
                   ))}
                 </div>
               </div>
 
               <div className={card}>
+                <label className="block text-xs font-semibold text-text-primary mb-2">
+                  {t.settings.language}
+                </label>
+                <LanguageSwitch />
+              </div>
+
+              <div className={card}>
                 <label className="block text-xs font-semibold text-text-primary mb-1">
-                  Song footer on the fullscreen output
+                  {t.settings.songFooter}
                 </label>
                 <p className="text-[11px] text-text-muted mb-2 leading-snug">
-                  Which parts of the caption are printed under the lyrics, per
-                  songbook. Bible chapters and messages have their own caption
-                  and are not affected.
+                  {t.settings.songFooterHint}
                 </p>
                 <div className="space-y-1">
                   <div className="flex items-center gap-2 pb-1 border-b border-border">
@@ -785,7 +818,10 @@ export default function SettingsModal({
                                 })
                               }
                               label=""
-                              hint={`${f.label} — ${FOOTER_SOURCE_LABELS[source]}`}
+                              hint={t.settings.footerCell(
+                                f.label,
+                                FOOTER_SOURCE_LABELS[source],
+                              )}
                             />
                           </span>
                         ))}
@@ -797,11 +833,10 @@ export default function SettingsModal({
 
               <div className={card}>
                 <label className="block text-xs font-semibold text-text-primary mb-1">
-                  Divider between languages
+                  {t.settings.divider}
                 </label>
                 <p className="text-[11px] text-text-muted mb-2 leading-snug">
-                  Thickness of the line between the two languages and of the box
-                  around the translation label. Applies to all three outputs.
+                  {t.settings.dividerHint}
                 </p>
                 <div className="flex items-center gap-2">
                   <input
@@ -823,12 +858,10 @@ export default function SettingsModal({
 
               <div className={card}>
                 <label className="block text-xs font-semibold text-text-primary mb-1">
-                  Translation label
+                  {t.settings.translationLabel}
                 </label>
                 <p className="text-[11px] text-text-muted mb-2 leading-snug">
-                  Text of the box printed on the divider above a translation,
-                  per songbook. Leave empty to detect it from the text of the
-                  translation. A song can override this in the editor.
+                  {t.settings.translationLabelHint}
                 </p>
                 <div className="space-y-1">
                   {FOOTER_SOURCE_ORDER.map((source) => (
@@ -845,7 +878,9 @@ export default function SettingsModal({
                             [source]: e.target.value,
                           })
                         }
-                        placeholder={`auto (${TRANSLATION_LABEL_DEFAULT})`}
+                        placeholder={t.settings.translationLabelAuto(
+                          TRANSLATION_LABEL_DEFAULT,
+                        )}
                         className="w-40 px-2 py-1 text-[11px] border border-border-secondary rounded hover:border-primary/60 transition-colors focus:outline-none focus:ring-1 focus:ring-primary bg-surface text-text-primary placeholder-text-muted"
                       />
                     </div>
@@ -855,12 +890,10 @@ export default function SettingsModal({
 
               <div className={card}>
                 <label className="block text-xs font-semibold text-text-primary mb-1">
-                  Backup
+                  {t.settings.backup}
                 </label>
                 <p className="text-[11px] text-text-muted mb-2 leading-snug">
-                  Export a copy of the data to a folder of your choice (e.g.
-                  Downloads or Desktop). Do this from time to time so nothing
-                  gets lost.
+                  {t.settings.backupHint}
                 </p>
                 <div className="flex items-center gap-1.5 flex-wrap">
                   <button
@@ -869,42 +902,43 @@ export default function SettingsModal({
                     className="px-3 py-1 text-xs font-semibold bg-primary text-white rounded hover:bg-primary-hover transition-colors disabled:opacity-50 flex items-center gap-1.5"
                   >
                     <Icon name="FolderDown" size={12} />
-                    Export all
+                    {t.settings.exportAll}
                   </button>
                   <button
                     onClick={() => runExport(["songs"])}
                     disabled={exporting}
-                    className="px-3 py-1 text-xs font-semibold bg-surface-secondary border border-border text-text-primary rounded hover:bg-surface-hover transition-colors disabled:opacity-50"
+                    className="flex items-center gap-1.5 px-3 py-1 text-xs font-semibold bg-surface-secondary border border-border text-text-primary rounded hover:bg-surface-hover transition-colors disabled:opacity-50"
                   >
-                    Songs
+                    <Icon name="Music" size={12} />
+                    {t.common.songs}
                   </button>
                   <button
                     onClick={() => runExport(["bibles"])}
                     disabled={exporting}
-                    className="px-3 py-1 text-xs font-semibold bg-surface-secondary border border-border text-text-primary rounded hover:bg-surface-hover transition-colors disabled:opacity-50"
+                    className="flex items-center gap-1.5 px-3 py-1 text-xs font-semibold bg-surface-secondary border border-border text-text-primary rounded hover:bg-surface-hover transition-colors disabled:opacity-50"
                   >
-                    Bibles
+                    <Icon name="BookOpen" size={12} />
+                    {t.common.bibles}
                   </button>
                   <button
                     onClick={() => runExport(["messages"])}
                     disabled={exporting}
-                    className="px-3 py-1 text-xs font-semibold bg-surface-secondary border border-border text-text-primary rounded hover:bg-surface-hover transition-colors disabled:opacity-50"
+                    className="flex items-center gap-1.5 px-3 py-1 text-xs font-semibold bg-surface-secondary border border-border text-text-primary rounded hover:bg-surface-hover transition-colors disabled:opacity-50"
                   >
-                    Messages
+                    <Icon name="Mic" size={12} />
+                    {t.common.messages}
                   </button>
                 </div>
                 {exporting && (
                   <div className="text-[11px] text-text-muted mt-2 flex items-center gap-1">
                     <Icon name="Loader" size={12} className="animate-spin" />
-                    Exporting…
+                    {t.settings.exporting}
                   </div>
                 )}
                 {exportMsg && (
                   <div
                     className={`text-[11px] mt-2 break-all ${
-                      exportMsg.startsWith("Exported")
-                        ? "text-success"
-                        : "text-danger"
+                      exportFailed ? "text-danger" : "text-success"
                     }`}
                   >
                     {exportMsg}
@@ -916,17 +950,17 @@ export default function SettingsModal({
             <div className="space-y-4">
               <div className={card}>
                 <label className="block text-xs font-semibold text-text-primary mb-1">
-                  Cloud data
+                  {t.settings.cloudData}
                 </label>
                 <div className="text-[11px] text-text-muted leading-snug space-y-0.5 mb-2">
                   <div>
-                    Local version:{" "}
+                    {t.settings.localVersion}{" "}
                     <span className="font-mono text-text-primary">
                       {localVersion ?? "—"}
                     </span>
                   </div>
                   <div>
-                    Cloud version:{" "}
+                    {t.settings.cloudVersion}{" "}
                     <span className="font-mono text-text-primary">
                       {remoteVersion ?? "—"}
                     </span>
@@ -935,7 +969,7 @@ export default function SettingsModal({
 
                 {updateAvailable && !syncBusy && (
                   <div className="mb-2 px-2 py-1.5 bg-primary/10 border border-primary/30 rounded text-[11px] text-primary">
-                    New data available on cloud. Click below to update.
+                    {t.settings.updateAvailable}
                   </div>
                 )}
 
@@ -946,13 +980,13 @@ export default function SettingsModal({
                       className="px-3 py-1 text-xs font-semibold bg-primary text-white rounded hover:bg-primary-hover transition-colors flex items-center gap-1.5"
                     >
                       <Icon name="Download" size={12} />
-                      Update now
+                      {t.settings.updateNow}
                     </button>
                   )}
                   <button
                     onClick={() => handleSync(true)}
                     disabled={syncBusy}
-                    title="Re-download the content you have selected, ignoring local hashes"
+                    title={t.settings.forceResyncHint}
                     className="px-3 py-1 text-xs font-semibold bg-surface-secondary border border-border text-text-primary rounded hover:bg-surface-hover transition-colors disabled:opacity-50 flex items-center gap-1.5"
                   >
                     {syncBusy ? (
@@ -962,12 +996,12 @@ export default function SettingsModal({
                           size={12}
                           className="animate-spin"
                         />
-                        Syncing…
+                        {t.settings.syncing}
                       </>
                     ) : (
                       <>
                         <Icon name="RefreshCw" size={12} />
-                        Force re-sync
+                        {t.settings.forceResync}
                       </>
                     )}
                   </button>
@@ -993,13 +1027,13 @@ export default function SettingsModal({
                     {syncProgress.phase === "done" && (
                       <div className="text-[11px] text-success flex items-center gap-1">
                         <Icon name="Check" size={12} />
-                        {syncProgress.message ?? "Up to date"}
+                        {syncProgress.message ?? t.settings.upToDate}
                       </div>
                     )}
                     {syncProgress.phase === "error" && (
                       <div className="text-[11px] text-danger flex items-center gap-1">
                         <Icon name="TriangleAlert" size={12} />
-                        {syncProgress.message ?? "Sync failed"}
+                        {syncProgress.message ?? t.settings.syncFailed}
                       </div>
                     )}
                   </div>
@@ -1008,17 +1042,17 @@ export default function SettingsModal({
 
               <div className={card}>
                 <label className="block text-xs font-semibold text-text-primary mb-1">
-                  Write token
+                  {t.settings.writeToken}
                 </label>
                 <p className="text-[11px] text-text-muted mb-2 leading-snug">
-                  Token to authorize saving song edits to the shared cloud
-                  database. Without a token, edits are saved only locally on
-                  this device. Ask the admin for a token.
+                  {t.settings.writeTokenHint}
                 </p>
                 <input
                   type="password"
                   placeholder={
-                    savedToken ? "•••••••••• (saved)" : "Paste your token"
+                    savedToken
+                      ? t.settings.tokenSaved
+                      : t.settings.tokenPlaceholder
                   }
                   value={token}
                   onChange={(e) => setToken(e.target.value)}
@@ -1030,14 +1064,14 @@ export default function SettingsModal({
                     disabled={saving}
                     className="px-3 py-1 text-xs font-semibold bg-primary text-white rounded hover:bg-primary-hover transition-colors disabled:opacity-50"
                   >
-                    {saving ? "Saving..." : "Save"}
+                    {saving ? t.common.saving : t.common.save}
                   </button>
                   {savedToken && (
                     <button
                       onClick={handleClear}
                       className="px-3 py-1 text-xs font-semibold text-danger hover:bg-danger/10 rounded transition-colors"
                     >
-                      Clear
+                      {t.common.clear}
                     </button>
                   )}
                   {savedMsg && (
@@ -1047,14 +1081,14 @@ export default function SettingsModal({
                   )}
                 </div>
                 <p className="text-[11px] text-text-muted mt-3">
-                  Status:{" "}
+                  {t.settings.status}{" "}
                   {savedToken ? (
                     <span className="text-success">
-                      Write access enabled — edits sync to cloud
+                      {t.settings.writeEnabled}
                     </span>
                   ) : (
                     <span className="text-text-secondary">
-                      Read-only — edits stay on this device
+                      {t.settings.readOnly}
                     </span>
                   )}
                 </p>
@@ -1066,10 +1100,7 @@ export default function SettingsModal({
             <span className="text-text-primary font-semibold">
               ChoirPresenter{appVersion ? ` v${appVersion}` : ""}
             </span>{" "}
-            — presentation app for songs, Bible verses and sermons. Two
-            independent outputs: main projection (Local) and a stream
-            lower-third for vMix (Stream). Data is stored in the cloud and
-            cached on this device for offline use. © 2026 Josh
+            {t.settings.about}
           </div>
         </div>
       </div>

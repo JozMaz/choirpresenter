@@ -2,7 +2,9 @@
 
 import { useState } from "react";
 import type { Identity } from "../lib/access";
+import { useI18n } from "../lib/i18n/context";
 import Icon from "./Icon";
+import LanguageSwitch from "./LanguageSwitch";
 
 interface TokenGateProps {
   onAuthorized: (identity: Identity, token: string) => void;
@@ -13,6 +15,7 @@ export default function TokenGate({
   onAuthorized,
   initialMessage = null,
 }: TokenGateProps) {
+  const { t } = useI18n();
   const [token, setToken] = useState("");
   const [checking, setChecking] = useState(false);
   const [error, setError] = useState<string | null>(initialMessage);
@@ -32,23 +35,23 @@ export default function TokenGate({
       return;
     }
     if (result?.offline) {
-      setError(
-        "No connection to the server. Check the internet and try again.",
-      );
+      setError(t.tokenGate.offline);
       return;
     }
-    setError("This token is not valid. Ask the administrator for a new one.");
+    setError(t.tokenGate.invalid);
   };
 
   return (
     <main className="h-screen w-screen bg-background flex items-center justify-center p-6">
       <div className="w-full max-w-sm bg-surface border border-border rounded-lg shadow-xl px-6 py-6">
-        <h1 className="text-lg font-semibold text-text-primary mb-1">
-          ChoirPresenter
-        </h1>
+        <div className="flex items-start gap-2 mb-1">
+          <h1 className="flex-1 text-lg font-semibold text-text-primary">
+            ChoirPresenter
+          </h1>
+          <LanguageSwitch />
+        </div>
         <p className="text-xs text-text-muted leading-snug mb-4">
-          Enter the access token for your congregation. You get it from the
-          administrator and it works on any number of devices.
+          {t.tokenGate.intro}
         </p>
 
         <input
@@ -59,7 +62,7 @@ export default function TokenGate({
           onKeyDown={(e) => {
             if (e.key === "Enter") void submit();
           }}
-          placeholder="Access token"
+          placeholder={t.tokenGate.placeholder}
           className="w-full px-2 py-1.5 text-xs border border-border-secondary rounded bg-surface text-text-primary placeholder-text-muted hover:border-primary/60 focus:outline-none focus:ring-1 focus:ring-primary transition-colors"
         />
 
@@ -75,7 +78,7 @@ export default function TokenGate({
           {checking && (
             <Icon name="Loader" size={12} className="animate-spin" />
           )}
-          {checking ? "Checking..." : "Continue"}
+          {checking ? t.tokenGate.checking : t.tokenGate.continue}
         </button>
       </div>
     </main>

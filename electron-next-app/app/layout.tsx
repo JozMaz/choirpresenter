@@ -3,6 +3,7 @@ import { Geist, Geist_Mono } from "next/font/google";
 import localFont from "next/font/local";
 import "./globals.css";
 import { THEME_INIT_SCRIPT } from "./lib/theme";
+import { I18nProvider } from "./lib/i18n/context";
 
 export const metadata: Metadata = {
   title: "ChoirPresenter",
@@ -54,7 +55,7 @@ export default function RootLayout({
       <body
         className={`${geistSans.variable} ${geistMono.variable} ${myriadPro.variable} antialiased`}
       >
-        {children}
+        <I18nProvider>{children}</I18nProvider>
       </body>
     </html>
   );

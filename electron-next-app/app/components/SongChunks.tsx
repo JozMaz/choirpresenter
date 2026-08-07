@@ -3,6 +3,8 @@
 import { useEffect, useRef } from "react";
 import type { SongPlan } from "../lib/outputPlan";
 import type { ApiItem, SectionType } from "../lib/types";
+import { sectionLabel } from "../lib/songSchema";
+import { useI18n } from "../lib/i18n/context";
 
 const TYPE_COLOR: Record<SectionType, string> = {
   verse: "bg-primary",
@@ -15,6 +17,7 @@ interface SongChunksProps {
   currentSong: ApiItem;
   plan: SongPlan;
   activeStepIndex: number;
+  liveStepIndex: number;
   onGoToStep: (idx: number) => void;
 }
 
@@ -22,8 +25,10 @@ export default function SongChunks({
   currentSong,
   plan,
   activeStepIndex,
+  liveStepIndex,
   onGoToStep,
 }: SongChunksProps) {
+  const { t } = useI18n();
   const activeRef = useRef<HTMLButtonElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
   const lastSongIdRef = useRef<string | null>(null);
@@ -65,34 +70,38 @@ export default function SongChunks({
                   }`}
                 />
                 <span className="text-[11px] font-bold uppercase tracking-wide text-text-primary">
-                  {section.label}
+                  {sectionLabel(section.type, section.number, t.sectionTypes)}
                 </span>
                 {stepIndexes.length > 1 && (
                   <span className="text-[10px] text-text-muted">
-                    {stepIndexes.length} parts
+                    {t.songChunks.parts(stepIndexes.length)}
                   </span>
                 )}
               </div>
               <div className="p-1.5 space-y-1">
                 {stepIndexes.map((stepIdx) => {
                   const slide = plan.steps[stepIdx].preview;
-                  const isActive = stepIdx === activeStepIndex;
+                  const isLive = stepIdx === liveStepIndex;
+                  const isPreselected = stepIdx === activeStepIndex && !isLive;
+                  const isActive = isLive || isPreselected;
                   return (
                     <button
                       key={stepIdx}
                       ref={isActive ? activeRef : null}
                       onClick={() => onGoToStep(stepIdx)}
                       className={`w-full text-left rounded border px-2 py-1.5 transition-colors ${
-                        isActive
+                        isLive
                           ? "bg-primary border-primary text-white"
-                          : "bg-surface-secondary/50 border-border text-text-secondary hover:bg-surface-hover"
+                          : isPreselected
+                            ? "bg-amber-500/20 border-amber-500 text-text-primary"
+                            : "bg-surface-secondary/50 border-border text-text-secondary hover:bg-surface-hover"
                       }`}
                     >
                       {slide.primary.map((line, i) => (
                         <div
                           key={i}
                           className={`text-xs leading-snug ${
-                            isActive ? "text-white" : ""
+                            isLive ? "text-white" : ""
                           }`}
                         >
                           {line}
@@ -104,7 +113,7 @@ export default function SongChunks({
                             <div
                               key={i}
                               className={`text-xs leading-snug italic ${
-                                isActive ? "text-white/80" : "text-text-muted"
+                                isLive ? "text-white/80" : "text-text-muted"
                               }`}
                             >
                               {line}

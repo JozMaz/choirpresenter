@@ -2,6 +2,7 @@
 
 import type { ApiItem } from "../lib/types";
 import { getSelectionTitle } from "../lib/songAdapter";
+import { useI18n } from "../lib/i18n/context";
 import Icon from "./Icon";
 
 interface SelectionHeaderProps {
@@ -17,7 +18,11 @@ export default function SelectionHeader({
   onRestoreSelection,
   canRestoreSelection,
 }: SelectionHeaderProps) {
-  const { main, sub } = getSelectionTitle(currentSong);
+  const { t } = useI18n();
+  const { main, sub } = getSelectionTitle(
+    currentSong,
+    t.selectionHeader.fallbackTitle,
+  );
   return (
     <div className="shrink-0 flex items-center gap-1.5 px-4 pt-3 pb-2">
       <div className="min-w-0 flex-1">
@@ -38,8 +43,8 @@ export default function SelectionHeader({
         disabled={!canRestoreSelection}
         title={
           canRestoreSelection
-            ? "Put back what you just unselected"
-            : "Nothing to put back"
+            ? t.selectionHeader.restore
+            : t.selectionHeader.nothingToRestore
         }
         className="w-7 h-7 shrink-0 flex items-center justify-center rounded border border-border-secondary text-text-secondary transition-colors enabled:hover:bg-primary enabled:hover:text-white enabled:hover:border-primary disabled:opacity-40"
       >
@@ -50,12 +55,12 @@ export default function SelectionHeader({
         disabled={!currentSong}
         title={
           currentSong
-            ? "Unselect — clears this list and both outputs"
-            : "Nothing is selected"
+            ? t.selectionHeader.unselectHint
+            : t.selectionHeader.nothingSelected
         }
         className="px-2.5 py-1 shrink-0 text-xs font-semibold rounded border border-border-secondary text-text-secondary transition-colors enabled:hover:bg-surface-hover enabled:hover:text-text-primary disabled:opacity-40"
       >
-        Unselect
+        {t.selectionHeader.unselect}
       </button>
     </div>
   );

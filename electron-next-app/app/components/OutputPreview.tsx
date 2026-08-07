@@ -6,7 +6,6 @@ import { usePersistedState } from "../hooks/usePersistedState";
 import { LS_KEYS } from "../lib/constants";
 import {
   DISPLAY_GROUPS,
-  DISPLAY_GROUP_LABELS,
   DEFAULT_BG,
   OVERLAY_DEFAULTS,
   PROFILE_DEFAULTS,
@@ -31,6 +30,8 @@ import type {
   NetStatus,
   OverlayConfig,
 } from "../lib/types";
+import { useI18n } from "../lib/i18n/context";
+import type { Dict } from "../lib/i18n";
 import Checkbox from "./Checkbox";
 import Icon from "./Icon";
 import MonitorPicker from "./MonitorPicker";
@@ -68,29 +69,29 @@ const round = (v: number) => Math.round(v * 10) / 10;
 
 const snapToCentre = (v: number) => (Math.abs(v) <= OFFSET_SNAP ? 0 : round(v));
 
-const BOX_MODES: { value: BoxMode; label: string; hint: string }[] = [
+const boxModes = (t: Dict): { value: BoxMode; label: string; hint: string }[] => [
   {
     value: "padding",
-    label: "Padding",
-    hint: "Box hugs the text with a margin around it",
+    label: t.outputPreview.boxModePadding,
+    hint: t.outputPreview.boxModePaddingHint,
   },
   {
     value: "size",
-    label: "Fixed",
-    hint: "Box keeps the same size no matter how much text there is",
+    label: t.outputPreview.boxModeFixed,
+    hint: t.outputPreview.boxModeFixedHint,
   },
 ];
 
-const ALIGN_X: { value: BoxAlign; label: string }[] = [
-  { value: "start", label: "Left" },
-  { value: "center", label: "Centre" },
-  { value: "end", label: "Right" },
+const alignX = (t: Dict): { value: BoxAlign; label: string }[] => [
+  { value: "start", label: t.outputPreview.left },
+  { value: "center", label: t.outputPreview.centre },
+  { value: "end", label: t.outputPreview.right },
 ];
 
-const ALIGN_Y: { value: BoxAlign; label: string }[] = [
-  { value: "start", label: "Top" },
-  { value: "center", label: "Centre" },
-  { value: "end", label: "Bottom" },
+const alignY = (t: Dict): { value: BoxAlign; label: string }[] => [
+  { value: "start", label: t.outputPreview.top },
+  { value: "center", label: t.outputPreview.centre },
+  { value: "end", label: t.outputPreview.bottom },
 ];
 
 const SLIDER_CLASS = `flex-1 min-w-0 h-3 appearance-none bg-transparent cursor-pointer outline-none
@@ -280,6 +281,10 @@ export default function OutputPreview({
   netBusy,
   onToggleNet,
 }: OutputPreviewProps) {
+  const { t } = useI18n();
+  const BOX_MODES = boxModes(t);
+  const ALIGN_X = alignX(t);
+  const ALIGN_Y = alignY(t);
   const mode = def.mode;
   const transparent = supportsTransparency(def);
   const lower = mode === "lowerThirds";
@@ -578,11 +583,7 @@ export default function OutputPreview({
         {lower && (
           <button
             onClick={() => setZoomFit(!zoomFit)}
-            title={
-              zoomFit
-                ? "Preview is enlarged to stay readable — the output is unchanged"
-                : "Preview matches the output exactly"
-            }
+            title={zoomFit ? t.outputPreview.fitOn : t.outputPreview.fitOff}
             className={`flex items-center gap-1 px-2 py-1 text-[10px] font-semibold rounded border transition-colors ${
               zoomFit
                 ? "bg-primary border-primary text-white"
@@ -590,13 +591,13 @@ export default function OutputPreview({
             }`}
           >
             <Icon name={zoomFit ? "Maximize2" : "Minimize2"} size={11} />
-            {zoomFit ? "Fit" : "1:1"}
+            {zoomFit ? t.outputPreview.fit : t.outputPreview.oneToOne}
           </button>
         )}
 
         <button
           onClick={() => setSettingsOpen(true)}
-          title={`${outputName(def, id)} settings`}
+          title={t.outputPreview.openSettings(outputName(def, id))}
           className="w-7 h-7 flex items-center justify-center rounded border border-border text-text-secondary transition-colors hover:bg-surface-hover hover:text-text-primary"
         >
           <Icon name="Settings" size={13} />
@@ -622,7 +623,7 @@ export default function OutputPreview({
             }`}
           >
             <Icon name={running ? "Square" : "Play"} size={12} />
-            {running ? "Stop" : "Start"}
+            {running ? t.outputPreview.netStop : t.outputPreview.netStart}
           </button>
         )}
       </div>
@@ -666,8 +667,8 @@ export default function OutputPreview({
                       onClick={() => setOverride(value)}
                       title={
                         value === group
-                          ? `${DISPLAY_GROUP_LABELS[value]} — currently on the output`
-                          : DISPLAY_GROUP_LABELS[value]
+                          ? t.outputPreview.groupLive(t.displayGroups[value])
+                          : t.displayGroups[value]
                       }
                       className={`px-2.5 py-1 text-[10px] font-semibold rounded transition-colors ${
                         editGroup === value
@@ -675,7 +676,7 @@ export default function OutputPreview({
                           : "text-text-muted hover:bg-surface-hover hover:text-text-primary"
                       }`}
                     >
-                      {DISPLAY_GROUP_LABELS[value]}
+                      {t.displayGroups[value]}
                       {value === group && (
                         <span className="ml-1 inline-block w-1.5 h-1.5 rounded-full bg-success align-middle" />
                       )}
@@ -697,7 +698,7 @@ export default function OutputPreview({
               <div className="space-y-4">
                 <div className="space-y-1">
                   <Slider
-                    label="Fade"
+                    label={t.outputPreview.fade}
                     min={0}
                     max={1200}
                     step={20}
@@ -705,7 +706,7 @@ export default function OutputPreview({
                     {...fadeMs}
                   />
                   <Slider
-                    label="Text size"
+                    label={t.outputPreview.textSize}
                     min={40}
                     max={200}
                     step={5}
@@ -716,8 +717,8 @@ export default function OutputPreview({
                     <Checkbox
                       checked={tightLabels}
                       onChange={setTightLabels}
-                      label="Labels close to the text"
-                      hint="Keeps the reference and the name next to the text instead of at the edges of the frame"
+                      label={t.outputPreview.tightLabels}
+                      hint={t.outputPreview.tightLabelsHint}
                     />
                   </div>
                 </div>
@@ -725,26 +726,26 @@ export default function OutputPreview({
                 {lower && (
                   <div className="space-y-1">
                     <Slider
-                      label="Scale"
+                      label={t.outputPreview.scale}
                       min={10}
                       max={100}
                       inputRef={scaleRef}
                       {...boxScale}
                     />
                     <Segmented
-                      label="Anchor X"
+                      label={t.outputPreview.anchorX}
                       options={ALIGN_X}
                       value={boxAlignX}
                       onChange={setBoxAlignX}
                     />
                     <Segmented
-                      label="Anchor Y"
+                      label={t.outputPreview.anchorY}
                       options={ALIGN_Y}
                       value={boxAlignY}
                       onChange={setBoxAlignY}
                     />
                     <Slider
-                      label="Left / right"
+                      label={t.outputPreview.offsetX}
                       min={-OFFSET_RANGE}
                       max={OFFSET_RANGE}
                       step={0.1}
@@ -752,7 +753,7 @@ export default function OutputPreview({
                       {...boxOffsetX}
                     />
                     <Slider
-                      label="Up / down"
+                      label={t.outputPreview.offsetY}
                       min={OFFSET_Y_MIN}
                       max={OFFSET_Y_MAX}
                       step={0.1}
@@ -765,7 +766,7 @@ export default function OutputPreview({
                 {lower && (
                   <div className="space-y-1">
                     <div className="text-[11px] font-semibold text-text-primary pb-0.5">
-                      Background behind the text
+                      {t.outputPreview.background}
                     </div>
 
                     {!transparent && (
@@ -777,25 +778,20 @@ export default function OutputPreview({
                             className="shrink-0 text-text-muted"
                           />
                           <span className="text-[11px] font-semibold text-text-primary">
-                            IP only — HDMI has no transparency
+                            {t.outputPreview.ipOnlyTitle}
                           </span>
                         </div>
                         <p className="text-[10px] text-text-muted leading-snug">
-                          HDMI carries a solid picture with no alpha channel, so
-                          the box cannot be see-through — your video would never
-                          show through it. It is left undrawn rather than turned
-                          into a solid slab. Size and position above still
-                          apply. Switch this output to IP to use these.
+                          {t.outputPreview.ipOnlyBody}
                         </p>
                         <p className="text-[10px] text-text-muted leading-snug">
-                          The frame is black — key it out with a luma key in
-                          your streaming software.
+                          {t.outputPreview.ipOnlyLuma}
                         </p>
                       </div>
                     )}
 
                     <Segmented
-                      label="Horizontal"
+                      label={t.outputPreview.horizontal}
                       options={BOX_MODES}
                       value={boxModeX}
                       onChange={setBoxModeX}
@@ -803,7 +799,7 @@ export default function OutputPreview({
                     />
                     <div className={boxModeX === "padding" ? "" : "hidden"}>
                       <Slider
-                        label="Padding X"
+                        label={t.outputPreview.paddingX}
                         min={0}
                         max={25}
                         step={0.5}
@@ -814,7 +810,7 @@ export default function OutputPreview({
                     </div>
                     <div className={boxModeX === "size" ? "" : "hidden"}>
                       <Slider
-                        label="Width"
+                        label={t.outputPreview.width}
                         min={25}
                         max={250}
                         inputRef={widthRef}
@@ -824,7 +820,7 @@ export default function OutputPreview({
                     </div>
 
                     <Segmented
-                      label="Vertical"
+                      label={t.outputPreview.vertical}
                       options={BOX_MODES}
                       value={boxModeY}
                       onChange={setBoxModeY}
@@ -832,7 +828,7 @@ export default function OutputPreview({
                     />
                     <div className={boxModeY === "padding" ? "" : "hidden"}>
                       <Slider
-                        label="Padding Y"
+                        label={t.outputPreview.paddingY}
                         min={0}
                         max={25}
                         step={0.5}
@@ -843,7 +839,7 @@ export default function OutputPreview({
                     </div>
                     <div className={boxModeY === "size" ? "" : "hidden"}>
                       <Slider
-                        label="Height"
+                        label={t.outputPreview.height}
                         min={15}
                         max={250}
                         inputRef={heightRef}
@@ -852,7 +848,7 @@ export default function OutputPreview({
                       />
                     </div>
                     <Slider
-                      label="Radius"
+                      label={t.outputPreview.radius}
                       min={0}
                       max={100}
                       inputRef={radiusRef}
@@ -860,7 +856,7 @@ export default function OutputPreview({
                       disabled={!transparent}
                     />
                     <Slider
-                      label="Darkness"
+                      label={t.outputPreview.darkness}
                       min={0}
                       max={100}
                       inputRef={alphaRef}
@@ -868,7 +864,7 @@ export default function OutputPreview({
                       disabled={!transparent}
                     />
                     <Slider
-                      label="Soft edges"
+                      label={t.outputPreview.softEdges}
                       min={0}
                       max={600}
                       inputRef={edgeRef}
@@ -885,25 +881,25 @@ export default function OutputPreview({
                         type="text"
                         readOnly
                         value={url}
-                        placeholder="Start to get the address"
+                        placeholder={t.outputPreview.addressPlaceholder}
                         onFocus={(e) => e.currentTarget.select()}
                         className="flex-1 min-w-0 px-2 py-1 text-[11px] font-mono border border-border-secondary rounded bg-surface text-text-primary placeholder-text-muted focus:outline-none focus:ring-1 focus:ring-primary"
                       />
                       <button
                         onClick={copyUrl}
                         disabled={!url}
-                        title="Copy — paste into a browser source in your streaming software"
+                        title={t.outputPreview.copyHint}
                         className="flex items-center gap-1 shrink-0 px-2 py-1 text-[11px] font-semibold rounded border border-border-secondary text-text-secondary transition-colors hover:bg-surface-hover hover:text-text-primary disabled:opacity-40"
                       >
                         <Icon name={copied ? "Check" : "Copy"} size={12} />
-                        {copied ? "Copied" : "Copy"}
+                        {copied ? t.common.copied : t.common.copy}
                       </button>
                     </div>
 
                     {running && addresses.length > 1 && (
                       <div className="flex flex-wrap items-center gap-1">
                         <span className="text-[10px] text-text-muted">
-                          Adapter:
+                          {t.outputPreview.adapter}
                         </span>
                         {addresses.map((entry, i) => (
                           <button
@@ -924,19 +920,17 @@ export default function OutputPreview({
 
                     {netStatus?.error && (
                       <p className="text-[11px] text-danger">
-                        Could not start: {netStatus.error}
+                        {t.outputPreview.couldNotStart(netStatus.error)}
                       </p>
                     )}
                     {running && addresses.length === 0 && (
                       <p className="text-[11px] text-danger">
-                        No network address found — this machine is not on a LAN.
+                        {t.outputPreview.noNetworkAddress}
                       </p>
                     )}
                     {running && addresses.length > 0 && (
                       <p className="text-[10px] text-text-muted leading-snug">
-                        Add this address as a browser source in your streaming
-                        software. Both computers have to be on the same network,
-                        and the firewall must allow incoming connections.
+                        {t.outputPreview.browserSourceHint}
                       </p>
                     )}
                   </div>
@@ -968,7 +962,7 @@ export default function OutputPreview({
                       onPointerUp={endDrag}
                       onPointerCancel={endDrag}
                       onDoubleClick={resetPosition}
-                      title="Drag to move — snaps to centre and to the default position, double-click to reset"
+                      title={t.outputPreview.dragHint}
                       className={`absolute inset-0 ${dragging ? "cursor-grabbing" : "cursor-grab"}`}
                     />
                   </>

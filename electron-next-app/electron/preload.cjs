@@ -2,6 +2,7 @@ const { contextBridge, ipcRenderer } = require("electron");
 
 contextBridge.exposeInMainWorld("api", {
   ping: () => "pong",
+  setLanguage: (lang) => ipcRenderer.send("set-language", lang),
   getDisplays: () => ipcRenderer.invoke("get-displays"),
   openHdmi: (displayId) => ipcRenderer.invoke("open-hdmi", displayId),
   updateHdmi: (html) => ipcRenderer.send("update-hdmi", html),

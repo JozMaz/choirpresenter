@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import type { OrgRecord, SongBookKey, Songbook } from "../lib/types";
 import { SONGBOOK_NAMES } from "../lib/songAdapter";
 import { ALL_SONGBOOK_KEYS, type Catalog } from "../lib/access";
+import { useI18n } from "../lib/i18n/context";
 import Checkbox from "./Checkbox";
 
 const BIBLE_OPTIONS = [
@@ -14,6 +15,7 @@ const BIBLE_OPTIONS = [
 const MESSAGE_DEFAULTS = { count: 534, sizeMb: 41 };
 
 export default function AdminPanel() {
+  const { t } = useI18n();
   const [orgs, setOrgs] = useState<OrgRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -33,12 +35,12 @@ export default function AdminPanel() {
     const result = await window.api?.adminListOrgs();
     setLoading(false);
     if (!result?.ok) {
-      setError(result?.error || "Could not load organizations.");
+      setError(result?.error || t.admin.loadOrgsFailed);
       return;
     }
     setError(null);
     setOrgs(result.data?.orgs ?? []);
-  }, []);
+  }, [t]);
 
   useEffect(() => {
     let cancelled = false;
@@ -71,7 +73,7 @@ export default function AdminPanel() {
     const result = await window.api?.adminCreateOrg(name);
     setBusy(false);
     if (!result?.ok || !result.data) {
-      setError(result?.error || "Could not create the organization.");
+      setError(result?.error || t.admin.createOrgFailed);
       return;
     }
     setError(null);
@@ -85,7 +87,7 @@ export default function AdminPanel() {
     const result = await window.api?.adminRotateToken(org.orgId);
     setBusy(false);
     if (!result?.ok || !result.data) {
-      setError(result?.error || "Could not issue a new token.");
+      setError(result?.error || t.admin.rotateTokenFailed);
       return;
     }
     setError(null);
@@ -98,7 +100,7 @@ export default function AdminPanel() {
     const result = await window.api?.adminPatchOrg(org.orgId, { revoked });
     setBusy(false);
     if (!result?.ok) {
-      setError(result?.error || "Could not change the organization.");
+      setError(result?.error || t.admin.patchOrgFailed);
       return;
     }
     setError(null);
@@ -129,8 +131,8 @@ export default function AdminPanel() {
     setBusy(false);
     setCatalogMsg(
       result?.ok
-        ? "Published. Everyone sees this on their next start."
-        : result?.error || "Could not update the catalog.",
+        ? t.admin.catalogPublished
+        : result?.error || t.admin.catalogFailed,
     );
   };
 
@@ -143,11 +145,11 @@ export default function AdminPanel() {
     try {
       parsed = JSON.parse(picked.contents) as Songbook;
     } catch {
-      setImportMsg(`${picked.name} is not valid JSON.`);
+      setImportMsg(t.admin.notValidJson(picked.name));
       return;
     }
     if (!parsed || !Array.isArray(parsed.songs)) {
-      setImportMsg(`${picked.name} has no "songs" array — wrong file?`);
+      setImportMsg(t.admin.noSongsArray(picked.name));
       return;
     }
 
@@ -159,10 +161,10 @@ export default function AdminPanel() {
     setBusy(false);
     setImportMsg(
       result?.cloudOk
-        ? `Imported ${parsed.songs.length} songs into ${SONGBOOK_NAMES[target]} and uploaded.`
+        ? t.admin.imported(parsed.songs.length, SONGBOOK_NAMES[target])
         : result?.localOk
-          ? `Saved ${parsed.songs.length} songs locally, but the upload failed.`
-          : "Import failed.",
+          ? t.admin.importedLocalOnly(parsed.songs.length)
+          : t.admin.importFailed,
     );
   };
 
@@ -178,10 +180,9 @@ export default function AdminPanel() {
       {error && <p className="text-[11px] text-danger leading-snug">{error}</p>}
 
       <div className={card}>
-        <label className={label}>Organizations</label>
+        <label className={label}>{t.admin.organizations}</label>
         <p className="text-[11px] text-text-muted mb-2 leading-snug">
-          Each organization gets one token, usable on any number of devices.
-          Revoking locks every one of them on the next check.
+          {t.admin.organizationsHint}
         </p>
 
         <div className="flex gap-1.5 mb-3">
@@ -191,7 +192,7 @@ export default function AdminPanel() {
             onKeyDown={(e) => {
               if (e.key === "Enter") void createOrg();
             }}
-            placeholder="New organization name"
+            placeholder={t.admin.newOrgPlaceholder}
             className={input}
           />
           <button
@@ -199,14 +200,14 @@ export default function AdminPanel() {
             disabled={!newName.trim() || busy}
             className="px-3 py-1 shrink-0 text-xs font-semibold rounded bg-primary text-white transition-colors enabled:hover:bg-primary-hover disabled:bg-disabled"
           >
-            Create
+            {t.admin.create}
           </button>
         </div>
 
         {issuedToken && (
           <div className="mb-3 p-2 rounded border border-amber-500/40 bg-amber-500/10">
             <p className="text-[11px] font-semibold text-amber-600 mb-1">
-              Copy this token now — it is never shown again.
+              {t.admin.copyTokenNow}
             </p>
             <code className="block text-[11px] break-all text-text-primary select-all">
               {issuedToken}
@@ -215,15 +216,15 @@ export default function AdminPanel() {
               onClick={() => setIssuedToken(null)}
               className="mt-1.5 text-[10px] font-semibold text-text-muted hover:text-text-primary transition-colors"
             >
-              I saved it
+              {t.admin.tokenSavedAck}
             </button>
           </div>
         )}
 
         {loading ? (
-          <p className="text-[11px] text-text-muted">Loading...</p>
+          <p className="text-[11px] text-text-muted">{t.common.loading}</p>
         ) : orgs.length === 0 ? (
-          <p className="text-[11px] text-text-muted">No organizations yet.</p>
+          <p className="text-[11px] text-text-muted">{t.admin.noOrgs}</p>
         ) : (
           <div className="space-y-1">
             {orgs.map((org) => (
@@ -235,29 +236,29 @@ export default function AdminPanel() {
                   {org.name}
                   {org.role === "admin" && (
                     <span className="ml-1.5 text-[9px] font-semibold text-primary uppercase">
-                      admin
+                      {t.admin.roleAdmin}
                     </span>
                   )}
                   {org.revokedAt && (
                     <span className="ml-1.5 text-[9px] font-semibold text-danger uppercase">
-                      revoked
+                      {t.admin.revoked}
                     </span>
                   )}
                 </span>
                 <button
                   onClick={() => void rotateToken(org)}
                   disabled={busy}
-                  title="Issue a new token — the old one stops working"
+                  title={t.admin.newTokenHint}
                   className={smallButton}
                 >
-                  New token
+                  {t.admin.newToken}
                 </button>
                 <button
                   onClick={() => void setRevoked(org, !org.revokedAt)}
                   disabled={busy}
                   className={smallButton}
                 >
-                  {org.revokedAt ? "Restore" : "Revoke"}
+                  {org.revokedAt ? t.admin.restore : t.admin.revoke}
                 </button>
               </div>
             ))}
@@ -266,9 +267,9 @@ export default function AdminPanel() {
       </div>
 
       <div className={card}>
-        <label className={label}>Offered for download</label>
+        <label className={label}>{t.admin.offered}</label>
         <p className="text-[11px] text-text-muted mb-2 leading-snug">
-          What everyone gets to pick from when they start the app.
+          {t.admin.offeredHint}
         </p>
         <div className="space-y-1.5 mb-3">
           {ALL_SONGBOOK_KEYS.map((key) => (
@@ -306,7 +307,7 @@ export default function AdminPanel() {
             onChange={(checked) =>
               setOffered((prev) => ({ ...prev, messages: checked }))
             }
-            label="Sermons"
+            label={t.common.sermons}
           />
         </div>
         <button
@@ -314,7 +315,7 @@ export default function AdminPanel() {
           disabled={busy}
           className="px-3 py-1 text-xs font-semibold rounded bg-primary text-white transition-colors enabled:hover:bg-primary-hover disabled:bg-disabled"
         >
-          Publish selection
+          {t.admin.publish}
         </button>
         {catalogMsg && (
           <p className="mt-2 text-[11px] text-text-muted leading-snug">
@@ -324,10 +325,9 @@ export default function AdminPanel() {
       </div>
 
       <div className={card}>
-        <label className={label}>Import a songbook JSON</label>
+        <label className={label}>{t.admin.importSongbook}</label>
         <p className="text-[11px] text-text-muted mb-2 leading-snug">
-          Replaces the whole target songbook with the file an organization sent
-          you, and uploads it.
+          {t.admin.importSongbookHint}
         </p>
         <div className="flex flex-wrap gap-1.5">
           {ALL_SONGBOOK_KEYS.map((key) => (

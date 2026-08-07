@@ -4,8 +4,11 @@ import { useEffect, useRef, useState } from "react";
 import type { EditorSection, SectionType, SongBookKey } from "../lib/types";
 import { MUSICAL_KEYS, formatKey } from "../lib/musicKeys";
 import { deriveSequence, sectionLabel } from "../lib/songSchema";
+import { SONGBOOK_NAMES } from "../lib/songAdapter";
 import { generateSlides, toLines } from "../lib/songSerialize";
 import { translationLabelFor } from "../lib/language";
+import { useI18n } from "../lib/i18n/context";
+import type { Dict } from "../lib/i18n";
 import AutoTextarea from "./AutoTextarea";
 import Checkbox from "./Checkbox";
 import ConfirmDialog from "./ConfirmDialog";
@@ -45,15 +48,6 @@ const createEmptySection = (): EditorSection => ({
   slidesLocked: false,
 });
 
-const BOOK_LABEL: Record<TargetBook, string> = {
-  custom: "My Songs",
-  newSong: "New Song",
-  newSongPlGb: "New Song PL/EN",
-  pielgrzym: "Pielgrzym",
-  roboczy: "Roboczy",
-  children: "Children",
-};
-
 const ALL_TARGETS: TargetBook[] = [
   "custom",
   "newSong",
@@ -63,22 +57,24 @@ const ALL_TARGETS: TargetBook[] = [
   "children",
 ];
 
-const bookOptionsFor = (canEditCloud: boolean) =>
+const bookLabels = (t: Dict): Record<TargetBook, string> => ({
+  custom: t.common.mySongs,
+  newSong: SONGBOOK_NAMES.newSong,
+  newSongPlGb: SONGBOOK_NAMES.newSongPlGb,
+  pielgrzym: SONGBOOK_NAMES.pielgrzym,
+  roboczy: SONGBOOK_NAMES.roboczy,
+  children: SONGBOOK_NAMES.children,
+});
+
+const bookOptionsFor = (canEditCloud: boolean, labels: Record<TargetBook, string>) =>
   (canEditCloud ? ALL_TARGETS : (["custom"] as TargetBook[])).map((b) => ({
     value: b,
-    label: BOOK_LABEL[b],
+    label: labels[b],
   }));
 
 const KEY_OPTIONS = [
   { value: "", label: "—" },
   ...MUSICAL_KEYS.map((k: string) => ({ value: k, label: formatKey(k) })),
-];
-
-const TYPE_OPTIONS: { value: SectionType; label: string }[] = [
-  { value: "verse", label: "Verse" },
-  { value: "chorus", label: "Chorus" },
-  { value: "bridge", label: "Bridge" },
-  { value: "ending", label: "Ending" },
 ];
 
 const SECTION_STYLE: Record<SectionType, string> = {
@@ -97,6 +93,14 @@ export default function SongEditor({
   onDelete,
   onCancel,
 }: SongEditorProps) {
+  const { t } = useI18n();
+  const BOOK_LABEL = bookLabels(t);
+  const TYPE_OPTIONS: { value: SectionType; label: string }[] = [
+    { value: "verse", label: t.sectionTypes.verse },
+    { value: "chorus", label: t.sectionTypes.chorus },
+    { value: "bridge", label: t.sectionTypes.bridge },
+    { value: "ending", label: t.sectionTypes.ending },
+  ];
   const [songName, setSongName] = useState(initial?.songName ?? "");
   const [songIdInput, setSongIdInput] = useState<string>(
     initial?.songNumber != null ? String(initial.songNumber) : "",
@@ -294,21 +298,25 @@ export default function SongEditor({
       <div className="max-w-6xl mx-auto space-y-2">
         <div className="sticky top-0 z-10 bg-surface border border-border-secondary rounded-md shadow-sm px-3 py-2 flex justify-between items-center gap-2">
           <h2 className="text-sm font-semibold text-text-primary leading-tight">
-            {isEditing ? "Edit song" : "New song"}
+            {isEditing ? t.editor.editTitle : t.editor.newTitle}
           </h2>
           <div className="flex gap-1.5 shrink-0">
             <button
               onClick={onCancel}
               className="px-2.5 py-1 text-xs font-semibold text-text-secondary border border-border rounded hover:bg-surface-hover transition-colors"
             >
-              Cancel
+              {t.common.cancel}
             </button>
             <button
               onClick={handleSave}
               disabled={!canSave}
               className="px-3 py-1 text-xs font-semibold bg-primary text-white rounded hover:bg-primary-hover disabled:bg-disabled transition-colors"
             >
-              {isMoving ? "Update & Move" : isEditing ? "Update" : "Save"}
+              {isMoving
+                ? t.editor.updateAndMove
+                : isEditing
+                  ? t.editor.update
+                  : t.editor.save}
             </button>
           </div>
         </div>
@@ -322,16 +330,16 @@ export default function SongEditor({
           <div className="text-[11px] text-text-secondary leading-snug">
             <p>
               <span className="font-semibold text-text-primary">
-                Slides are used only by outputs set to “Saved” in Settings →
-                “What goes on each output”.
+                {t.editor.slidesInfoBold}
               </span>{" "}
-              Outputs set to “Whole” or “Max lines” split the text themselves
-              and ignore them.
+              {t.editor.slidesInfoRest}
             </p>
             <p>
-              Your own split is kept only once a section is marked{" "}
-              <span className="font-semibold text-amber-600">edited</span> —
-              otherwise it is split again on every load.
+              {t.editor.keepSplitBefore}
+              <span className="font-semibold text-amber-600">
+                {t.editor.keepSplitBold}
+              </span>
+              {t.editor.keepSplitAfter}
             </p>
           </div>
         </div>
@@ -339,16 +347,16 @@ export default function SongEditor({
         <div className="bg-surface-secondary border border-border-secondary rounded-md p-2.5 space-y-2">
           <div className="flex gap-2">
             <div className="flex-1 min-w-0">
-              <label className={labelClass}>Songbook</label>
+              <label className={labelClass}>{t.editor.songbook}</label>
               <Dropdown
                 value={targetBook}
-                options={bookOptionsFor(canEditCloud)}
+                options={bookOptionsFor(canEditCloud, BOOK_LABEL)}
                 onChange={(v) => setTargetBook(v)}
                 disabled={lockTargetBook}
               />
             </div>
             <div className="w-16">
-              <label className={labelClass}>Number</label>
+              <label className={labelClass}>{t.editor.number}</label>
               <input
                 type="text"
                 inputMode="numeric"
@@ -361,7 +369,7 @@ export default function SongEditor({
               />
             </div>
             <div className="w-20">
-              <label className={labelClass}>Key</label>
+              <label className={labelClass}>{t.editor.key}</label>
               <Dropdown
                 value={musicKey}
                 options={KEY_OPTIONS}
@@ -371,26 +379,27 @@ export default function SongEditor({
           </div>
           {isMoving && (
             <p className="text-[11px] text-amber-500 leading-snug">
-              On save, the song will be moved from{" "}
-              <span className="font-semibold">{BOOK_LABEL[initialBook!]}</span>{" "}
-              to <span className="font-semibold">{BOOK_LABEL[targetBook]}</span>
-              .
+              {t.editor.moveNoticeBefore}
+              <span className="font-semibold">{BOOK_LABEL[initialBook!]}</span>
+              {t.editor.moveNoticeMiddle}
+              <span className="font-semibold">{BOOK_LABEL[targetBook]}</span>
+              {t.editor.moveNoticeAfter}
             </p>
           )}
 
           <div className="flex gap-2">
             <div className="flex-1 min-w-0">
-              <label className={labelClass}>Song name</label>
+              <label className={labelClass}>{t.editor.songName}</label>
               <input
                 type="text"
                 value={songName}
                 onChange={(e) => setSongName(e.target.value)}
-                placeholder="Title…"
+                placeholder={t.editor.songNamePlaceholder}
                 className={inputClass}
               />
             </div>
             <div className="flex-1 min-w-0">
-              <label className={labelClass}>Sequence</label>
+              <label className={labelClass}>{t.editor.sequence}</label>
               <div className="px-2 py-1 bg-surface border border-border rounded text-[11px] font-mono text-text-secondary min-h-6.5 truncate">
                 {deriveSequence(sections) || "—"}
               </div>
@@ -399,7 +408,9 @@ export default function SongEditor({
 
           {hasTranslation && (
             <div>
-              <label className={labelClass}>Translation label</label>
+              <label className={labelClass}>
+                {t.editor.translationLabel}
+              </label>
               <input
                 type="text"
                 value={translationLabel}
@@ -408,9 +419,7 @@ export default function SongEditor({
                 className={inputClass}
               />
               <p className="text-[10px] text-text-muted mt-0.5 leading-snug">
-                Shown in the box on the divider above the translation. Leave
-                empty to use the songbook setting, or „{detectedLabel}” detected
-                from the text.
+                {t.editor.translationLabelHint(detectedLabel)}
               </p>
             </div>
           )}
@@ -440,11 +449,11 @@ export default function SongEditor({
                 value={numberDrafts[section.id] ?? String(section.number)}
                 onChange={(e) => typeNumber(section.id, e.target.value)}
                 onBlur={() => clearNumberDraft(section.id)}
-                title="Section number — digits only"
+                title={t.editor.sectionNumberHint}
                 className="w-13 px-2 py-1 text-xs text-center rounded border border-border-secondary bg-surface text-text-primary transition-colors hover:bg-surface-hover focus:outline-none focus:ring-1 focus:ring-primary"
               />
               <span className="text-[11px] text-text-muted truncate">
-                {sectionLabel(section.type, section.number)}
+                {sectionLabel(section.type, section.number, t.sectionTypes)}
               </span>
               <div className="flex-1" />
               <button
@@ -458,17 +467,17 @@ export default function SongEditor({
                 }`}
                 title={
                   section.showAlt
-                    ? "Remove the second language from this section"
-                    : "Add a second language to this section"
+                    ? t.editor.removeSecondLanguage
+                    : t.editor.addSecondLanguage
                 }
               >
-                Drugi język
+                {t.editor.secondLanguage}
               </button>
               {sections.length > 1 && (
                 <button
                   onClick={() => removeSection(section.id)}
                   className="w-6 h-6 flex items-center justify-center rounded text-text-muted hover:bg-danger hover:text-white transition-colors"
-                  title="Remove section"
+                  title={t.editor.removeSection}
                 >
                   <Icon name="Trash2" size={12} />
                 </button>
@@ -478,7 +487,7 @@ export default function SongEditor({
             <div className="grid grid-cols-1 lg:grid-cols-2">
               <div className="p-2 space-y-1.5 lg:border-r border-border">
                 <div className="text-[10px] font-semibold text-text-muted uppercase tracking-wide">
-                  Output 1 — full section
+                  {t.editor.primaryColumn}
                 </div>
                 <AutoTextarea
                   ref={registerLines(section.id)}
@@ -487,10 +496,10 @@ export default function SongEditor({
                     patchSection(section.id, { lines: e.target.value })
                   }
                   onKeyDown={(e) => handleLinesKeyDown(e, section, idx)}
-                  placeholder="Lyrics…"
+                  placeholder={t.editor.lyricsPlaceholder}
                   minRows={3}
                   className={areaClass}
-                  title="Press Enter twice to move to the next section"
+                  title={t.editor.enterTwiceHint}
                 />
                 {section.showAlt && (
                   <>
@@ -499,7 +508,7 @@ export default function SongEditor({
                       onChange={(e) =>
                         patchSection(section.id, { altLines: e.target.value })
                       }
-                      placeholder="Second language…"
+                      placeholder={t.editor.secondLanguagePlaceholder}
                       minRows={3}
                       className={`${areaClass} italic`}
                     />
@@ -508,8 +517,8 @@ export default function SongEditor({
                       onChange={(v) =>
                         patchSection(section.id, { isTranslation: v })
                       }
-                      label="Second language is a translation only"
-                      hint={`Italics + a „${secondaryLabel}” box on the divider. Leave off when the second language is also sung.`}
+                      label={t.editor.translationOnly}
+                      hint={t.editor.translationOnlyHint(secondaryLabel)}
                     />
                   </>
                 )}
@@ -518,11 +527,11 @@ export default function SongEditor({
               <div className="p-2 space-y-1.5 bg-surface-secondary/30">
                 <div className="flex items-center gap-1.5">
                   <span className="text-[10px] font-semibold text-text-muted uppercase tracking-wide">
-                    Output 2 — slides
+                    {t.editor.slidesColumn}
                   </span>
                   {section.slidesLocked && (
                     <span className="text-[10px] px-1.5 py-0.5 rounded bg-amber-500/15 text-amber-600 font-semibold">
-                      edited
+                      {t.editor.editedBadge}
                     </span>
                   )}
                   <div className="flex-1" />
@@ -530,15 +539,15 @@ export default function SongEditor({
                     <button
                       onClick={() => regenerateSlides(section.id)}
                       className="text-[10px] px-1.5 py-0.5 rounded border border-border text-text-secondary hover:bg-surface-hover hover:text-text-primary transition-colors"
-                      title="Discard manual edits and split again"
+                      title={t.editor.regenerateHint}
                     >
-                      Regenerate
+                      {t.editor.regenerate}
                     </button>
                   )}
                   <button
                     onClick={() => addSlide(section.id)}
                     className="w-5 h-5 flex items-center justify-center rounded text-text-muted hover:bg-surface-hover hover:text-text-primary transition-colors"
-                    title="Add slide"
+                    title={t.editor.addSlide}
                   >
                     <Icon name="Plus" size={12} />
                   </button>
@@ -546,7 +555,7 @@ export default function SongEditor({
 
                 {section.slides.length === 0 && (
                   <p className="text-[11px] text-text-muted py-1">
-                    Slides appear here as you type on the left.
+                    {t.editor.slidesHint}
                   </p>
                 )}
 
@@ -563,7 +572,7 @@ export default function SongEditor({
                       <button
                         onClick={() => removeSlide(section.id, slide.id)}
                         className="w-4.5 h-4.5 flex items-center justify-center rounded text-text-muted hover:bg-danger hover:text-white transition-colors"
-                        title="Remove slide"
+                        title={t.editor.removeSlide}
                       >
                         <Icon name="X" size={10} />
                       </button>
@@ -604,32 +613,33 @@ export default function SongEditor({
           className="w-full py-2 border-2 border-dashed border-border-secondary rounded-md text-text-muted text-xs font-semibold hover:border-primary hover:text-primary hover:bg-surface-hover transition-colors flex items-center justify-center gap-1.5"
         >
           <Icon name="Plus" size={14} />
-          Add Section
+          {t.editor.addSection}
         </button>
 
         {isEditing && onDelete && (
           <div className="border border-danger/30 bg-danger/5 rounded-md px-2.5 py-2 flex justify-between items-center gap-2">
             <p className="text-[11px] text-text-muted">
               <span className="font-semibold text-text-primary">
-                Delete this song.
+                {t.editor.deleteBold}
               </span>{" "}
-              This action is irreversible.
+              {t.editor.deleteRest}
             </p>
             <button
               onClick={() => setConfirmDelete(true)}
               className="px-2.5 py-1 bg-danger text-white rounded text-xs font-semibold hover:bg-danger-hover transition-colors shrink-0"
             >
-              Delete
+              {t.common.delete}
             </button>
           </div>
         )}
         <ConfirmDialog
           open={confirmDelete}
-          title="Delete this song?"
-          message={`"${songName}" will be permanently removed from the songbook${
-            targetBook === "custom" ? " on this device" : " for everyone"
-          }.`}
-          confirmLabel="Delete"
+          title={t.editor.confirmDeleteTitle}
+          message={t.editor.confirmDeleteMessage(
+            songName,
+            targetBook !== "custom",
+          )}
+          confirmLabel={t.common.delete}
           icon="Trash2"
           onConfirm={() => {
             setConfirmDelete(false);

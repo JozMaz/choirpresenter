@@ -2,7 +2,7 @@
 
 import { Allotment } from "allotment";
 import "allotment/dist/style.css";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useEffectEvent, useMemo, useState } from "react";
 
 import { getMessageText } from "./lib/messageIndex";
 
@@ -56,10 +56,30 @@ import { displayGroupFor, migrateProfiles } from "./lib/outputProfiles";
 import { buildSongFromEditor, songToEditorSections } from "./lib/songSerialize";
 import { toApiItem, SONGBOOK_NAMES } from "./lib/songAdapter";
 import { splitVerseIntoParts } from "./lib/bibleSlides";
-import { BIBLE_LABELS, type BibleKey } from "./lib/bibleData";
+import {
+  BIBLE_LABELS,
+  getBookByFlatIndex,
+  type BibleKey,
+} from "./lib/bibleData";
+import {
+  entryFor,
+  entryKeyFor,
+  moveEntry,
+  readSelectedEntries,
+  songEntryKey,
+  type BibleChapterRef,
+  type SelectedEntry,
+} from "./lib/selection";
 import { buildSectionsAndSlides } from "./lib/songSchema";
 
 import { usePersistedState } from "./hooks/usePersistedState";
+import { useI18n } from "./lib/i18n/context";
+import {
+  recallOpened,
+  rememberOpened,
+  TAB_KIND,
+  useLibraryState,
+} from "./lib/libraryState";
 import { watchSystemTheme } from "./lib/theme";
 import { useSongPlayer } from "./hooks/useSongPlayer";
 import { useHdmiSync } from "./hooks/useHdmiSync";
@@ -158,9 +178,15 @@ function HomeContent({
   selection,
   onChangeSelection,
 }: HomeContentProps) {
-  const [selectedItems, setSelectedItems] = usePersistedState<ApiItem[]>(
+  const { t } = useI18n();
+  const [selectedItems, setSelectedItems] = usePersistedState<SelectedEntry[]>(
     LS_KEYS.selectedItems,
     [],
+    readSelectedEntries,
+  );
+  const selectedKeys = useMemo(
+    () => new Set(selectedItems.map((entry) => entry.key)),
+    [selectedItems],
   );
   const [customSongEntries, setCustomSongEntries] = usePersistedState<
     SongEntry[]
@@ -276,7 +302,7 @@ function HomeContent({
       if (!parsed) return;
       setCatalog(parsed);
       if (localStorage.getItem(LS_KEYS.seenCatalog) === parsed.version) return;
-      const fresh = newlyOffered(parsed, selection);
+      const fresh = newlyOffered(parsed, selection, t.common.sermons);
       if (fresh.length > 0) setFreshOffers(fresh);
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -285,7 +311,7 @@ function HomeContent({
   const selectionSummary = [
     ...selection.songbooks.map((key) => SONGBOOK_NAMES[key]),
     ...selection.bibles.map((key) => BIBLE_LABELS[key as BibleKey] ?? key),
-    ...(selection.messages ? ["sermons"] : []),
+    ...(selection.messages ? [t.common.sermonsLower] : []),
   ].join(", ");
 
   const dismissOffers = () => {
@@ -316,14 +342,14 @@ function HomeContent({
     setBlackoutActive(false);
   };
 
-  const showBibleChapter = (
-    rawVerses: { Text?: string; ID?: number }[],
-    bookName: string,
-    chapter: number,
-    bibleName: string,
-    autoSelectVerseIdx?: number,
-    goLive = false,
-  ) => {
+  const buildBibleItem = (ref: BibleChapterRef): ApiItem | null => {
+    const { bibleKey, bookFlatIdx, chapterIdx, bookName, bibleName } = ref;
+    const bible = bibles[bibleKey];
+    const book = bible ? getBookByFlatIndex(bible, bookFlatIdx) : null;
+    const rawVerses = (book?.book.Chapters ?? [])[chapterIdx]?.Verses;
+    if (!rawVerses) return null;
+
+    const chapter = chapterIdx + 1;
     const title = `${bookName} ${chapter}`;
     const entries = rawVerses.map((v, i) => {
       const lines = (v.Text || "").split("\n").filter((l) => l.trim() !== "");
@@ -342,7 +368,7 @@ function HomeContent({
       .map((v, i) => `${v.ID || i + 1}. ${v.Text || ""}`)
       .join("\n\n");
 
-    const item: ApiItem = {
+    return {
       id: `bible:${bookName}:${chapter}`,
       number: null,
       title,
@@ -357,26 +383,33 @@ function HomeContent({
       fullText,
       searchIndex: "",
       isBible: true,
-      bibleMeta: { bookName, chapter, bibleName },
+      bibleMeta: { bookName, chapter, bibleName, bibleKey, bookFlatIdx },
     };
+  };
+
+  const showBibleChapter = (
+    ref: BibleChapterRef,
+    autoSelectVerseIdx?: number,
+    goLive = false,
+  ) => {
+    const item = buildBibleItem(ref);
+    if (!item) return;
     player.sendFirstPart(item);
     if (
       autoSelectVerseIdx !== undefined &&
       autoSelectVerseIdx >= 0 &&
-      autoSelectVerseIdx < sections.length
+      autoSelectVerseIdx < item.sections.length
     ) {
       player.goToSection(autoSelectVerseIdx, goLive);
     }
   };
 
-  const showMessage = async (
+  const buildMessageItem = async (
     dateKey: string,
     title: string,
-    chunkIdx?: number,
-    goLive = false,
-  ) => {
+  ): Promise<ApiItem | null> => {
     const entry = await getMessageText(dateKey);
-    if (!entry || entry.chunks.length === 0) return;
+    if (!entry || entry.chunks.length === 0) return null;
 
     const withOrder = entry.chunks.map((c, i) => {
       const isFirstOfParagraph = i === 0 || entry.chunks[i - 1].pnum !== c.pnum;
@@ -392,7 +425,7 @@ function HomeContent({
     const { sections, slides } = buildSectionsAndSlides(withOrder);
     const fullText = withOrder.map((v) => v.lines.join("\n")).join("\n\n");
 
-    const item: ApiItem = {
+    return {
       id: `msg:${dateKey}`,
       number: null,
       title,
@@ -414,18 +447,53 @@ function HomeContent({
         pnums: entry.chunks.map((c) => c.pnum),
       },
     };
+  };
+
+  const showMessage = async (
+    dateKey: string,
+    title: string,
+    chunkIdx?: number,
+    goLive = false,
+  ) => {
+    const item = await buildMessageItem(dateKey, title);
+    if (!item) return;
     player.sendFirstPart(item);
-    if (chunkIdx !== undefined && chunkIdx >= 0 && chunkIdx < sections.length) {
+    if (
+      chunkIdx !== undefined &&
+      chunkIdx >= 0 &&
+      chunkIdx < item.sections.length
+    ) {
       player.goToSection(chunkIdx, goLive);
     }
   };
 
+  // The list keeps the spot you were on, so an entry added while reading a
+  // verse comes back at that verse rather than at the top of the chapter.
   const selectItem = (item: ApiItem) => {
-    if (
-      !selectedItems.find((i) => i.id === item.id && i.source === item.source)
-    ) {
-      setSelectedItems([...selectedItems, item]);
+    const entry = entryFor(item, player.stepIndex);
+    if (!entry || selectedKeys.has(entry.key)) return;
+    setSelectedItems([...selectedItems, entry]);
+  };
+
+  const itemForEntry = async (entry: SelectedEntry): Promise<ApiItem | null> =>
+    entry.kind === "song"
+      ? entry.item
+      : entry.kind === "bible"
+        ? buildBibleItem(entry)
+        : await buildMessageItem(entry.dateKey, entry.title);
+
+  // A single click only pre-selects: the entry opens in the panel at its saved
+  // spot and the outputs keep whatever they were showing.
+  const openEntry = async (entry: SelectedEntry, goLive: boolean) => {
+    const item = await itemForEntry(entry);
+    if (!item) return;
+    if (!goLive) {
+      player.restoreOpened(item, entry.stepIndex);
+      return;
     }
+    player.sendFirstPart(item);
+    player.goToStep(Math.max(0, entry.stepIndex));
+    setBlackoutActive(false);
   };
 
   const openEditorForNew = () => setEditorContext({});
@@ -478,26 +546,27 @@ function HomeContent({
     if (player.currentSong?.id === song.id) {
       player.sendFirstPart(item);
     }
-    setSelectedItems((prev) => prev.map((i) => (i.id === song.id ? item : i)));
+    const key = songEntryKey(book, song.id);
+    setSelectedItems((prev) =>
+      prev.map((entry) =>
+        entry.kind === "song" && entry.item.id === song.id
+          ? { ...entry, key, item }
+          : entry,
+      ),
+    );
   };
 
   const handleSave = async (state: EditorState) => {
     const editing = editorContext?.editing;
     const target = state.targetBook;
     if (target !== "custom" && !canEditCloud) {
-      showSaveStatus(
-        "error",
-        "Published songbooks can only be changed by the administrator.",
-      );
+      showSaveStatus("error", t.songSave.publishedAdminOnly);
       return;
     }
     const sourceBook = editing?.source;
     const isMove = !!editing && sourceBook !== target;
     if (isMove && sourceBook !== "custom" && !canEditCloud) {
-      showSaveStatus(
-        "error",
-        "Songs cannot be moved out of a published songbook — only the administrator can change it.",
-      );
+      showSaveStatus("error", t.songSave.cannotMoveOutOfPublished);
       return;
     }
 
@@ -525,26 +594,17 @@ function HomeContent({
             editing!.id,
           );
           if (!del.localOk) {
-            showSaveStatus(
-              "error",
-              "Copied to My Songs, but removing from the old songbook failed — song is now in both.",
-            );
+            showSaveStatus("error", t.songSave.copiedButRemoveFailed);
           } else if (del.cloudOk === true) {
-            showSaveStatus("saved", "Moved to My Songs");
+            showSaveStatus("saved", t.songSave.movedToMySongs);
           } else if (del.cloudOk === false) {
-            showSaveStatus(
-              "error",
-              "Moved locally, but cloud sync failed — others still see it in the old songbook.",
-            );
+            showSaveStatus("error", t.songSave.movedLocallyCloudFailed);
           } else {
-            showSaveStatus("local", "Moved to My Songs (this device only)");
+            showSaveStatus("local", t.songSave.movedToMySongsLocal);
           }
         } catch (err) {
           console.error("Move delete failed:", err);
-          showSaveStatus(
-            "error",
-            "Copied to My Songs, but removing from the old songbook failed — song is now in both.",
-          );
+          showSaveStatus("error", t.songSave.copiedButRemoveFailed);
         }
       }
       refreshSongRefs(song, "custom");
@@ -558,14 +618,11 @@ function HomeContent({
       result = await upsertSong(target, song);
     } catch (err) {
       console.error("Save failed:", err);
-      showSaveStatus("error", "Save failed — nothing was changed.");
+      showSaveStatus("error", t.songSave.saveFailed);
       return;
     }
     if (result.refused || !result.localOk) {
-      showSaveStatus(
-        "error",
-        "Save was refused — nothing was changed. Check the data and try again.",
-      );
+      showSaveStatus("error", t.songSave.saveRefused);
       return;
     }
 
@@ -576,14 +633,11 @@ function HomeContent({
           customSongEntries.filter((s) => s.id !== editing!.id),
         );
         if (result.cloudOk === true) {
-          showSaveStatus("saved", `Moved to ${targetName}`);
+          showSaveStatus("saved", t.songSave.movedTo(targetName));
         } else if (result.cloudOk === false) {
-          showSaveStatus(
-            "error",
-            `Moved to ${targetName} locally, but cloud sync failed.`,
-          );
+          showSaveStatus("error", t.songSave.movedToCloudFailed(targetName));
         } else {
-          showSaveStatus("local", `Moved to ${targetName} (this device only)`);
+          showSaveStatus("local", t.songSave.movedToLocalOnly(targetName));
         }
       } else {
         try {
@@ -592,35 +646,23 @@ function HomeContent({
             editing!.id,
           );
           if (!del.localOk) {
-            showSaveStatus(
-              "error",
-              `Added to ${targetName}, but removing from the old songbook failed — song is now in both.`,
-            );
+            showSaveStatus("error", t.songSave.addedButRemoveFailed(targetName));
           } else if (result.cloudOk === true && del.cloudOk === true) {
-            showSaveStatus("saved", `Moved to ${targetName}`);
+            showSaveStatus("saved", t.songSave.movedTo(targetName));
           } else if (result.cloudOk === false || del.cloudOk === false) {
-            showSaveStatus(
-              "error",
-              `Moved to ${targetName} locally, but cloud sync failed.`,
-            );
+            showSaveStatus("error", t.songSave.movedToCloudFailed(targetName));
           } else {
-            showSaveStatus(
-              "local",
-              `Moved to ${targetName} (this device only)`,
-            );
+            showSaveStatus("local", t.songSave.movedToLocalOnly(targetName));
           }
         } catch (err) {
           console.error("Move delete failed:", err);
-          showSaveStatus(
-            "error",
-            `Added to ${targetName}, but removing from the old songbook failed — song is now in both.`,
-          );
+          showSaveStatus("error", t.songSave.addedButRemoveFailed(targetName));
         }
       }
     } else {
       if (result.cloudOk === true) showSaveStatus("saved");
       else if (result.cloudOk === false)
-        showSaveStatus("error", "Saved locally, but cloud sync failed.");
+        showSaveStatus("error", t.songSave.savedLocallyCloudFailed);
       else showSaveStatus("local");
     }
 
@@ -641,10 +683,7 @@ function HomeContent({
     }
 
     if (!canEditCloud) {
-      showSaveStatus(
-        "error",
-        "Published songbooks can only be changed by the administrator.",
-      );
+      showSaveStatus("error", t.songSave.publishedAdminOnly);
       return;
     }
 
@@ -654,18 +693,19 @@ function HomeContent({
       result = await deleteSongById(editing.source, editing.id);
     } catch (err) {
       console.error("Delete failed:", err);
-      showSaveStatus("error", "Delete failed — the song was kept.");
+      showSaveStatus("error", t.songSave.deleteFailed);
       return;
     }
 
     if (!result.localOk) {
-      showSaveStatus("error", "Delete failed — the song was kept.");
+      showSaveStatus("error", t.songSave.deleteFailed);
       return;
     }
-    if (result.cloudOk === true) showSaveStatus("saved", "Song deleted");
+    if (result.cloudOk === true)
+      showSaveStatus("saved", t.songSave.songDeleted);
     else if (result.cloudOk === false)
-      showSaveStatus("error", "Deleted locally, but cloud sync failed.");
-    else showSaveStatus("local", "Deleted on this device only");
+      showSaveStatus("error", t.songSave.deletedLocallyCloudFailed);
+    else showSaveStatus("local", t.songSave.deletedThisDeviceOnly);
 
     closeEditor();
   };
@@ -729,6 +769,34 @@ function HomeContent({
       );
     }
   }, [outputs, hdmiActive, hdmi2Active, netStatus]);
+
+  const activeKey = entryKeyFor(player.currentSong);
+
+  const libraryTab = useLibraryState((s) => s.tab);
+  const currentSong = player.currentSong;
+  const currentStepIndex = player.stepIndex;
+
+  // Every tab keeps the last thing opened from it together with the part the
+  // operator stopped on.
+  useEffect(() => {
+    if (!currentSong) return;
+    const entry = entryFor(currentSong, currentStepIndex);
+    if (entry) rememberOpened(entry, currentStepIndex);
+  }, [currentSong, currentStepIndex]);
+
+  const restoreOpenedForTab = useEffectEvent(async () => {
+    const remembered = recallOpened(TAB_KIND[libraryTab]);
+    if (!remembered || remembered.entry.key === activeKey) return;
+    const item = await itemForEntry(remembered.entry);
+    // A sermon is read from disk, so a quick second switch can land first.
+    if (item && useLibraryState.getState().tab === libraryTab) {
+      player.restoreOpened(item, remembered.stepIndex);
+    }
+  });
+
+  useEffect(() => {
+    void restoreOpenedForTab();
+  }, [libraryTab]);
 
   const liveGroup = displayGroupFor(player.liveSong ?? {});
 
@@ -895,17 +963,21 @@ function HomeContent({
               <Allotment.Pane preferredSize={leftSizes ? undefined : "40%"}>
                 <SelectedPanel
                   customSongs={customSongs}
-                  selectedItems={selectedItems}
-                  activeItem={player.currentSong}
+                  entries={selectedItems}
+                  activeKey={activeKey}
+                  liveKey={entryKeyFor(player.liveSong)}
+                  selectedKeys={selectedKeys}
+                  onOpen={(entry, goLive) => void openEntry(entry, goLive)}
                   onShow={player.sendFirstPart}
                   onPlay={playItem}
                   onSelect={selectItem}
-                  onRemove={(id, source) =>
+                  onRemove={(key) =>
                     setSelectedItems(
-                      selectedItems.filter(
-                        (item) => !(item.id === id && item.source === source),
-                      ),
+                      selectedItems.filter((entry) => entry.key !== key),
                     )
+                  }
+                  onReorder={(fromKey, toKey) =>
+                    setSelectedItems(moveEntry(selectedItems, fromKey, toKey))
                   }
                   onClearAll={() => setSelectedItems([])}
                 />
@@ -937,7 +1009,7 @@ function HomeContent({
                     <SongbooksTree
                       dataByBook={dataByBook}
                       bookNames={bookNames}
-                      selectedItems={selectedItems}
+                      selectedKeys={selectedKeys}
                       activeItem={player.currentSong}
                       onShow={player.sendFirstPart}
                       onPlay={playItem}
@@ -976,6 +1048,7 @@ function HomeContent({
                       currentSong={player.currentSong}
                       plan={player.plan}
                       activeStepIndex={player.stepIndex}
+                      liveStepIndex={player.liveStepIndex}
                       onGoToStep={(idx) => {
                         player.goToStep(idx);
                         setBlackoutActive(false);
@@ -985,6 +1058,7 @@ function HomeContent({
                     <SectionsList
                       currentSong={player.currentSong}
                       activeSectionIndex={activeSectionIndex}
+                      liveSectionIndex={player.liveSectionIndex}
                       onGoToSection={(idx) => {
                         player.goToSection(idx);
                         setBlackoutActive(false);
@@ -1003,38 +1077,21 @@ function HomeContent({
                   saveStatus={saveStatus}
                   saveDetail={saveDetail}
                   onToggleSelected={
-                    !editorMode &&
-                    player.currentSong &&
-                    !player.currentSong.isBible &&
-                    !player.currentSong.isMessage
+                    !editorMode && player.currentSong && activeKey
                       ? () => {
-                          const song = player.currentSong!;
-                          const isIn = selectedItems.some(
-                            (i) => i.id === song.id && i.source === song.source,
-                          );
-                          if (isIn) {
+                          if (selectedKeys.has(activeKey)) {
                             setSelectedItems(
                               selectedItems.filter(
-                                (i) =>
-                                  !(
-                                    i.id === song.id && i.source === song.source
-                                  ),
+                                (entry) => entry.key !== activeKey,
                               ),
                             );
                           } else {
-                            selectItem(song);
+                            selectItem(player.currentSong!);
                           }
                         }
                       : undefined
                   }
-                  isInSelected={
-                    !!player.currentSong &&
-                    selectedItems.some(
-                      (i) =>
-                        i.id === player.currentSong!.id &&
-                        i.source === player.currentSong!.source,
-                    )
-                  }
+                  isInSelected={!!activeKey && selectedKeys.has(activeKey)}
                   onStartNewSong={
                     editorMode ||
                     player.currentSong?.isBible ||
@@ -1070,7 +1127,9 @@ function HomeContent({
                             : [...prev, id],
                         )
                       }
-                      title={`Show or hide the ${outputName(outputs[id], id)} preview`}
+                      title={t.preview.toggleVisibility(
+                        outputName(outputs[id], id),
+                      )}
                       className={`px-2.5 py-1 text-[10px] font-semibold rounded transition-colors ${
                         visiblePreviews.includes(id)
                           ? "bg-primary text-white"
@@ -1143,7 +1202,7 @@ function HomeContent({
         <div className="fixed bottom-4 left-1/2 -translate-x-1/2 z-30 flex items-center gap-3 px-4 py-2.5 rounded-lg bg-surface border border-primary/40 shadow-xl">
           <Icon name="Sparkles" size={15} className="shrink-0 text-primary" />
           <span className="text-xs text-text-secondary">
-            New content available:{" "}
+            {t.offers.newContentAvailable}{" "}
             <span className="font-semibold text-text-primary">
               {freshOffers.join(", ")}
             </span>
@@ -1155,11 +1214,11 @@ function HomeContent({
             }}
             className="px-2.5 py-1 text-xs font-semibold rounded bg-primary text-white transition-colors hover:bg-primary-hover"
           >
-            Download
+            {t.offers.download}
           </button>
           <button
             onClick={dismissOffers}
-            title="Not now"
+            title={t.offers.notNow}
             className="w-6 h-6 flex items-center justify-center rounded text-text-muted hover:bg-surface-hover hover:text-text-primary transition-colors"
           >
             <Icon name="X" size={12} />
@@ -1185,15 +1244,13 @@ function HomeContent({
   );
 }
 
-import { bootstrap, type BootstrapProgress } from "./lib/cloudData";
+import {
+  bootstrap,
+  NO_CACHE_ERROR,
+  type BootstrapProgress,
+} from "./lib/cloudData";
 
 type Stage = "checking" | "auth" | "picker" | "booting" | "ready";
-
-const LOCAL_DEV_IDENTITY: Identity = {
-  role: "admin",
-  orgId: "local",
-  name: "Local data mode",
-};
 
 const FULL_SELECTION: ContentSelection = {
   songbooks: ALL_SONGBOOK_KEYS,
@@ -1202,6 +1259,7 @@ const FULL_SELECTION: ContentSelection = {
 };
 
 export default function Home() {
+  const { t } = useI18n();
   const [stage, setStage] = useState<Stage>("checking");
   const [identity, setIdentity] = useState<Identity | null>(null);
   const [authMessage, setAuthMessage] = useState<string | null>(null);
@@ -1220,7 +1278,11 @@ export default function Home() {
     bootstrap((p) => setBootProgress(p), sel)
       .then(() => setStage("ready"))
       .catch((err: Error) =>
-        setBootError(err?.message || "Failed to bootstrap data."),
+        setBootError(
+          err?.message === NO_CACHE_ERROR
+            ? t.boot.noCloudNoCache
+            : err?.message || t.boot.bootstrapFailed,
+        ),
       );
   };
 
@@ -1250,7 +1312,11 @@ export default function Home() {
       }
 
       if (await api.dataLocalMode?.()) {
-        setIdentity(LOCAL_DEV_IDENTITY);
+        setIdentity({
+          role: "admin",
+          orgId: "local",
+          name: t.boot.localDataMode,
+        });
         startBoot(FULL_SELECTION);
         return;
       }
@@ -1281,9 +1347,7 @@ export default function Home() {
       }
 
       if (result.status === 401 && cachedRaw) {
-        setAuthMessage(
-          "The token is no longer valid. Ask the administrator for a new one.",
-        );
+        setAuthMessage(t.boot.tokenExpired);
         localStorage.removeItem(LS_KEYS.identity);
       }
       setStage("auth");
@@ -1296,11 +1360,11 @@ export default function Home() {
       <main className="h-screen w-screen bg-background flex items-center justify-center">
         <div className="max-w-md text-center px-8">
           <h2 className="text-xl font-semibold text-text-primary mb-2">
-            Cannot load data
+            {t.boot.cannotLoadData}
           </h2>
           <p className="text-sm text-text-muted">{bootError}</p>
           <p className="text-xs text-text-muted mt-4">
-            Connect to internet and restart the app.
+            {t.boot.connectAndRestart}
           </p>
         </div>
       </main>
@@ -1331,7 +1395,7 @@ export default function Home() {
   if (stage === "checking") {
     return (
       <main className="h-screen w-screen bg-background">
-        <LoadingScreen progress={0} message="Connecting..." />
+        <LoadingScreen progress={0} message={t.boot.connecting} />
       </main>
     );
   }
@@ -1339,10 +1403,10 @@ export default function Home() {
   if (stage === "booting") {
     const label =
       bootProgress.phase === "downloading"
-        ? `Downloading data — ${bootProgress.currentFile ?? ""}`
+        ? t.boot.downloadingData(bootProgress.currentFile ?? "")
         : bootProgress.phase === "checking"
-          ? "Checking for data..."
-          : "Connecting...";
+          ? t.boot.checkingForData
+          : t.boot.connecting;
     return (
       <main className="h-screen w-screen bg-background">
         <LoadingScreen progress={bootProgress.ratio} message={label} />

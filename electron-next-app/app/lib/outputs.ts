@@ -11,11 +11,6 @@ export const OUTPUT_TYPE_LABELS: Record<OutputType, string> = {
   ip: "IP",
 };
 
-export const OUTPUT_MODE_LABELS: Record<OutputMode, string> = {
-  fullscreen: "Fullscreen",
-  lowerThirds: "Lower thirds",
-};
-
 export const DEFAULT_OUTPUT_NAMES: Record<OutputId, string> = {
   out1: "Output 1",
   out2: "Output 2",

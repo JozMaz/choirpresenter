@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { DisplayInfo } from "../lib/types";
+import { useI18n } from "../lib/i18n/context";
 import Icon from "./Icon";
 
 interface MonitorPickerProps {
@@ -26,6 +27,7 @@ export default function MonitorPicker({
   hdmiActive,
   onToggleHdmi,
 }: MonitorPickerProps) {
+  const { t } = useI18n();
   const [open, setOpen] = useState(false);
   const [alignRight, setAlignRight] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
@@ -79,13 +81,13 @@ export default function MonitorPicker({
         onClick={toggleOpen}
         disabled={hdmiActive}
         title={
-          hdmiActive ? "Stop the output to change monitor" : "Choose monitor"
+          hdmiActive ? t.monitorPicker.stopToChange : t.monitorPicker.choose
         }
         className="flex items-center gap-1.5 text-xs px-2 py-1 rounded border border-border-secondary bg-surface text-text-primary hover:bg-surface-hover disabled:opacity-50 transition-colors"
       >
         <Icon name="Monitor" size={13} />
         <span className="truncate max-w-32">
-          {selected ? selected.label : "Choose monitor"}
+          {selected ? selected.label : t.monitorPicker.choose}
         </span>
         <Icon name={open ? "ChevronUp" : "ChevronDown"} size={13} />
       </button>
@@ -98,9 +100,9 @@ export default function MonitorPicker({
         >
           {available.length === 0 ? (
             <p className="px-3 py-2 text-[11px] text-text-muted leading-relaxed">
-              No other monitor connected.
+              {t.monitorPicker.noOtherMonitor}
               <span className="block text-text-secondary mt-0.5">
-                Connect a projector or a second screen.
+                {t.monitorPicker.connectProjector}
               </span>
             </p>
           ) : (
@@ -149,7 +151,7 @@ export default function MonitorPicker({
             : "bg-primary hover:bg-primary-hover text-white disabled:opacity-40"
         }`}
       >
-        {hdmiActive ? "Stop" : "Start"}
+        {hdmiActive ? t.monitorPicker.stop : t.monitorPicker.start}
       </button>
     </div>
   );

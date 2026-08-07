@@ -6,12 +6,6 @@ export type DisplayGroup = "songs" | "bible" | "messages";
 
 export const DISPLAY_GROUPS: DisplayGroup[] = ["songs", "bible", "messages"];
 
-export const DISPLAY_GROUP_LABELS: Record<DisplayGroup, string> = {
-  songs: "Songs",
-  bible: "Bible",
-  messages: "Sermons",
-};
-
 export type ProfileField =
   | "fadeMs"
   | "textScale"

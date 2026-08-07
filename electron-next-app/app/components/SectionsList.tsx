@@ -6,6 +6,7 @@ import { getSongSections } from "../lib/songAdapter";
 import { normalizeSearch } from "../lib/textUtils";
 import { highlightSnippet, type HighlightResult } from "../lib/searchHighlight";
 import { useDebounced } from "../hooks/useDebounced";
+import { useI18n } from "../lib/i18n/context";
 import Icon from "./Icon";
 
 const floatingNavClass =
@@ -14,6 +15,7 @@ const floatingNavClass =
 interface SectionsListProps {
   currentSong: ApiItem | null;
   activeSectionIndex: number;
+  liveSectionIndex: number;
   onGoToSection: (idx: number) => void;
 }
 
@@ -40,7 +42,7 @@ function HighlightedSectionText({
             className={`rounded px-0.5 ${
               ordinal === currentHit
                 ? "bg-amber-400 text-black font-semibold"
-                : "bg-primary/30 text-text-primary"
+                : "bg-primary/10 text-text-primary"
             }`}
           >
             {seg.text}
@@ -54,8 +56,10 @@ function HighlightedSectionText({
 export default function SectionsList({
   currentSong,
   activeSectionIndex,
+  liveSectionIndex,
   onGoToSection,
 }: SectionsListProps) {
+  const { t } = useI18n();
   const activeRef = useRef<HTMLButtonElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
   const lastSongIdRef = useRef<string | null>(null);
@@ -66,8 +70,8 @@ export default function SectionsList({
   const isMessage = !!currentSong?.isMessage;
 
   const sections = useMemo<SectionListItem[]>(
-    () => (currentSong ? getSongSections(currentSong) : []),
-    [currentSong],
+    () => (currentSong ? getSongSections(currentSong, t.sectionTypes) : []),
+    [currentSong, t],
   );
 
   const tokens = useMemo(() => {
@@ -171,7 +175,7 @@ export default function SectionsList({
     <>
       {!currentSong && (
         <div className="flex-1 flex items-center justify-center text-text-muted text-sm">
-          Pick a song, Bible chapter or message to begin.
+          {t.sectionsList.pickSomething}
         </div>
       )}
 
@@ -180,7 +184,7 @@ export default function SectionsList({
           <div className="relative flex-1 min-w-0">
             <input
               type="text"
-              placeholder="Find in this message..."
+              placeholder={t.sectionsList.findInMessage}
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               onKeyDown={(e) => {
@@ -197,7 +201,7 @@ export default function SectionsList({
             {searchTerm && (
               <button
                 onClick={() => setSearchTerm("")}
-                title="Clear (Esc)"
+                title={t.sectionsList.clearEsc}
                 className="absolute right-1 top-1/2 -translate-y-1/2 w-5 h-5 flex items-center justify-center rounded text-text-muted hover:text-text-primary hover:bg-surface-hover transition-colors"
               >
                 <Icon name="X" size={12} />
@@ -207,7 +211,7 @@ export default function SectionsList({
           <button
             onClick={() => stepHit(-1)}
             disabled={totalHits === 0}
-            title="Previous match (Shift+Enter)"
+            title={t.sectionsList.previousMatch}
             className="w-6 h-6 shrink-0 flex items-center justify-center rounded border border-border-secondary text-text-secondary hover:bg-surface-hover hover:text-text-primary disabled:opacity-40 transition-colors"
           >
             <Icon name="ChevronUp" size={12} />
@@ -215,7 +219,7 @@ export default function SectionsList({
           <button
             onClick={() => stepHit(1)}
             disabled={totalHits === 0}
-            title="Next match (Enter)"
+            title={t.sectionsList.nextMatch}
             className="w-6 h-6 shrink-0 flex items-center justify-center rounded border border-border-secondary text-text-secondary hover:bg-surface-hover hover:text-text-primary disabled:opacity-40 transition-colors"
           >
             <Icon name="ChevronDown" size={12} />
@@ -238,7 +242,9 @@ export default function SectionsList({
               }
             >
               {sections.map((section: SectionListItem, idx: number) => {
-                const isActive = idx === activeSectionIndex;
+                const isLive = idx === liveSectionIndex;
+                const isPreselected = idx === activeSectionIndex && !isLive;
+                const isActive = isLive || isPreselected;
                 const isBible = currentSong.isBible || currentSong.isMessage;
                 const hl = highlights?.[idx];
                 return (
@@ -249,18 +255,20 @@ export default function SectionsList({
                     className={`w-full text-left rounded border transition-colors flex items-start ${
                       isBible ? "px-2 py-0.5 gap-1.5" : "px-2 py-1 gap-2"
                     } ${
-                      isActive
+                      isLive
                         ? "bg-primary border-primary text-white"
-                        : isBible
-                          ? "border-transparent text-text-secondary hover:bg-surface-hover"
-                          : "bg-surface-secondary border-border text-text-secondary hover:bg-surface-hover"
+                        : isPreselected
+                          ? "bg-amber-500/20 border-amber-500 text-text-primary"
+                          : isBible
+                            ? "border-transparent text-text-secondary hover:bg-surface-hover"
+                            : "bg-surface-secondary border-border text-text-secondary hover:bg-surface-hover"
                     }`}
                   >
                     {section.label && (
                       <span
                         className={`text-xs font-semibold shrink-0 ${
                           isBible ? "min-w-5" : "w-16 pt-0.5"
-                        } ${isActive ? "text-white" : "text-text-primary"}`}
+                        } ${isLive ? "text-white" : "text-text-primary"}`}
                       >
                         {section.label}
                       </span>
@@ -269,7 +277,7 @@ export default function SectionsList({
                       {currentSong.isMessage || currentSong.isBible ? (
                         <div
                           className={`text-xs whitespace-pre-wrap ${
-                            isActive ? "text-white" : "text-text-secondary"
+                            isLive ? "text-white" : "text-text-secondary"
                           }`}
                         >
                           {hl ? (
@@ -287,7 +295,7 @@ export default function SectionsList({
                           {section.previewPrimary && (
                             <span
                               className={`text-xs truncate ${
-                                isActive ? "text-white" : "text-text-secondary"
+                                isLive ? "text-white" : "text-text-secondary"
                               }`}
                             >
                               {section.previewPrimary}
@@ -296,7 +304,7 @@ export default function SectionsList({
                           {section.previewPrimary2 && (
                             <span
                               className={`text-xs truncate ${
-                                isActive ? "text-white" : "text-text-secondary"
+                                isLive ? "text-white" : "text-text-secondary"
                               }`}
                             >
                               {section.previewPrimary2}
@@ -305,7 +313,7 @@ export default function SectionsList({
                           {section.previewSecondary && (
                             <span
                               className={`text-xs truncate italic ${
-                                isActive ? "text-white/80" : "text-text-muted"
+                                isLive ? "text-white/80" : "text-text-muted"
                               }`}
                             >
                               {section.previewSecondary}
@@ -327,8 +335,8 @@ export default function SectionsList({
                 disabled={!scrollNav.canScrollUp}
                 title={
                   scrollNav.canScrollUp
-                    ? "Jump to the top"
-                    : "Already at the top"
+                    ? t.sectionsList.jumpTop
+                    : t.sectionsList.alreadyTop
                 }
                 className={floatingNavClass}
               >
@@ -344,10 +352,10 @@ export default function SectionsList({
                 disabled={!scrollNav.activeOffScreen}
                 title={
                   scrollNav.activeOffScreen
-                    ? "Jump to the current chunk"
+                    ? t.sectionsList.jumpCurrent
                     : activeSectionIndex < 0
-                      ? "Nothing is live yet"
-                      : "The current chunk is already visible"
+                      ? t.sectionsList.nothingLive
+                      : t.sectionsList.currentVisible
                 }
                 className={floatingNavClass}
               >
@@ -358,8 +366,8 @@ export default function SectionsList({
                 disabled={!scrollNav.canScrollDown}
                 title={
                   scrollNav.canScrollDown
-                    ? "Jump to the bottom"
-                    : "Already at the bottom"
+                    ? t.sectionsList.jumpBottom
+                    : t.sectionsList.alreadyBottom
                 }
                 className={floatingNavClass}
               >

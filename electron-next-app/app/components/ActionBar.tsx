@@ -1,5 +1,6 @@
 "use client";
 
+import { useI18n } from "../lib/i18n/context";
 import Icon from "./Icon";
 
 interface ActionBarProps {
@@ -29,52 +30,51 @@ export default function ActionBar({
   saveStatus = "idle",
   saveDetail = null,
 }: ActionBarProps) {
+  const { t } = useI18n();
   return (
     <div className="shrink-0 flex items-center px-4 py-2">
       <div className="flex-1 flex items-center gap-2">
         {saveStatus === "saving" && (
           <span
             className="flex items-center gap-1 px-2 py-1 text-[11px] font-semibold text-text-secondary"
-            title={saveDetail ?? "Saving to cloud..."}
+            title={saveDetail ?? t.saveStatus.savingToCloud}
           >
             <Icon name="Loader" size={12} className="animate-spin" />
-            <span className="truncate max-w-72">{saveDetail ?? "Saving…"}</span>
+            <span className="truncate max-w-72">
+              {saveDetail ?? t.saveStatus.savingShort}
+            </span>
           </span>
         )}
         {saveStatus === "saved" && (
           <span
             className="flex items-center gap-1 px-2 py-1 text-[11px] font-semibold text-success"
-            title={saveDetail ?? "Synced to cloud"}
+            title={saveDetail ?? t.saveStatus.syncedToCloud}
           >
             <Icon name="Check" size={12} />
-            <span className="truncate max-w-72">{saveDetail ?? "Saved"}</span>
+            <span className="truncate max-w-72">
+              {saveDetail ?? t.saveStatus.saved}
+            </span>
           </span>
         )}
         {saveStatus === "local" && (
           <span
             className="flex items-center gap-1 px-2 py-1 text-[11px] font-semibold text-text-secondary"
-            title={
-              saveDetail ??
-              "No write token — saved only on this device. Open Settings to add a token."
-            }
+            title={saveDetail ?? t.saveStatus.localOnlyHint}
           >
             <Icon name="HardDrive" size={12} />
             <span className="truncate max-w-72">
-              {saveDetail ?? "Local only"}
+              {saveDetail ?? t.saveStatus.localOnly}
             </span>
           </span>
         )}
         {saveStatus === "error" && (
           <span
             className="flex items-center gap-1 px-2 py-1 text-[11px] font-semibold text-danger"
-            title={
-              saveDetail ??
-              "Cloud sync failed — check internet or your write token"
-            }
+            title={saveDetail ?? t.saveStatus.cloudFailedHint}
           >
             <Icon name="TriangleAlert" size={12} />
             <span className="truncate max-w-72">
-              {saveDetail ?? "Cloud failed"}
+              {saveDetail ?? t.saveStatus.cloudFailed}
             </span>
           </span>
         )}
@@ -88,8 +88,8 @@ export default function ActionBar({
             }`}
             title={
               isInSelected
-                ? "Remove from selected songs"
-                : "Add to selected songs"
+                ? t.actionBar.removeFromSelected
+                : t.actionBar.addToSelected
             }
           >
             <Icon name={isInSelected ? "Check" : "ListPlus"} size={15} />
@@ -99,7 +99,7 @@ export default function ActionBar({
           <button
             onClick={onEditCurrentSong}
             className="w-8 h-8 flex items-center justify-center bg-surface-secondary border border-border text-text-secondary rounded-full hover:bg-primary hover:text-white hover:border-primary transition-colors"
-            title="Edit current song"
+            title={t.actionBar.editCurrentSong}
           >
             <Icon name="Pencil" size={14} />
           </button>
@@ -108,7 +108,7 @@ export default function ActionBar({
           <button
             onClick={onStartNewSong}
             className="w-8 h-8 flex items-center justify-center bg-primary text-white rounded-full text-lg hover:bg-primary-hover transition-colors"
-            title="Add new song"
+            title={t.actionBar.addNewSong}
           >
             +
           </button>
@@ -120,14 +120,14 @@ export default function ActionBar({
             <button
               onClick={onNavigatePrev}
               className="w-8 h-8 flex items-center justify-center rounded-full bg-surface-secondary border border-border text-text-secondary hover:bg-primary hover:text-white hover:border-primary transition-colors"
-              title="Previous part (↑)"
+              title={t.actionBar.previousPart}
             >
               <Icon name="ChevronLeft" size={16} />
             </button>
             <button
               onClick={onNavigateNext}
               className="w-8 h-8 flex items-center justify-center rounded-full bg-surface-secondary border border-border text-text-secondary hover:bg-primary hover:text-white hover:border-primary transition-colors"
-              title="Next part (↓/Space)"
+              title={t.actionBar.nextPart}
             >
               <Icon name="ChevronRight" size={16} />
             </button>
@@ -137,7 +137,9 @@ export default function ActionBar({
       <div className="flex-1 flex items-center justify-end">
         <button
           onClick={onToggleBlackout}
-          title={blackoutActive ? "Show text (X)" : "Hide text (X)"}
+          title={
+            blackoutActive ? t.actionBar.showText : t.actionBar.hideText
+          }
           className={`w-8 h-8 flex items-center justify-center rounded-full border transition-colors ${
             blackoutActive
               ? "bg-primary border-primary text-white hover:bg-primary-hover"

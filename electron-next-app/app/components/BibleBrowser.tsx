@@ -22,12 +22,16 @@ import { normalizeSearch } from "../lib/textUtils";
 import { highlightSnippet } from "../lib/searchHighlight";
 import { scoreItemsAsync } from "../lib/asyncSearch";
 import { getBibleVerseIndex, type FlatVerse } from "../lib/bibleIndex";
+import type { BibleChapterRef } from "../lib/selection";
 import HighlightedText from "./HighlightedText";
 import { bibleGroupTint } from "../lib/bibleGroups";
 import Icon from "./Icon";
 import Dropdown, { type DropdownOption } from "./Dropdown";
 import ExactSearchToggle from "./ExactSearchToggle";
 import { useExactSearch } from "../hooks/useExactSearch";
+import { useI18n } from "../lib/i18n/context";
+import { useLibraryState } from "../lib/libraryState";
+import { useRememberedScroll } from "../hooks/useRememberedScroll";
 
 const VerseResultRow = memo(function VerseResultRow({
   v,
@@ -40,6 +44,7 @@ const VerseResultRow = memo(function VerseResultRow({
   exact: boolean;
   onClick: (v: FlatVerse, goLive: boolean) => void;
 }) {
+  const { t } = useI18n();
   const hl = useMemo(
     () =>
       highlightSnippet(v.text, tokens, {
@@ -53,7 +58,7 @@ const VerseResultRow = memo(function VerseResultRow({
     <div
       onClick={() => onClick(v, false)}
       onDoubleClick={() => onClick(v, true)}
-      title="Click to load, double-click to send to the outputs"
+      title={t.bibleBrowser.loadOrGoLive}
       className="flex items-start gap-2 px-2 py-0.5 bg-surface-secondary rounded border border-border hover:bg-surface-hover transition-colors cursor-pointer select-none"
     >
       <span className="text-xs font-semibold text-primary shrink-0 pt-0.5">
@@ -71,10 +76,7 @@ interface BibleBrowserProps {
   loaded: boolean;
   activeRef?: { bookName: string; chapter: number } | null;
   onShowChapter: (
-    verses: BibleVerse[],
-    bookName: string,
-    chapter: number,
-    bibleName: string,
+    ref: BibleChapterRef,
     autoSelectVerseIdx?: number,
     goLive?: boolean,
   ) => void;
@@ -86,13 +88,15 @@ export default function BibleBrowser({
   activeRef,
   onShowChapter,
 }: BibleBrowserProps) {
-  const [activeBible, setActiveBible] = useState<BibleKey>("gdanska");
-  const [openBookIdx, setOpenBookIdx] = useState<number | null>(null);
-  const [activeChapter, setActiveChapter] = useState<{
-    bookIdx: number;
-    chapterIdx: number;
-  } | null>(null);
-  const [searchTerm, setSearchTerm] = useState("");
+  const { t } = useI18n();
+  const activeBible = useLibraryState((s) => s.bibleKey);
+  const setActiveBible = useLibraryState((s) => s.setBibleKey);
+  const openBookIdx = useLibraryState((s) => s.openBibleBook);
+  const setOpenBookIdx = useLibraryState((s) => s.setOpenBibleBook);
+  const activeChapter = useLibraryState((s) => s.activeChapter);
+  const setActiveChapter = useLibraryState((s) => s.setActiveChapter);
+  const searchTerm = useLibraryState((s) => s.bibleSearch);
+  const setSearchTerm = useLibraryState((s) => s.setBibleSearch);
   const deferredTerm = useDeferredValue(searchTerm);
   const inputRef = useRef<HTMLInputElement>(null);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -122,10 +126,12 @@ export default function BibleBrowser({
     () =>
       (Object.keys(BIBLE_LABELS) as BibleKey[]).map((b) => ({
         value: b,
-        label: bibles[b] ? BIBLE_LABELS[b] : `${BIBLE_LABELS[b]} (unavailable)`,
+        label: bibles[b]
+          ? BIBLE_LABELS[b]
+          : t.bibleBrowser.unavailable(BIBLE_LABELS[b]),
         disabled: !bibles[b],
       })),
-    [bibles],
+    [bibles, t],
   );
 
   const openBook = useMemo(() => {
@@ -199,43 +205,44 @@ export default function BibleBrowser({
   const isSearching = normalizeSearch(deferredTerm).length > 0;
 
   const toggleBook = (idx: number) => {
-    setOpenBookIdx((prev) => (prev === idx ? null : idx));
+    setOpenBookIdx(openBookIdx === idx ? null : idx);
   };
 
+  const { ref: listRef, onScroll: onListScroll } = useRememberedScroll<HTMLDivElement>("bibles", !!bible);
+
   const handleChapterClick = (bookIdx: number, chapterIdx: number) => {
-    if (!bible) return;
-    const bookRef = getBookByFlatIndex(bible, bookIdx);
-    if (!bookRef) return;
-    const chapter = (bookRef.book.Chapters || [])[chapterIdx];
-    if (!chapter) return;
     setActiveChapter({ bookIdx, chapterIdx });
-    onShowChapter(
-      chapter.Verses || [],
-      stripBookAlias(getBookName(bookIdx)),
-      chapterIdx + 1,
-      BIBLE_LABELS[activeBible],
-    );
+    onShowChapter({
+      bibleKey: activeBible,
+      bookFlatIdx: bookIdx,
+      chapterIdx,
+      bookName: stripBookAlias(getBookName(bookIdx)),
+      bibleName: BIBLE_LABELS[activeBible],
+    });
   };
 
   const handleSearchResultClick = useCallback(
     (v: FlatVerse, goLive: boolean) => {
       setActiveChapter({ bookIdx: v.bookFlatIdx, chapterIdx: v.chapterIdx });
       onShowChapter(
-        v.chapterVerses,
-        v.bookReferenceName,
-        v.chapterIdx + 1,
-        BIBLE_LABELS[activeBible],
+        {
+          bibleKey: activeBible,
+          bookFlatIdx: v.bookFlatIdx,
+          chapterIdx: v.chapterIdx,
+          bookName: v.bookReferenceName,
+          bibleName: BIBLE_LABELS[activeBible],
+        },
         v.verseIdx,
         goLive,
       );
     },
-    [onShowChapter, activeBible],
+    [onShowChapter, activeBible, setActiveChapter],
   );
 
   if (!loaded) {
     return (
       <div className="h-full flex items-center justify-center text-text-muted text-sm">
-        Loading Bibles...
+        {t.bibleBrowser.loading}
       </div>
     );
   }
@@ -243,7 +250,7 @@ export default function BibleBrowser({
   if (!bible) {
     return (
       <div className="h-full flex items-center justify-center text-text-muted text-sm">
-        Failed to load Bibles
+        {t.bibleBrowser.failed}
       </div>
     );
   }
@@ -267,8 +274,8 @@ export default function BibleBrowser({
           <input
             ref={inputRef}
             type="text"
-            placeholder="Search verses..."
-            defaultValue=""
+            placeholder={t.bibleBrowser.searchPlaceholder}
+            defaultValue={searchTerm}
             onChange={(e) => scheduleSearch(e.target.value)}
             onKeyDown={(e) => {
               if (e.key === "Escape") clearSearch();
@@ -278,7 +285,7 @@ export default function BibleBrowser({
           {isSearching && (
             <button
               onClick={clearSearch}
-              title="Clear search (Esc)"
+              title={t.common.clearSearch}
               className="absolute right-1 top-1/2 -translate-y-1/2 w-5 h-5 flex items-center justify-center rounded text-text-muted hover:text-text-primary hover:bg-surface-hover transition-colors"
             >
               <Icon name="X" size={12} />
@@ -290,17 +297,20 @@ export default function BibleBrowser({
 
       {isSearching && (
         <div className="shrink-0 px-2 pt-1 text-[10px] text-text-muted">
-          Results: {searchResults.length}
-          {searchResults.length === 200 ? "+" : ""}
+          {t.common.results(searchResults.length, searchResults.length === 200)}
         </div>
       )}
 
-      <div className="flex-1 overflow-y-auto px-2 pt-2 pb-2 mt-1">
+      <div
+        ref={listRef}
+        onScroll={onListScroll}
+        className="flex-1 overflow-y-auto px-2 pt-2 pb-2 mt-1"
+      >
         {isSearching ? (
           <div>
             {searchResults.length === 0 && (
               <p className="text-text-muted text-xs text-center py-2">
-                No results
+                {t.common.noResults}
               </p>
             )}
             {groupedResults.map((group, gIdx) => (
@@ -323,7 +333,7 @@ export default function BibleBrowser({
             ))}
             {searchResults.length === 200 && (
               <p className="text-text-muted text-xs text-center py-2">
-                (showing first 200 results)
+                {t.common.showingFirst(200)}
               </p>
             )}
           </div>

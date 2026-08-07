@@ -2,6 +2,7 @@
 
 import type { ApiItem } from "../lib/types";
 import type { HighlightResult } from "../lib/searchHighlight";
+import { useI18n } from "../lib/i18n/context";
 import HighlightedText from "./HighlightedText";
 import Icon from "./Icon";
 
@@ -32,12 +33,13 @@ export default function SongListRow({
   bodyHl,
   bookLabel,
 }: SongListRowProps) {
+  const { t } = useI18n();
   const hasSnippet = bodyHl && bodyHl.segments.some((s) => s.hit);
   return (
     <div
       onClick={onShow}
       onDoubleClick={onPlay}
-      title={onPlay ? "Click to open, double-click to show it live" : undefined}
+      title={onPlay ? t.selectedPanel.openOrGoLive : undefined}
       className={`flex justify-between items-${hasSnippet ? "start" : "center"} gap-2 px-2 ${hasSnippet ? "py-1" : "py-0"} rounded border transition-colors cursor-pointer leading-tight ${
         isActive
           ? "bg-primary/20 border-primary"
@@ -77,7 +79,7 @@ export default function SongListRow({
               e.stopPropagation();
               onEdit();
             }}
-            title="Edit song"
+            title={t.songRow.editSong}
             className="w-5 h-5 flex items-center justify-center rounded text-text-secondary hover:bg-text-secondary hover:text-white transition-colors"
           >
             <Icon name="Pencil" size={11} />
@@ -89,7 +91,9 @@ export default function SongListRow({
             if (!isSelected) onSelect();
           }}
           disabled={isSelected}
-          title={isSelected ? "Already selected" : "Add to selection"}
+          title={
+            isSelected ? t.songRow.alreadySelected : t.songRow.addToSelection
+          }
           className="w-5 h-5 flex items-center justify-center rounded text-primary hover:bg-primary hover:text-white transition-colors disabled:text-disabled disabled:hover:bg-transparent"
         >
           <Icon name={isSelected ? "Check" : "ListPlus"} size={12} />

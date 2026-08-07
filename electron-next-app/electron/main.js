@@ -33,6 +33,31 @@ const NET_ROOT = () =>
 
 const NET_BASE_PORT = 7777;
 
+const NATIVE_STRINGS = {
+  en: {
+    pickSongbook: "Pick a songbook JSON",
+    backupDestination: "Choose backup destination",
+    exportHere: "Export here",
+    nothingSelected: "Nothing selected.",
+    noLocalData: "No local data to export yet.",
+  },
+  pl: {
+    pickSongbook: "Wybierz plik JSON ze śpiewnikiem",
+    backupDestination: "Wybierz folder na kopię zapasową",
+    exportHere: "Zapisz tutaj",
+    nothingSelected: "Nic nie wybrano.",
+    noLocalData: "Nie ma jeszcze żadnych danych do zapisania.",
+  },
+};
+
+let uiLanguage = "en";
+
+const L = () => NATIVE_STRINGS[uiLanguage] ?? NATIVE_STRINGS.en;
+
+ipcMain.on("set-language", (_, lang) => {
+  if (NATIVE_STRINGS[lang]) uiLanguage = lang;
+});
+
 const API_BASE = path.join(__dirname, "..", "api");
 
 const SONGBOOK_BUNDLE_PATHS = {
@@ -739,7 +764,7 @@ ipcMain.handle("admin-patch-catalog", (_, catalog) =>
 
 ipcMain.handle("pick-json-file", async () => {
   const result = await dialog.showOpenDialog(mainWindow, {
-    title: "Pick a songbook JSON",
+    title: L().pickSongbook,
     properties: ["openFile"],
     filters: [{ name: "JSON", extensions: ["json"] }],
   });
@@ -912,20 +937,20 @@ ipcMain.handle("export-data", async (_, categories, customSongsJson) => {
   const cats = (Array.isArray(categories) ? categories : []).filter(
     (c) => EXPORT_CATEGORIES[c],
   );
-  if (cats.length === 0) return { ok: false, error: "Nothing selected." };
+  if (cats.length === 0) return { ok: false, error: L().nothingSelected };
 
   const cacheDir = dataCacheDir();
   const available = cats.filter((c) =>
     fs.existsSync(path.join(cacheDir, EXPORT_CATEGORIES[c])),
   );
   if (available.length === 0) {
-    return { ok: false, error: "No local data to export yet." };
+    return { ok: false, error: L().noLocalData };
   }
 
   const res = await dialog.showOpenDialog(mainWindow ?? undefined, {
-    title: "Choose backup destination",
+    title: L().backupDestination,
     defaultPath: app.getPath("downloads"),
-    buttonLabel: "Export here",
+    buttonLabel: L().exportHere,
     properties: ["openDirectory", "createDirectory"],
   });
   if (res.canceled || !res.filePaths[0]) return { canceled: true };

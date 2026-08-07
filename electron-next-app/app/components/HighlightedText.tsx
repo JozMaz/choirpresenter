@@ -10,7 +10,7 @@ interface HighlightedTextProps {
 
 export default function HighlightedText({
   result,
-  hitClassName = "bg-primary/20 text-primary rounded px-0.5",
+  hitClassName = "bg-primary/10 text-text-primary rounded px-0.5",
   fallback,
 }: HighlightedTextProps) {
   if (!result.segments.length && fallback !== undefined) {

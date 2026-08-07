@@ -1,5 +1,6 @@
 "use client";
 
+import { useI18n } from "../lib/i18n/context";
 import Icon from "./Icon";
 
 interface ExactSearchToggleProps {
@@ -11,15 +12,12 @@ export default function ExactSearchToggle({
   exact,
   onChange,
 }: ExactSearchToggleProps) {
+  const { t } = useI18n();
   return (
     <button
       type="button"
       onClick={() => onChange(!exact)}
-      title={
-        exact
-          ? "Exact phrase: on — finds the typed words only as a whole phrase"
-          : "Exact phrase: off — finds all words anywhere"
-      }
+      title={exact ? t.exactSearch.on : t.exactSearch.off}
       aria-pressed={exact}
       className={`shrink-0 w-7 h-[26px] flex items-center justify-center rounded border transition-colors ${
         exact

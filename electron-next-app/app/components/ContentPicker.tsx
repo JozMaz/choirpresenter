@@ -10,7 +10,9 @@ import {
 import { SONGBOOK_NAMES } from "../lib/songAdapter";
 import { BIBLE_LABELS } from "../lib/bibleData";
 import { ALL_SONGBOOK_KEYS } from "../lib/access";
+import { useI18n } from "../lib/i18n/context";
 import Checkbox from "./Checkbox";
+import LanguageSwitch from "./LanguageSwitch";
 
 interface ContentPickerProps {
   catalog: Catalog | null;
@@ -31,6 +33,7 @@ export default function ContentPicker({
   onCancel,
   showEverything = false,
 }: ContentPickerProps) {
+  const { t } = useI18n();
   const [selection, setSelection] = useState<ContentSelection>(initial);
 
   const songbookOptions = showEverything
@@ -66,29 +69,34 @@ export default function ContentPicker({
   const body = (
     <>
       <div className={sectionClass}>
-        <span className={headingClass}>Songbooks</span>
+        <span className={headingClass}>{t.common.songbooks}</span>
         {songbookOptions.length > 0 ? (
           <div className="space-y-1.5">
-            {songbookOptions.map((book) => (
-              <Checkbox
-                key={book.key}
-                checked={selection.songbooks.includes(book.key)}
-                onChange={(checked) => toggleSongbook(book.key, checked)}
-                label={
-                  "songs" in book && book.songs
-                    ? `${book.name} (${book.songs})`
-                    : book.name
-                }
-              />
-            ))}
+            {songbookOptions.map((book) => {
+              const songs = "songs" in book ? Number(book.songs) : 0;
+              return (
+                <Checkbox
+                  key={book.key}
+                  checked={selection.songbooks.includes(book.key)}
+                  onChange={(checked) => toggleSongbook(book.key, checked)}
+                  label={
+                    songs
+                      ? t.contentPicker.songCount(book.name, songs)
+                      : book.name
+                  }
+                />
+              );
+            })}
           </div>
         ) : (
-          <p className="text-[11px] text-text-muted">Nothing published yet.</p>
+          <p className="text-[11px] text-text-muted">
+            {t.contentPicker.nothingPublished}
+          </p>
         )}
       </div>
 
       <div className={sectionClass}>
-        <span className={headingClass}>Bibles</span>
+        <span className={headingClass}>{t.common.bibles}</span>
         {bibleOptions.length > 0 ? (
           <div className="space-y-1.5">
             {bibleOptions.map((bible) => (
@@ -101,14 +109,18 @@ export default function ContentPicker({
             ))}
           </div>
         ) : (
-          <p className="text-[11px] text-text-muted">Nothing published yet.</p>
+          <p className="text-[11px] text-text-muted">
+            {t.contentPicker.nothingPublished}
+          </p>
         )}
       </div>
 
       <div className={sectionClass}>
-        <span className={headingClass}>Messages</span>
+        <span className={headingClass}>{t.common.messages}</span>
         {!offersMessages ? (
-          <p className="text-[11px] text-text-muted">Nothing published yet.</p>
+          <p className="text-[11px] text-text-muted">
+            {t.contentPicker.nothingPublished}
+          </p>
         ) : (
           <Checkbox
             checked={selection.messages}
@@ -117,12 +129,12 @@ export default function ContentPicker({
             }
             label={
               catalog?.messages?.count
-                ? `All sermons (${catalog.messages.count})`
-                : "All sermons"
+                ? t.contentPicker.allSermonsCount(catalog.messages.count)
+                : t.contentPicker.allSermons
             }
             hint={
               catalog?.messages?.sizeMb
-                ? `About ${catalog.messages.sizeMb} MB — downloaded as one set, not one by one.`
+                ? t.contentPicker.sizeHint(catalog.messages.sizeMb)
                 : undefined
             }
           />
@@ -135,29 +147,29 @@ export default function ContentPicker({
     <div className="flex items-center gap-2 pt-1">
       <p className="flex-1 text-[11px] text-text-muted leading-snug">
         {empty
-          ? "With nothing selected you can still write your own songs; the library stays hidden."
-          : "You can change this later in Settings."}
+          ? t.contentPicker.emptyHint
+          : t.contentPicker.changeLaterHint}
       </p>
       {asModal && onCancel ? (
         <button
           onClick={onCancel}
           className="px-3 py-1.5 text-xs font-semibold rounded border border-border text-text-secondary transition-colors enabled:hover:bg-surface-hover enabled:hover:text-text-primary"
         >
-          Cancel
+          {t.common.cancel}
         </button>
       ) : (
         <button
           onClick={onSkip}
           className="px-3 py-1.5 text-xs font-semibold rounded border border-border text-text-secondary transition-colors enabled:hover:bg-surface-hover enabled:hover:text-text-primary"
         >
-          Skip
+          {t.contentPicker.skip}
         </button>
       )}
       <button
         onClick={() => onConfirm(selection)}
         className="px-3 py-1.5 text-xs font-semibold rounded bg-primary text-white transition-colors hover:bg-primary-hover"
       >
-        {empty ? "Continue without data" : "Download"}
+        {empty ? t.contentPicker.continueWithoutData : t.contentPicker.download}
       </button>
     </div>
   );
@@ -168,11 +180,10 @@ export default function ContentPicker({
         <div className="w-full max-w-md max-h-[85vh] flex flex-col bg-surface rounded-lg border border-border shadow-xl">
           <div className="shrink-0 px-6 pt-5 pb-2">
             <h2 className="text-lg font-semibold text-text-primary">
-              Downloaded content
+              {t.contentPicker.modalTitle}
             </h2>
             <p className="text-[11px] text-text-muted leading-snug mt-1">
-              Unchecking something does not delete what is already on the disk;
-              it stops being kept up to date.
+              {t.contentPicker.modalHint}
             </p>
           </div>
           <div className="flex-1 overflow-y-auto px-6 pb-2 space-y-3">
@@ -188,11 +199,14 @@ export default function ContentPicker({
     <main className="h-screen w-screen bg-background flex items-center justify-center p-6">
       <div className="w-full max-w-md bg-surface border border-border rounded-lg shadow-xl px-6 py-6 space-y-3">
         <div>
-          <h1 className="text-lg font-semibold text-text-primary">
-            What should we download?
-          </h1>
+          <div className="flex items-start gap-2">
+            <h1 className="flex-1 text-lg font-semibold text-text-primary">
+              {t.contentPicker.firstRunTitle}
+            </h1>
+            <LanguageSwitch />
+          </div>
           <p className="text-[11px] text-text-muted leading-snug mt-1">
-            Only what you pick is downloaded and kept up to date.
+            {t.contentPicker.firstRunHint}
           </p>
         </div>
         {body}

@@ -1,3 +1,5 @@
+import type { BibleKey } from "./bibleData";
+
 export interface DisplayInfo {
   id: number;
   label: string;
@@ -99,6 +101,7 @@ declare global {
   interface Window {
     api?: {
       ping: () => string;
+      setLanguage: (lang: string) => void;
       getDisplays: () => Promise<DisplayInfo[]>;
       openHdmi: (displayId: number) => Promise<void>;
       updateHdmi: (html: string) => void;
@@ -230,6 +233,8 @@ export interface BibleMeta {
   bookName: string;
   chapter: number;
   bibleName: string;
+  bibleKey: BibleKey;
+  bookFlatIdx: number;
 }
 
 export interface MessageMeta {
@@ -250,7 +255,6 @@ export interface Slide extends SlideText {
 }
 
 export interface Section extends SlideText {
-  label: string;
   type: SectionType;
   number: number;
   slideStart: number;
