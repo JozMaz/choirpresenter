@@ -225,6 +225,9 @@ export const en = {
     fitOn:
       "Preview is enlarged to stay readable — the output is unchanged",
     fitOff: "Preview matches the output exactly",
+    delayBadge: (seconds: string) => `+${seconds} s`,
+    delayBadgeHint: (seconds: string) =>
+      `This output runs ${seconds} s behind, and so does this preview`,
     fit: "Fit",
     oneToOne: "1:1",
     openSettings: (name: string) => `${name} settings`,
@@ -300,6 +303,12 @@ export const en = {
     hdmiNoAlphaBold: "HDMI cannot send transparency",
     hdmiNoAlphaAfter:
       " — it has no alpha channel, so the box behind the text could never let your video show through. Its controls stay visible but greyed out, and the box is not drawn. Switch to IP to use them.",
+    delay: "Delay",
+    delayUnit: "s",
+    delayOff: "off",
+    delayHint:
+      "Holds this output behind by the set time — every change reaches it that much later, in the order you made it. Useful when a stream or a projector runs behind the room. Leave at 0 for no delay. Set per output, so the other one is unaffected.",
+
     lowerThirdsNote:
       "Transparent overlay with a shaped, dimmed box behind the text. Size and position are set per Songs / Bible / Sermons in the preview.",
     fullscreenNote:

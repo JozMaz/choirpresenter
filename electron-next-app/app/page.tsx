@@ -83,6 +83,7 @@ import {
 import { watchSystemTheme } from "./lib/theme";
 import { useSongPlayer } from "./hooks/useSongPlayer";
 import { useHdmiSync } from "./hooks/useHdmiSync";
+import { useDelayedOutput, type OutputFrame } from "./hooks/useDelayedOutput";
 import { useSongbooks } from "./hooks/useSongbooks";
 import { useBibles } from "./hooks/useBibles";
 
@@ -831,26 +832,54 @@ function HomeContent({
     liveTranslationLabel,
   ]);
 
-  const hdmiHtml = outputs.out1.type === "hdmi" ? outputHtml.out1 : "";
-  const hdmi2Html = outputs.out2.type === "hdmi" ? outputHtml.out2 : "";
-  useHdmiSync(1, hdmiActive && outputs.out1.type === "hdmi", hdmiHtml, blackoutActive);
-  useHdmiSync(2, hdmi2Active && outputs.out2.type === "hdmi", hdmi2Html, blackoutActive);
+  // Everything past this point runs on the delayed frames, so an output that is
+  // held back is held back everywhere: the screen, the browser source and the
+  // preview that claims to mirror them.
+  const out1Frame = useDelayedOutput(
+    outputHtml.out1,
+    blackoutActive,
+    outputs.out1.delayMs,
+  );
+  const out2Frame = useDelayedOutput(
+    outputHtml.out2,
+    blackoutActive,
+    outputs.out2.delayMs,
+  );
+  const frames: Record<OutputId, OutputFrame> = {
+    out1: out1Frame,
+    out2: out2Frame,
+  };
+
+  useHdmiSync(
+    1,
+    hdmiActive && outputs.out1.type === "hdmi",
+    outputs.out1.type === "hdmi" ? out1Frame.html : "",
+    out1Frame.blackout,
+  );
+  useHdmiSync(
+    2,
+    hdmi2Active && outputs.out2.type === "hdmi",
+    outputs.out2.type === "hdmi" ? out2Frame.html : "",
+    out2Frame.blackout,
+  );
 
   const netRunning = (id: OutputId) => netStatus[id]?.running === true;
 
   useEffect(() => {
     for (const id of OUTPUT_IDS) {
       if (outputs[id].type !== "ip" || netStatus[id]?.running !== true) continue;
-      window.api?.netUpdate?.(id, outputHtml[id]);
+      window.api?.netUpdate?.(id, frames[id].html);
     }
-  }, [netStatus, outputs, outputHtml]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [netStatus, outputs, out1Frame.html, out2Frame.html]);
 
   useEffect(() => {
     for (const id of OUTPUT_IDS) {
       if (netStatus[id]?.running !== true) continue;
-      window.api?.netBlackout?.(id, blackoutActive);
+      window.api?.netBlackout?.(id, frames[id].blackout);
     }
-  }, [netStatus, blackoutActive]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [netStatus, out1Frame.blackout, out2Frame.blackout]);
 
   useEffect(() => {
     const refresh = async () => {
@@ -1148,8 +1177,8 @@ function HomeContent({
                       <OutputPreview
                         id={id}
                         def={outputs[id]}
-                        html={outputHtml[id]}
-                        blackoutActive={blackoutActive}
+                        html={frames[id].html}
+                        blackoutActive={frames[id].blackout}
                         group={liveGroup}
                         dividerWidth={dividerWidth}
                         positionText={id === "out2" ? positionText : undefined}

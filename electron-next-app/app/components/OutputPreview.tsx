@@ -418,6 +418,7 @@ export default function OutputPreview({
     (raw) => (raw === "true" ? true : raw === "false" ? false : lower),
   );
   const running = netStatus?.running === true;
+  const delaySeconds = (def.delayMs / 1000).toFixed(1).replace(/\.0$/, "");
 
   const startDrag = (e: React.PointerEvent<HTMLDivElement>) => {
     e.currentTarget.setPointerCapture(e.pointerId);
@@ -578,6 +579,15 @@ export default function OutputPreview({
         <h2 className="text-lg font-semibold text-text-primary truncate">
           {outputName(def, id)}
         </h2>
+        {def.delayMs > 0 && (
+          <span
+            title={t.outputPreview.delayBadgeHint(delaySeconds)}
+            className="shrink-0 flex items-center gap-1 px-1.5 py-0.5 rounded border border-amber-500/60 bg-amber-500/15 text-[10px] font-semibold text-amber-600"
+          >
+            <Icon name="Clock" size={10} />
+            {t.outputPreview.delayBadge(delaySeconds)}
+          </span>
+        )}
         <div className="flex-1" />
 
         {lower && (

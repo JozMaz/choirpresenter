@@ -16,11 +16,14 @@ export const DEFAULT_OUTPUT_NAMES: Record<OutputId, string> = {
   out2: "Output 2",
 };
 
+export const MAX_OUTPUT_DELAY_MS = 20000;
+
 export interface OutputDef {
   name: string;
   enabled: boolean;
   type: OutputType;
   mode: OutputMode;
+  delayMs: number;
 }
 
 export type OutputsConfig = Record<OutputId, OutputDef>;
@@ -31,12 +34,14 @@ export const DEFAULT_OUTPUTS: OutputsConfig = {
     enabled: true,
     type: "hdmi",
     mode: "fullscreen",
+    delayMs: 0,
   },
   out2: {
     name: DEFAULT_OUTPUT_NAMES.out2,
     enabled: false,
     type: "hdmi",
     mode: "lowerThirds",
+    delayMs: 0,
   },
 };
 
@@ -58,6 +63,10 @@ function normalizeDef(value: unknown, fallback: OutputDef): OutputDef {
       raw.mode === "fullscreen" || raw.mode === "lowerThirds"
         ? raw.mode
         : fallback.mode,
+    delayMs:
+      typeof raw.delayMs === "number" && Number.isFinite(raw.delayMs)
+        ? Math.min(MAX_OUTPUT_DELAY_MS, Math.max(0, Math.round(raw.delayMs)))
+        : fallback.delayMs,
   };
 }
 
@@ -110,12 +119,14 @@ function migratedOutputs(): OutputsConfig | null {
       enabled: true,
       type: "hdmi",
       mode: "fullscreen",
+      delayMs: 0,
     },
     out2: {
       name: DEFAULT_OUTPUT_NAMES.out2,
       enabled: true,
       type: usedNetwork ? "ip" : "hdmi",
       mode: "lowerThirds",
+      delayMs: 0,
     },
   };
 }

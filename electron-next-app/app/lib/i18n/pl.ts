@@ -235,6 +235,9 @@ export const pl: Dict = {
     fitOn:
       "Podgląd jest powiększony, żeby dało się go odczytać — na wyjściu nic się nie zmienia",
     fitOff: "Podgląd wygląda dokładnie tak jak wyjście",
+    delayBadge: (seconds) => `+${seconds} s`,
+    delayBadgeHint: (seconds) =>
+      `To wyjście jest opóźnione o ${seconds} s — i ten podgląd też`,
     fit: "Powiększ",
     oneToOne: "1:1",
     openSettings: (name) => `Ustawienia wyjścia „${name}”`,
@@ -312,6 +315,12 @@ export const pl: Dict = {
     hdmiNoAlphaBold: "HDMI nie przenosi przezroczystości",
     hdmiNoAlphaAfter:
       " — nie ma kanału alfa, więc tło pod tekstem nigdy nie przepuściłoby Twojego wideo. Suwaki tła zostają widoczne, ale wyszarzone, a tło nie jest rysowane. Przełącz na IP, aby z nich korzystać.",
+    delay: "Opóźnienie",
+    delayUnit: "s",
+    delayOff: "brak",
+    delayHint:
+      "Przytrzymuje to wyjście o zadany czas — każda zmiana dociera na nie później, w tej samej kolejności, w jakiej ją zrobiłeś. Przydatne, gdy stream albo projektor jest opóźniony względem sali. Zostaw 0, żeby nic nie opóźniać. Ustawiane osobno dla każdego wyjścia, drugie zostaje bez zmian.",
+
     lowerThirdsNote:
       "Przezroczysta nakładka z przyciemnionym tłem pod tekstem. Wielkość i położenie ustawiasz osobno dla Pieśni / Biblii / Kazań w podglądzie.",
     fullscreenNote:

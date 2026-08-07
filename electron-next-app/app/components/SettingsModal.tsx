@@ -28,6 +28,7 @@ import {
 } from "../lib/outputConfig";
 import {
   DEFAULT_OUTPUT_NAMES,
+  MAX_OUTPUT_DELAY_MS,
   OUTPUT_IDS,
   OUTPUT_TYPE_LABELS,
   outputName,
@@ -116,6 +117,20 @@ const themeOptions = (
   { value: "light", label: t.settings.themeLight, icon: "Sun" },
   { value: "system", label: t.settings.themeSystem, icon: "Monitor" },
 ];
+
+const formatDelay = (delayMs: number): string =>
+  (delayMs / 1000).toFixed(1).replace(/\.0$/, "");
+
+// Free text so the field can be cleared and retyped, but only digits and a
+// single decimal point ever reach it.
+const cleanDelayInput = (raw: string): string => {
+  const [whole, ...rest] = raw.replace(",", ".").replace(/[^\d.]/g, "").split(".");
+  const head = whole.slice(0, 2);
+  return rest.length ? `${head}.${rest.join("").slice(0, 1)}` : head;
+};
+
+const toDelayMs = (seconds: number): number =>
+  Math.min(MAX_OUTPUT_DELAY_MS, Math.max(0, Math.round(seconds * 1000)));
 
 const outputModeLabels = (t: Dict): Record<OutputMode, string> => ({
   fullscreen: t.outputModes.fullscreen,
@@ -249,6 +264,9 @@ function OutputsSection({
 }) {
   const { t } = useI18n();
   const OUTPUT_MODE_LABELS = outputModeLabels(t);
+  const [delayDrafts, setDelayDrafts] = useState<Partial<Record<OutputId, string>>>(
+    {},
+  );
   const patch = (id: OutputId, changes: Partial<OutputDef>) =>
     onChange({ ...outputs, [id]: { ...outputs[id], ...changes } });
 
@@ -344,6 +362,45 @@ function OutputsSection({
                     ),
                   )}
                 </div>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <span className="w-10 shrink-0 text-[10px] text-text-muted">
+                  {t.settings.delay}
+                </span>
+                <input
+                  type="text"
+                  inputMode="decimal"
+                  value={delayDrafts[id] ?? formatDelay(def.delayMs)}
+                  onChange={(e) => {
+                    const text = cleanDelayInput(e.target.value);
+                    setDelayDrafts((prev) => ({ ...prev, [id]: text }));
+                    const seconds = Number(text);
+                    if (text !== "" && Number.isFinite(seconds)) {
+                      patch(id, { delayMs: toDelayMs(seconds) });
+                    }
+                  }}
+                  onBlur={() => {
+                    const text = delayDrafts[id];
+                    if (text !== undefined && (text === "" || text === ".")) {
+                      patch(id, { delayMs: 0 });
+                    }
+                    setDelayDrafts((prev) => {
+                      const next = { ...prev };
+                      delete next[id];
+                      return next;
+                    });
+                  }}
+                  className="w-16 px-1.5 py-0.5 text-[11px] text-right border border-border-secondary rounded bg-surface text-text-primary focus:outline-none focus:ring-1 focus:ring-primary"
+                />
+                <span className="text-[10px] text-text-muted">
+                  {t.settings.delayUnit}
+                </span>
+                {def.delayMs === 0 && (
+                  <span className="text-[10px] text-text-muted">
+                    ({t.settings.delayOff})
+                  </span>
+                )}
               </div>
             </div>
 
@@ -627,6 +684,9 @@ export default function SettingsModal({
             </label>
             <p className="text-[11px] text-text-muted mb-2 leading-snug">
               {t.settings.outputsHint}
+            </p>
+            <p className="text-[11px] text-text-muted mb-2 leading-snug">
+              {t.settings.delayHint}
             </p>
             <OutputsSection outputs={outputs} onChange={onChangeOutputs} />
           </div>
